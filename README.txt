@@ -8,7 +8,7 @@ This will make a directory psrsalsa/
 
 To update existing code you can run: git pull
 
-and run make again.
+When the code is updated, do a "make clean" and run "make" to compile the code again.
 
 
 INSTALLATION
