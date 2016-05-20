@@ -1,32 +1,32 @@
 # Define the C compiler to be used
-CC=gcc
+CC = gcc
 
 # Some flags to pass on to C compiler
 # Could do -O3 option to make code faster
-CFLAGS=-Wall -g
+CFLAGS = -Wall -g
 
 # Define the fortran compiler to be used (for slalib which is included in the source directory)
-F77=gfortran
+F77 = gfortran
 
 # Some flags to pass on to the fortran compiler (for slalib)
-FFLAGS=-fno-underscoring -O
+FFLAGS = -fno-underscoring -O
 
-#Define libraries on which psrsalsa is dependent, which are cfitsio, cpgplot and fftw3f.
+#Define libraries on which psrsalsa is dependent, which are cfitsio, cpgplot, gsl and fftw3f.
 #
 #Furthermore, libcpgplot requires:
 # - libpgplot
 # - libgfortran (if used gfortran to compile pgplot)
 # - libX11 (if used when compiling pgplot)
 # - libpng  (if used when compiling pgplot)
-LIBS=-lm -lcfitsio -lgfortran -lX11 -lpng -lpgplot -lcpgplot -lgsl -lgslcblas -lfftw3f
+LIBS = -lm -lcfitsio -lcpgplot -lpgplot -lpng -lX11 -lgsl -lgslcblas -lfftw3f -lgfortran
 
 #Define directories where libraries can be found.
-LIBDIRS=-L $(PGPLOT_DIR) 
+LIBDIRS = -L$(PGPLOT_DIR)
 
 #Define directories where include files can be found.
 #You can probably use something like: locate fitsio.h
 #to find the location of for instance the fitsio include files
-INCDIRS=-I src/lib/ -I $(PGPLOT_DIR) -I/usr/include/cfitsio/
+INCDIRS = -Isrc/lib/ -I$(PGPLOT_DIR) -I/usr/include/cfitsio/
 
 #####################################################################
 # After this point, it should not be necessary to edit the Makefile #
@@ -69,7 +69,7 @@ EXECUTABLES = $(subst src/prog,bin,$(EXECUTABLES_TMP))
 
 #These are the primary targets: the name of the libraries and executables to be generated
 all: $(SLALIBTARGET) $(LIBTARGET) $(EXECUTABLES)
-	csh message.csh
+	$(SHELL) message.csh
 
 #This is the rule of how to make the objects to go into the slalib library
 src/slalib/%.o:src/slalib/%.f

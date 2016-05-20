@@ -1,11 +1,22 @@
 PSRSALSA - A Suite of ALgorithms for Statistical Analysis of pulsar data
 
-INSTALATION
+DOWNLOAD/UPDATE
+----------------------------
+
+Download the latest version from https://github.com/weltevrede/psrsalsa/ which can be done on the command line with: git clone https://github.com/weltevrede/psrsalsa.git
+This will make a directory psrsalsa/
+
+To update existing code you can run: git pull
+
+and run make again.
+
+
+INSTALLATION
 ----------------------------
 
 In principle running "make" in the directory where this README.txt
 file lives should be enough. However, since PSRSALSA depends on other
-libraries, the Makefile might require editting. These dependencies
+libraries, the Makefile might require editing. These dependencies
 include:
   - cpgplot
   - cfitsio
@@ -75,4 +86,6 @@ package. This library probably depend on other libraries, such as
 libgfortran, libX11 and libpng.
 
 Version 5.2.0 is known to work
+
+see README_pgplot.txt how to compile pgplot.
 
