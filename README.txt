@@ -1,5 +1,7 @@
 PSRSALSA - A Suite of ALgorithms for Statistical Analysis of pulsar data
 
+See http://www.jb.man.ac.uk/research/pulsar/Resources/psrsalsa.html for some instructions and a tutorial.
+
 DOWNLOAD/UPDATE
 ----------------------------
 
