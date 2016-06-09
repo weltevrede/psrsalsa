@@ -17,12 +17,14 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <string.h>
 #include <math.h>
 #include <gsl/gsl_sort.h>
+#include <gsl/gsl_statistics_double.h>
 #include "psrsalsa.h"
 
 #define KSTEST 1
 #define KSFLAT 2
 #define KSSIN 3
 #define CORREL 20
+#define MOMENTS 30
 #define CHI2TEST_HIST 50
 #define CHI2TEST_CDF 51
 
@@ -106,6 +108,8 @@ int main(int argc, char **argv)
     printf("-kssin           Like -ks, but compare single input distribution with a\n");
     printf("                 sinusoidal distribution between 0 and 90 deg.\n");
     printf("                 Example:  pstat -kssin -col 1 file1\n");
+    printf("-moments         Compute different moments of the distribution (mean, variance etc.)\n");
+    printf("                 Example:  pstat -moments -col 1 file1\n");
     printf("\n");
     printCitationInfo();
     return 0;
@@ -164,6 +168,12 @@ int main(int argc, char **argv)
    return 0;
  }
  typetest = KSFLAT;
+      }else if(strcmp(argv[i], "-moments") == 0) {
+ if(typetest != 0) {
+   printerror(application.verbose_state.debug, "pstat: Cannot specify more than one type of statistical test at the time");
+   return 0;
+ }
+ typetest = MOMENTS;
       }else if(strcmp(argv[i], "-kssin") == 0) {
  if(typetest != 0) {
    printerror(application.verbose_state.debug, "pstat: Cannot specify more than one type of statistical test at the time");
@@ -279,6 +289,11 @@ int main(int argc, char **argv)
     }else if(typetest == CORREL) {
       if(nrInputColumns != 2) {
  printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two columns of data to be read in. Example: pstat -correl -col1 1 -col2 1 file1 file2 or pstat -correl -col \"1 2\" file1");
+ return 0;
+      }
+    }else if(typetest == MOMENTS) {
+      if(nrInputColumns != 1) {
+ printerror(application.verbose_state.debug, "ERROR pstat: Computation of the moments of a distribution requires one columns of data to be read in. Example: pstat -moments -col 1 file1");
  return 0;
       }
     }else if(typetest == KSFLAT) {
@@ -421,6 +436,24 @@ int main(int argc, char **argv)
     if(application.verbose_state.verbose == 0) {
       fprintf(fout, "probability = %e\n", prob);
     }
+  }else if(typetest == MOMENTS) {
+    double mean, variance, skew, kurt;
+    if(number_input_arrays != 1) {
+      printerror(application.verbose_state.debug, "ERROR pstat: Computation of the moments of a distribution requires one columns of data to be read in.");
+      return 0;
+    }
+    mean = gsl_stats_mean(input_array[0], 1, number_values[0]);
+    fprintf(fout, "Mean               = %e\n", mean);
+    variance = gsl_stats_variance_m(input_array[0], 1, number_values[0], mean);
+    fprintf(fout, "Variance           = %e (unbiased, normalised by 1/(N-1))\n", variance);
+    fprintf(fout, "Standard deviation = %e (unbiased, normalised by 1/(N-1))\n", sqrt(variance));
+    variance *= (number_values[0]-1.0)/(double)number_values[0];
+    fprintf(fout, "Variance           = %e (normalised by 1/N)\n", variance);
+    fprintf(fout, "Standard deviation = %e (normalised by 1/N)\n", sqrt(variance));
+    skew = gsl_stats_skew(input_array[0], 1, number_values[0]);
+    fprintf(fout, "Skewness           = %e\n", skew);
+    kurt = gsl_stats_kurtosis(input_array[0], 1, number_values[0]);
+    fprintf(fout, "Kurtosis           = %e\n", kurt);
   }else if(typetest == CORREL) {
     if(number_input_arrays != 2) {
       printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two input arrays to be specified");

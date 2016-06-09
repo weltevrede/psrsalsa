@@ -108,7 +108,8 @@ int main(int argc, char **argv)
  else
    nrfunctions2++;
         i++;
-      }else if(strcmp(argv[i], "-gamma") == 0 || strcmp(argv[i], "-flat") == 0 || strcmp(argv[i], "-norm") == 0 || strcmp(argv[i], "-lognorm") == 0 || strcmp(argv[i], "-pwrlaw") == 0) {
+      }else if(strcmp(argv[i], "-gamma") == 0 || strcmp(argv[i], "-flat") == 0 || strcmp(argv[i], "-norm") == 0 || strcmp(argv[i], "-lognorm") == 0 || strcmp(argv[i], "-pwrlaw") == 0
+        ) {
  float dummy_float;
  j = sscanf(argv[i+1], "%f %f", &dummy_float, &dummy_float);
  if(j != 2) {
