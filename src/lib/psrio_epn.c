@@ -106,7 +106,14 @@ void write_epn_longheader(datafile_definition datafile, int version, verbose_def
   txt[12] = 0;
   fprintf(datafile.fptr, "%12s", txt);
   fprintf(datafile.fptr, "%12s", txt);
-  dbl = get_period(datafile, 0, verbose);
+
+  i = get_period(datafile, 0, &dbl, verbose);
+  if(i == 2) {
+    printerror(verbose.debug, "ERROR write_epn_longheader (%s): Cannot obtain period", datafile.filename);
+    exit(0);
+  }else if (i == 1) {
+    printwarning(verbose.debug, "WARNING write_epn_longheader: Error obtaining the fold period");
+  }
   if(dbl < 0) {
     printwarning(verbose.debug, "WARNING write_epn_longheader: Error obtaining the fold period");
     dbl = 0;
@@ -258,7 +265,13 @@ void write_epn_data(datafile_definition datafile, float scale, float offset, flo
   sprintf(txt, "%#12G", rms);
   fprintf(datafile.fptr, "%s", txt);
 
-  dbl = get_period(datafile, 0, verbose);
+  i = get_period(datafile, 0, &dbl, verbose);
+  if(i == 2) {
+    printerror(verbose.debug, "ERROR write_epn_data (%s): Cannot obtain period", datafile.filename);
+    exit(0);
+  }else if(i == 1) {
+    printwarning(verbose.debug, "WARNING write_epn_data: Error obtaining the fold period");
+  }
   if(dbl < 0) {
     printwarning(verbose.debug, "WARNING write_epn_data: Error obtaining the fold period");
     dbl = 0;

@@ -403,7 +403,14 @@ int main(int argc, char **argv)
   if(preprocessApplication(&application, &fin[0]) == 0) {
     return 0;
   }
-  if(get_period(fin[0], 0, application.verbose_state) < 0.001) {
+  double period;
+  int ret;
+  ret = get_period(fin[0], 0, &period, application.verbose_state);
+  if(ret == 2) {
+    printerror(application.verbose_state.debug, "ERROR pspec (%s): Cannot obtain period", fin[0].filename);
+    return 0;
+  }
+  if(period < 0.001) {
     printerror(application.verbose_state.debug, "ERROR pspec: The period does not appear to be set in the header. Consider using the -header option.");
     return 0;
   }
@@ -457,7 +464,12 @@ int main(int argc, char **argv)
   }
   read_partprofilePSRData(fin[0], profileI, NULL, 0, 0, fft_blocks*fft_size, noverbose);
   xmin = 0;
-  xmax = 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/get_period(fin[0], 0, application.verbose_state);
+  ret = get_period(fin[0], 0, &period, application.verbose_state);
+  if(ret == 2) {
+    printerror(application.verbose_state.debug, "ERROR pspec (%s): Cannot obtain period", fin[0].filename);
+    return 0;
+  }
+  xmax = 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period;
   if(application.onpulse.nrRegions == 0 || selectMoreOnpulseRegions) {
     pgplot_clear_viewport_def(&viewport);
     strcpy(viewport.plotDevice, onpulseselectdevice);
@@ -643,7 +655,12 @@ int main(int argc, char **argv)
     if(profile_flag) {
       if(strcmp(profiledevice, "?") == 0)
  printf("Specify plotting device to show the profile: \n  ");
-      if(pgplotProfile(profiledevice, -1, -1, profileI, stddev, rms_sigma, modindex, rms_modindex, fin[0].NrBins, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/get_period(fin[0], 0, application.verbose_state), "Phase[deg]", "Intensity", fin[0].psrname, stddev_flag, mod_flag|modSimple_flag, zoom_flag, xmin_zoom, xmax_zoom, application.verbose_state) == 0) {
+      ret = get_period(fin[0], 0, &period, application.verbose_state);
+      if(ret == 2) {
+ printerror(application.verbose_state.debug, "ERROR pspec (%s): Cannot obtain period", fin[0].filename);
+ return 0;
+      }
+      if(pgplotProfile(profiledevice, -1, -1, profileI, stddev, rms_sigma, modindex, rms_modindex, fin[0].NrBins, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, "Phase[deg]", "Intensity", fin[0].psrname, stddev_flag, mod_flag|modSimple_flag, zoom_flag, xmin_zoom, xmax_zoom, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "ERROR pspec: Unable to open plotdevice.\n");
  return 0;
       }
@@ -681,7 +698,12 @@ int main(int argc, char **argv)
       strcpy(pgplotbox.xlabel, "Pulse phase [degrees]");
       strcpy(pgplotbox.ylabel, "P3 [cpp]");
       strcpy(pgplotbox.title, "LRFS");
-      pgplotMap(viewport, lrfs, fin[0].NrBins, 1+fft_size/2, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/get_period(fin[0], 0, application.verbose_state), xmin_zoom, xmax_zoom, 0, 0.5, 0, 0.5, pgplotbox, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, application.verbose_state);
+      ret = get_period(fin[0], 0, &period, application.verbose_state);
+      if(ret == 2) {
+ printerror(application.verbose_state.debug, "ERROR pspec (%s): Cannot obtain period", fin[0].filename);
+ return 0;
+      }
+      pgplotMap(viewport, lrfs, fin[0].NrBins, 1+fft_size/2, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, xmin_zoom, xmax_zoom, 0, 0.5, 0, 0.5, pgplotbox, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, application.verbose_state);
       if(write_flag) {
  fout.NrSubints = 1+fft_size/2;
  fout.NrBins = fin[0].NrBins;
@@ -1171,7 +1193,12 @@ int main(int argc, char **argv)
       strcpy(pgplotbox.xlabel, "Pulse phase [degrees]");
       strcpy(pgplotbox.ylabel, "P3 [pulse periods]");
       strcpy(pgplotbox.title, "P3 fold");
-      pgplotMap(viewport, p3foldmap, fin[0].NrBins, p3_fold_nbin, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/get_period(fin[0], 0, application.verbose_state), xmin_zoom, xmax_zoom, 0.5*p3_fold/(float)p3_fold_nbin, 0.5*p3_fold/(float)p3_fold_nbin + p3_fold*(p3_fold_nbin-1)/(float)p3_fold_nbin, 0, p3_fold, pgplotbox, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, application.verbose_state);
+      ret = get_period(fin[0], 0, &period, application.verbose_state);
+      if(ret == 2) {
+ printerror(application.verbose_state.debug, "ERROR pspec (%s): Cannot obtain period", fin[0].filename);
+ return 0;
+      }
+      pgplotMap(viewport, p3foldmap, fin[0].NrBins, p3_fold_nbin, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, xmin_zoom, xmax_zoom, 0.5*p3_fold/(float)p3_fold_nbin, 0.5*p3_fold/(float)p3_fold_nbin + p3_fold*(p3_fold_nbin-1)/(float)p3_fold_nbin, 0, p3_fold, pgplotbox, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, application.verbose_state);
     if(write_flag) {
       fout.NrSubints = p3_fold_nbin;
       fout.NrBins = fin[0].NrBins;

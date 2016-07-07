@@ -1038,10 +1038,15 @@ void printHeaderPSRData(datafile_definition datafile, int update, verbose_defini
   for(i = 0; i < verbose.indent; i++) printf(" ");
   mjd2dateString(datafile.mjd_start, txt, 0, 1, " ");
   if(datafile.isFolded == 1) {
+    double period;
+    if(get_period(datafile, 0, &period, verbose) == 2) {
+      printerror(verbose.debug, "ERROR printHeaderPSRData: Cannot obtain period");
+      exit(0);
+    }
     if(verbose.debug == 0)
-      printf("period=%lf sec", get_period(datafile, 0, verbose));
+      printf("period=%lf sec", period);
     else
-      printf("period=%.9e sec", get_period(datafile, 0, verbose));
+      printf("period=%.9e sec", period);
   }else {
     printf("Not folded");
   }
@@ -1061,10 +1066,15 @@ void printHeaderPSRData(datafile_definition datafile, int update, verbose_defini
   if(datafile.freqMode == FREQMODE_UNKNOWN) {
     printwarning(verbose.debug, "OBSERVING FREQUENCY IS NOT SET");
   }else {
+    double chanbw;
+    if(get_channelbw(datafile, 0, 0, &chanbw, verbose) == 0) {
+      printerror(verbose.debug, "ERROR printHeaderPSRData: Cannot obtain channel bandwidth");
+      exit(0);
+    }
     if(verbose.debug == 0)
-      printf("freq_cent=%f MHz bw=%f MHz channelbw=%f MHz\n", get_centre_freq(datafile, verbose), get_bw(datafile, verbose), get_channelbw(datafile, 0, 0, verbose));
+      printf("freq_cent=%f MHz bw=%f MHz channelbw=%f MHz\n", get_centre_freq(datafile, verbose), get_bw(datafile, verbose), chanbw);
     else
-      printf("freq_cent=%.9e MHz bw=%.9e MHz channelbw=%.9e MHz\n", get_centre_freq(datafile, verbose), get_bw(datafile, verbose), get_channelbw(datafile, 0, 0, verbose));
+      printf("freq_cent=%.9e MHz bw=%.9e MHz channelbw=%.9e MHz\n", get_centre_freq(datafile, verbose), get_bw(datafile, verbose), chanbw);
   }
   for(i = 0; i < verbose.indent; i++) printf(" ");
   if(verbose.debug) {
@@ -1175,7 +1185,7 @@ int setITRFlocation_by_name(datafile_definition *datafile, char *observatory, ve
       datafile->telescope_Z = 5085987.071;
     }else {
       fflush(stdout);
-      printerror(verbose.debug, "WARNING setITRFlocation_by_name: BUG!!!!!!");
+      printerror(verbose.debug, "ERROR setITRFlocation_by_name: BUG!!!!!!");
       return 0;
     }
   }else if(strcasecmp(observatory, "WSRT") == 0 || strcasecmp(observatory, "i") == 0) {
@@ -1521,6 +1531,11 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
       printf("Reading PSRFITS header\n");
     }
     ret = readPSRFITSHeader(datafile, readnoscales, verbose);
+    if(verbose.debug) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      printf("Reading PSRFITS header done\n");
+    }
   }else if(datafile->format == SIGPROC_format) {
     if(verbose.verbose) {
       for(i = 0; i < verbose.indent; i++)
@@ -1579,10 +1594,22 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
       }
     }
   }
-  if(get_period(*datafile, 0, verbose) < 0.001 && datafile->isFolded != 1) {
+  double period;
+  if(datafile->isFolded == 1) {
+    if(get_period(*datafile, 0, &period, verbose) == 2) {
+      printerror(verbose.debug, "ERROR readHeaderPSRData (%s): Cannot obtain period", datafile->filename);
+      return 0;
+    }
+  }else {
+    period = -1;
+  }
+  if(period < 0.001 && datafile->isFolded != 0) {
     fflush(stdout);
     if(nowarnings == 0) {
       printwarning(verbose.debug, "WARNING readHeaderPSRData (%s): The period does not appear to be set in the header. Consider using the -header option.", datafile->filename);
+      if(verbose.debug) {
+ printwarning(verbose.debug, "WARNING readHeaderPSRData (%s): isFolded=%d\n", datafile->filename, datafile->isFolded);
+      }
     }
   }
   if(datafile->tsampMode != TSAMPMODE_LONGITUDELIST) {
@@ -1604,14 +1631,23 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
     datafile->gentype = GENTYPE_SEARCHMODE;
   if(datafile->tsampMode != TSAMPMODE_LONGITUDELIST && datafile->tsampMode != TSAMPMODE_UNKNOWN) {
     double diff_nbin;
+    double period;
+    if(datafile->isFolded == 1) {
+      if(get_period(*datafile, 0, &period, verbose) == 2) {
+ printerror(verbose.debug, "ERROR readHeaderPSRData (%s): Cannot obtain period", datafile->filename);
+ return 0;
+      }
+    }else {
+      period = -1;
+    }
     if(get_tsamp(*datafile, 0, verbose) != 0)
-      diff_nbin = get_period(*datafile, 0, verbose)/get_tsamp(*datafile, 0, verbose) - datafile->NrBins;
+      diff_nbin = period/get_tsamp(*datafile, 0, verbose) - datafile->NrBins;
     else
       diff_nbin = 12345;
     if(datafile->isFolded && datafile->gentype != GENTYPE_2DFS && datafile->gentype != GENTYPE_RECEIVERMODEL && datafile->gentype != GENTYPE_RECEIVERMODEL2) {
       if(verbose.debug) {
  fflush(stdout);
- fprintf(stderr, "readHeaderPSRData (%s): Check if full period is stored - Tsamp=%lf, NBIN=%ld: Period=%lf suggests nr of bins is off by %lf.\n", datafile->filename, get_tsamp(*datafile, 0, verbose), datafile->NrBins, get_period(*datafile, 0, verbose), diff_nbin);
+ fprintf(stderr, "readHeaderPSRData (%s): Check if full period is stored - Tsamp=%lf, NBIN=%ld: Period=%lf suggests nr of bins is off by %lf.\n", datafile->filename, get_tsamp(*datafile, 0, verbose), datafile->NrBins, period, diff_nbin);
       }
       if(diff_nbin < -0.5 || diff_nbin > 0.5) {
  fflush(stdout);
@@ -1623,7 +1659,12 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
   }
   if(datafile->gentype == GENTYPE_PULSESTACK) {
     double tobs_expected;
-    tobs_expected = datafile->NrSubints * get_period(*datafile, 0, verbose);
+    double period;
+    if(get_period(*datafile, 0, &period, verbose) == 2) {
+      printerror(verbose.debug, "ERROR readHeaderPSRData (%s): Cannot obtain period", datafile->filename);
+      return 0;
+    }
+    tobs_expected = datafile->NrSubints * period;
     if(fabs(get_tsub(*datafile, 0, verbose)) < 0.0001) {
       datafile->tsubMode = TSUBMODE_FIXEDTSUB;
       if(datafile->tsub_list != NULL)
@@ -1634,7 +1675,7 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
  printerror(verbose.debug, "ERROR readHeaderPSRData (%s): Memory allocation error.", datafile->filename);
  return 0;
       }
-      datafile->tsub_list[0] = get_period(*datafile, 0, verbose);
+      datafile->tsub_list[0] = period;
     }else if(get_tobs(*datafile, verbose)/tobs_expected > 1.02 || get_tobs(*datafile, verbose)/tobs_expected < 0.98) {
       fflush(stdout);
       if(nowarnings == 0) {
@@ -1672,6 +1713,11 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
       if(verbose.verbose) printf("Write PuMa header.\n");
     }
     ret = writeWSRTHeader(*datafile, verbose);
+    if(verbose.debug) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      if(verbose.verbose) printf("Write PuMa header done.\n");
+    }
   }else if(datafile->format == PSRCHIVE_ASCII_format) {
     if(verbose.verbose) {
       for(i = 0; i < verbose.indent; i++)
@@ -1686,6 +1732,11 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
     }
     if(verbose.verbose) printf("Write PSRFITS header.\n");
     ret = writePSRFITSHeader(datafile, verbose);
+    if(verbose.debug) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      if(verbose.verbose) printf("Write PSRFITS header done.\n");
+    }
   }else if(datafile->format == EPN_format) {
     if(verbose.verbose) {
       for(i = 0; i < verbose.indent; i++)
@@ -1718,6 +1769,9 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
     if(datafile->format == FITS_format || datafile->format == PUMA_format) {
       writeHistoryPSRData(datafile, argc, argv, cmdOnly, verbose);
     }
+  }
+  if(ret == 0) {
+    printerror(verbose.debug, "ERROR writeHeaderPSRData: Writing header failed.");
   }
   return ret;
 }
@@ -1989,7 +2043,12 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
    }else {
      psrdata->uniform_bw = atof(value);
      if(verbose.verbose) printf("  hdr.bw = %f MHz\n", get_bw(*psrdata, verbose));
-     if(verbose.verbose) printf("  hdr.channelbw = %f MHz\n", get_channelbw(*psrdata, 0, 0, verbose));
+     double chanbw;
+     if(get_channelbw(*psrdata, 0, 0, &chanbw, verbose) == 0) {
+       printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Cannot obtain channel bandwidth.");
+       return 0;
+     }
+     if(verbose.verbose) printf("  hdr.channelbw = %f MHz\n", chanbw);
    }
  }else if(strcasecmp(identifier,"chbw") == 0 || strcasecmp(identifier,"chanbw") == 0 || strcasecmp(identifier,"channelbw") == 0) {
    if(psrdata->freqMode != FREQMODE_UNIFORM) {
@@ -1997,8 +2056,13 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
        return 0;
    }else {
      psrdata->uniform_bw = atof(value)*(psrdata->NrFreqChan);
+     double chanbw;
+     if(get_channelbw(*psrdata, 0, 0, &chanbw, verbose) == 0) {
+       printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Cannot obtain channel bandwidth.");
+       return 0;
+     }
      if(verbose.verbose) printf("  hdr.bw = %f MHz\n", get_bw(*psrdata, verbose));
-     if(verbose.verbose) printf("  hdr.channelbw = %f MHz\n", get_channelbw(*psrdata, 0, 0, verbose));
+     if(verbose.verbose) printf("  hdr.channelbw = %f MHz\n", chanbw);
    }
  }else if(strcasecmp(identifier, "freqref") == 0 || strcasecmp(identifier, "freq_ref") == 0 || strcasecmp(identifier, "ref_freq") == 0 || strcasecmp(identifier, "reffreq") == 0) {
    psrdata->freq_ref = atof(value);
@@ -2009,7 +2073,12 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
        return 0;
    }else {
      psrdata->fixedPeriod = atof(value);
-     if(verbose.verbose) printf("  hdr.period = %lf s\n", get_period(*psrdata, 0, verbose));
+     double period;
+     if(get_period(*psrdata, 0, &period, verbose) == 2) {
+       printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline (%s): Cannot obtain period", psrdata->filename);
+       return 0;
+     }
+     if(verbose.verbose) printf("  hdr.period = %lf s\n", period);
    }
  }else if(strcasecmp(identifier, "dt") == 0 || strcasecmp(identifier, "tsamp") == 0 || strcasecmp(identifier, "samptime") == 0) {
    if(psrdata->tsampMode != TSAMPMODE_FIXEDTSAMP) {
@@ -2538,7 +2607,19 @@ char *str_replace_header_params(datafile_definition data, char *text, verbose_de
   }
   free(newtext);
   newtext = newtext2;
-  sprintf(headerparam, "%lf", get_period(data, 0, verbose));
+  double period;
+  int ret;
+  if(data.isFolded) {
+    ret = get_period(data, 0, &period, verbose);
+    if(ret == 2) {
+      printerror(verbose.debug, "ERROR str_replace_header_params (%s): Cannot obtain period", data.filename);
+      return 0;
+    }
+  }else {
+    ret = 1;
+    period = 0;
+  }
+  sprintf(headerparam, "%lf", period);
   newtext2 = str_replace(newtext, "%PERIOD", headerparam, verbose);
   if(newtext2 == NULL) {
     fflush(stdout);

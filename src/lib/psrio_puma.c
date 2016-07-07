@@ -1187,7 +1187,19 @@ int writeWSRTHeader(datafile_definition datafile, verbose_definition verbose)
   puma_hdr.gen.ParBlkSize = 0;
   strncpy(puma_hdr.gen.ScanNum, datafile.scanID, NAMELEN);
   puma_hdr.redn.NBins = datafile.NrBins;
-  if(datafile.gentype == GENTYPE_SEARCHMODE || datafile.isFolded != 1 || get_period(datafile, 0, verbose) < 0) {
+  double period;
+  int ret;
+  if(datafile.isFolded) {
+    ret = get_period(datafile, 0, &period, verbose);
+    if(ret == 2) {
+      printerror(verbose.debug, "ERROR writeWSRTHeader (%s): Cannot obtain period", datafile.filename);
+      return 0;
+    }
+  }else {
+    ret = 1;
+    period = -1;
+  }
+  if(datafile.gentype == GENTYPE_SEARCHMODE || datafile.isFolded != 1 || ret == 1 || period < 0) {
     puma_hdr.redn.NTimeInts = datafile.NrBins*datafile.NrSubints;
     puma_hdr.redn.NBins = puma_hdr.redn.NTimeInts;
     puma_hdr.redn.GenType = 0;
@@ -1202,7 +1214,12 @@ int writeWSRTHeader(datafile_definition datafile, verbose_definition verbose)
   puma_hdr.redn.MJDint = (int)datafile.mjd_start;
   puma_hdr.redn.MJDfrac = datafile.mjd_start - puma_hdr.redn.MJDint;
   puma_hdr.redn.FreqCent = get_centre_freq(datafile, verbose);
-  puma_hdr.redn.DeltaFreq = get_channelbw(datafile, 0, 0, verbose);
+  double chanbw;
+  if(get_channelbw(datafile, 0, 0, &chanbw, verbose) == 0) {
+    printerror(verbose.debug, "ERROR writeWSRTHeader (%s): Cannot obtain channel bandwidth.", datafile.filename);
+    return 0;
+  }
+  puma_hdr.redn.DeltaFreq = chanbw;
   puma_hdr.redn.DM = datafile.dm;
   puma_hdr.mode.RM = datafile.rm;
   puma_hdr.redn.NFreqs = datafile.NrFreqChan;

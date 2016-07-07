@@ -760,7 +760,14 @@ int main(int argc, char **argv)
  if(fin.isFolded && fin.tsampMode == TSAMPMODE_FIXEDTSAMP) {
    if(get_tsamp(fin, 0, application.verbose_state) <= 0.0) {
      printwarning(application.verbose_state.debug, "WARNING pplot: Assuming full period is stored.");
-     fin.fixedtsamp = get_period(fin, 0, application.verbose_state)/(double)fin.NrBins;
+     double period;
+     int ret;
+     ret = get_period(fin, 0, &period, application.verbose_state);
+     if(ret == 2) {
+       printerror(application.verbose_state.debug, "ERROR pplot (%s): Cannot obtain period", fin.filename);
+       return 0;
+     }
+     fin.fixedtsamp = period/(double)fin.NrBins;
    }
  }
 
@@ -2174,13 +2181,25 @@ float ypos(float *stackI, int bin, long PulseNr, float scale, int NrBins, long p
 }
 int setBaselineParams(datafile_definition fin, float *baseline, float *dxshift, int *xUnitsSwitch, verbose_definition verbose)
 {
+  double period;
+  int ret;
+  if(fin.isFolded) {
+    ret = get_period(fin, 0, &period, verbose);
+    if(ret == 2) {
+      printerror(verbose.debug, "ERROR pplot (%s): Cannot obtain period", fin.filename);
+      return 0;
+    }
+  }else {
+    ret = 1;
+    period = -1;
+  }
   if(fin.xrangeset) {
     *baseline = (fin.xrange[1]-fin.xrange[0])*(fin.NrBins)/(float)(fin.NrBins-0.999);
     *dxshift = fin.xrange[0];
     *xUnitsSwitch = XUNIT_DEG;
   }else {
     if(fin.isFolded != 0 || fin.gentype != GENTYPE_SEARCHMODE) {
-      if(get_period(fin, 0, verbose) < 0.001) {
+      if(period < 0.001) {
  fflush(stdout);
  printwarning(verbose.debug, "pplot: The period does not appear to be set in the header. Consider using the -header option.");
  if(xUnitsSwitch != XUNIT_BINS) {
@@ -2202,12 +2221,12 @@ int setBaselineParams(datafile_definition fin, float *baseline, float *dxshift, 
       }
     }
     if(fin.isFolded != 0 || fin.gentype != GENTYPE_SEARCHMODE)
-      *baseline = 360.0*get_tsamp(fin, 0, verbose)*fin.NrBins/get_period(fin, 0, verbose);
+      *baseline = 360.0*get_tsamp(fin, 0, verbose)*fin.NrBins/period;
     else
       *baseline = 360.0;
     if(*xUnitsSwitch == XUNIT_PHASE) {
       if(fin.isFolded != 0 || fin.gentype != GENTYPE_SEARCHMODE)
- *baseline = get_tsamp(fin, 0, verbose)*fin.NrBins/get_period(fin, 0, verbose);
+ *baseline = get_tsamp(fin, 0, verbose)*fin.NrBins/period;
       else
  *baseline = 1.0;
     }else if(*xUnitsSwitch == XUNIT_TIME) {

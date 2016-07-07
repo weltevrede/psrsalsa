@@ -24,6 +24,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define KSFLAT 2
 #define KSSIN 3
 #define CORREL 20
+#define PEARSON 21
 #define MOMENTS 30
 #define CHI2TEST_HIST 50
 #define CHI2TEST_CDF 51
@@ -96,6 +97,10 @@ int main(int argc, char **argv)
     printf("                 useful to decide which model distribution fits an observed\n");
     printf("                 distribution best, but the chi square itself is not immediately\n");
     printf("                 meaningful. Example: pstat -chi2cdf file1 file2\n");
+    printf("-correl          Produces the cross correlation function (as function of lag) in\n");
+    printf("                 the Fourier domain assuming equal sampling.\n");
+    printf("                 Examples: pstat -correl -col1 1 -col2 1 file1 file2\n");
+    printf("                 or:       pstat -correl -col \"1 2\" file1\n");
     printf("-ks              Kolmogorov-Smirnov test: Assess difference between two\n");
     printf("                 distributions of points. The made approximations are similar to\n");
     printf("                 the implementation in Numerical Recipes in C, 2nd edition and.\n");
@@ -108,8 +113,13 @@ int main(int argc, char **argv)
     printf("-kssin           Like -ks, but compare single input distribution with a\n");
     printf("                 sinusoidal distribution between 0 and 90 deg.\n");
     printf("                 Example:  pstat -kssin -col 1 file1\n");
-    printf("-moments         Compute different moments of the distribution (mean, variance etc.)\n");
+    printf("-moments         Compute different moments of the distribution (mean, variance\n");
+    printf("                 etc.)\n");
     printf("                 Example:  pstat -moments -col 1 file1\n");
+    printf("-pearson         Pearson product-moment correlation coefficient:\n");
+    printf("                 Measures the linear correlation between two variables.\n");
+    printf("                 Examples: pstat -pearson -col1 1 -col2 1 file1 file2\n");
+    printf("                 or:       pstat -pearson -col \"1 2\" file1\n");
     printf("\n");
     printCitationInfo();
     return 0;
@@ -156,6 +166,12 @@ int main(int argc, char **argv)
    return 0;
  }
  typetest = CORREL;
+      }else if(strcasecmp(argv[i], "-pearson") == 0) {
+ if(typetest != 0) {
+   printerror(application.verbose_state.debug, "pstat: Cannot specify more than one type of statistical test at the time");
+   return 0;
+ }
+ typetest = PEARSON;
       }else if(strcmp(argv[i], "-ks") == 0) {
  if(typetest != 0) {
    printerror(application.verbose_state.debug, "pstat: Cannot specify more than one type of statistical test at the time");
@@ -289,6 +305,11 @@ int main(int argc, char **argv)
     }else if(typetest == CORREL) {
       if(nrInputColumns != 2) {
  printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two columns of data to be read in. Example: pstat -correl -col1 1 -col2 1 file1 file2 or pstat -correl -col \"1 2\" file1");
+ return 0;
+      }
+    }else if(typetest == PEARSON) {
+      if(nrInputColumns != 2) {
+ printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two columns of data to be read in. Example: pstat -pearson -col1 1 -col2 1 file1 file2 or pstat -pearson -col \"1 2\" file1");
  return 0;
       }
     }else if(typetest == MOMENTS) {
@@ -454,6 +475,21 @@ int main(int argc, char **argv)
     fprintf(fout, "Skewness           = %e\n", skew);
     kurt = gsl_stats_kurtosis(input_array[0], 1, number_values[0]);
     fprintf(fout, "Kurtosis           = %e\n", kurt);
+  }else if(typetest == PEARSON) {
+    double cc;
+
+    if(number_input_arrays != 2) {
+      printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two input arrays to be specified");
+      return 0;
+    }
+    if(number_values[0] != number_values[1]) {
+      printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two input arrays of equal length");
+      return 0;
+    }
+
+    cc = gsl_stats_correlation(input_array[0], 1, input_array[1], 1, number_values[0]);
+    fprintf(fout, "Pearson correlation coefficient = %e\n", cc);
+
   }else if(typetest == CORREL) {
     if(number_input_arrays != 2) {
       printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two input arrays to be specified");

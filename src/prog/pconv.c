@@ -156,7 +156,19 @@ int main(int argc, char **argv)
     }
   }
   copy_params_PSRData(fin, &fout, application.verbose_state);
-  if(get_period(fout, 0, application.verbose_state) >= 0 && get_period(fout, 0, application.verbose_state) < 0.001) {
+  double period;
+  int ret;
+  if(fin.isFolded) {
+    ret = get_period(fin, 0, &period, application.verbose_state);
+    if(ret == 2) {
+      printerror(application.verbose_state.debug, "ERROR pconv (%s): Cannot obtain period", fin.filename);
+      return 0;
+    }
+  }else {
+    ret = 1;
+    period = -1;
+  }
+  if(ret == 0 && period >= 0 && period < 0.001) {
     fout.fixedPeriod = 1;
     fout.foldMode = FOLDMODE_FIXEDPERIOD;
   }

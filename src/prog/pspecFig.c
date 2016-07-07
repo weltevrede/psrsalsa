@@ -478,7 +478,14 @@ int main(int argc, char **argv)
       return 0;
     if(PSRDataHeader_parse_commandline(&lrfs, argc, argv, verbose) == 0)
       return 0;
-    if(get_period(lrfs, 0, verbose) < 0.001) {
+    double period;
+    int ret;
+    ret = get_period(lrfs, 0, &period, verbose);
+    if(ret == 2) {
+      printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", lrfs.filename);
+      return 0;
+    }
+    if(period < 0.001) {
       printerror(verbose.debug, "The period does not appear to be set in the header. Consider using the -header option.");
       return 0;
     }
@@ -513,7 +520,14 @@ int main(int argc, char **argv)
       printwarning(verbose.debug, "WARNING: Assuming the number of bins = %ld and the sampling time = %lf s.", AverageProfile.NrBins, AverageProfile.fixedtsamp);
     }
   }
-  if(get_period(AverageProfile, 0, verbose) < 0.001) {
+  double period;
+  int ret_prd;
+  ret_prd = get_period(AverageProfile, 0, &period, verbose);
+  if(ret_prd == 2) {
+    printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
+    return 0;
+  }
+  if(period < 0.001) {
     printerror(verbose.debug, "The period does not appear to be set in the header. Consider using the -header option.");
     return 0;
   }
@@ -595,8 +609,13 @@ int main(int argc, char **argv)
   fclose(fout_ascii);
   if(verbose.verbose)
     printf("%ld points read from %s\n", AverageProfile.NrBins, filename);
+  ret = get_period(AverageProfile, 0, &period, verbose);
+  if(ret == 2) {
+    printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
+    return 0;
+  }
   fl_min = 0 + dl;
-  fl_max = 360*(AverageProfile.NrBins-1)*get_tsamp(AverageProfile, 0, verbose)/get_period(AverageProfile, 0, verbose) + dl;
+  fl_max = 360*(AverageProfile.NrBins-1)*get_tsamp(AverageProfile, 0, verbose)/period + dl;
   if(type_of_plots == 1) {
     if(change_filename_extension(argv[argc-1], filename, "amplitude", 1000, verbose) == 0)
       return 0;
@@ -737,8 +756,13 @@ int main(int argc, char **argv)
     ppgsch(0.38*labelscale);
     Imin = 0;
     Imax = 0;
+    ret = get_period(AverageProfile, 0, &period, verbose);
+    if(ret == 2) {
+      printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
+      return 0;
+    }
     for(xi=0; xi < AverageProfile.NrBins; xi++) {
-      if(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose) >= fl_min && xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose) <= fl_max) {
+      if(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period >= fl_min && xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period <= fl_max) {
  I = AverageProfile.data[xi];
  if(I > Imax)
    Imax = I;
@@ -752,7 +776,7 @@ int main(int argc, char **argv)
     }
     if(type_of_plots == 0) {
       for(xi=0; xi < ModProfile.NrBins; xi++) {
- if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) <= fl_max) {
+ if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
    ok_flag = 1;
    if(maxsigma_mod > 0 && ModProfile.data[xi]/ModProfileErr.data[xi] < maxsigma_mod)
      ok_flag = 0;
@@ -768,7 +792,7 @@ int main(int argc, char **argv)
  }
       }
       for(xi=0; xi < VarianceProfile.NrBins; xi++) {
- if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) <= fl_max) {
+ if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
    I = VarianceProfile.data[xi];
    if(I > Imax)
      Imax = I;
@@ -778,7 +802,7 @@ int main(int argc, char **argv)
       }
     }else {
       for(xi=0; xi < subpulseAmpProfile.NrBins; xi++) {
- if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) <= fl_max) {
+ if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
    I = subpulseAmpProfile.data[xi];
    if(I > Imax)
      Imax = I;
@@ -833,13 +857,13 @@ int main(int argc, char **argv)
     ppgsci(lineColour);
     i = 0;
     for(xi=0; xi < AverageProfile.NrBins; xi++) {
-      if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) <= fl_max) {
+      if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
  I = AverageProfile.data[xi]*profilescale;
  if(i == 0) {
-   ppgmove(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl,I);
+   ppgmove(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl,I);
    i = 1;
  }else {
-   ppgdraw(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl,I);
+   ppgdraw(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl,I);
  }
       }
     }
@@ -852,7 +876,7 @@ int main(int argc, char **argv)
  ppgscr(20, 0.5, 0.5, 0.5);
  ppgsci(20);
  for(xi=0; xi < AverageProfile.NrBins; xi++) {
-   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl;
+   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
    if(x >= fl_min && x <= fl_max) {
      I = VarianceProfile.data[xi];
      ok_flag = 1;
@@ -883,7 +907,7 @@ int main(int argc, char **argv)
  ppgsls(1);
  ppgslw(1);
  for(xi=0; xi < ModProfile.NrBins; xi++) {
-   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl;
+   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
    if(x >= fl_min && x <= fl_max) {
      I = ModProfile.data[xi];
      ok_flag = 1;
@@ -907,7 +931,7 @@ int main(int argc, char **argv)
  ppgsls(1);
  ppgslw(1);
  for(xi=0; xi < ModProfile.NrBins; xi++) {
-   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl;
+   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
    if(x >= fl_min && x <= fl_max) {
      I = ModProfile.data[xi];
      ok_flag = 1;
@@ -927,7 +951,7 @@ int main(int argc, char **argv)
       ppgsls(4);
       ppgslw(1);
       for(xi=0; xi < AverageProfile.NrBins; xi++) {
- x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl;
+ x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
  if(x >= fl_min && x <= fl_max) {
    I = subpulseAmpProfile.data[xi];
    if(i == 0) {
@@ -983,7 +1007,7 @@ int main(int argc, char **argv)
     Imin = 0;
     Imax = 0;
     for(xi=0; xi < subpulseTrackProfile.NrBins; xi++) {
-      if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) <= fl_max) {
+      if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
  I = subpulseTrackProfile.data[xi];
  if(doFlip)
    I *= -1;
@@ -1042,7 +1066,7 @@ int main(int argc, char **argv)
     ppgsls(1);
     ppgslw(1);
     for(xi=0; xi < subpulseTrackProfile.NrBins; xi++) {
-      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl;
+      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
       if(x >= fl_min && x <= fl_max) {
  I = subpulseTrackProfile.data[xi];
  if(doFlip)
@@ -1055,7 +1079,7 @@ int main(int argc, char **argv)
     ppgsci(1);
     ppgslw(3);
     for(xi=0; xi < subpulseTrackProfile.NrBins; xi++) {
-      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl;
+      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
       if(x >= fl_min && x <= fl_max) {
  I = subpulseTrackProfile.data[xi];
  if(doFlip)
@@ -1379,20 +1403,32 @@ void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, 
   viewport.dontopen = 1;
   viewport.dontclose = 1;
   viewport.noclear = 1;
-  pgplotMap(viewport, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0+dl, 360*(lrfs.NrBins-1)*get_tsamp(lrfs, 0, verbose)/get_period(lrfs, 0, verbose)+dl, fl_min, fl_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturizel, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+  double period;
+  int ret;
+  ret = get_period(lrfs, 0, &period, verbose);
+  if(ret == 2) {
+    printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", lrfs.filename);
+    exit(0);
+  }
+  pgplotMap(viewport, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0+dl, 360*(lrfs.NrBins-1)*get_tsamp(lrfs, 0, verbose)/period+dl, fl_min, fl_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturizel, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+  ret = get_period(AverageProfile, 0, &period, verbose);
+  if(ret == 2) {
+    printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
+    exit(0);
+  }
   if(overlaypp) {
     ppgsci(lineColour);
     ppgsls(1);
     ppgslw(1);
     i = 0;
     for(xi=0; xi < AverageProfile.NrBins; xi++) {
-      if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl) <= fl_max) {
+      if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
  I = AverageProfile.data[xi]*0.5;
  if(i == 0) {
-   ppgmove(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl,I);
+   ppgmove(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl,I);
    i = 1;
  }else {
-   ppgdraw(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/get_period(AverageProfile, 0, verbose)+dl,I);
+   ppgdraw(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl,I);
  }
       }
     }

@@ -322,17 +322,19 @@ int continuous_shift(datafile_definition fin, datafile_definition *fout, int shi
     printf("\n");
   return 1;
 }
-double get_period(datafile_definition datafile, long subint, verbose_definition verbose)
+int get_period(datafile_definition datafile, long subint, double *period, verbose_definition verbose)
 {
+  *period = 0;
   if(datafile.isFolded != 1) {
     printwarning(verbose.debug, "WARNING get_period: Data does not appear to be folded");
-    return -1;
+    return 1;
   }
   if(datafile.foldMode != FOLDMODE_FIXEDPERIOD) {
     printerror(verbose.debug, "ERROR get_period: Unknown folding mode");
-    exit(0);
+    return 2;
   }
-  return datafile.fixedPeriod;
+  *period = datafile.fixedPeriod;
+  return 0;
 }
 double get_tsamp(datafile_definition datafile, long subint, verbose_definition verbose)
 {
@@ -356,9 +358,16 @@ double get_pulse_longitude(datafile_definition datafile, long subint, long binnr
     return datafile.tsamp_list[binnr];
   }else if(datafile.tsampMode == TSAMPMODE_FIXEDTSAMP) {
     double longitude;
+    double period;
+    int ret;
+    ret = get_period(datafile, subint, &period, verbose);
+    if(ret != 0) {
+      printerror(verbose.debug, "ERROR get_pulse_longitude (%s): Cannot obtain period", datafile.filename);
+      exit(0);
+    }
     longitude = binnr;
     longitude *= datafile.fixedtsamp;
-    longitude /= get_period(datafile, subint, verbose);
+    longitude /= period;
     return 360.0*longitude;
   }else {
     printerror(verbose.debug, "ERROR get_pulse_longitude: Unknown sampling mode");
@@ -368,6 +377,7 @@ double get_pulse_longitude(datafile_definition datafile, long subint, long binnr
 }
 int convert_to_fixed_tsamp(datafile_definition *datafile, verbose_definition verbose)
 {
+  int ret;
   long binnr;
   double period, delta, delta_exp, diff;
   if(verbose.debug)
@@ -376,7 +386,11 @@ int convert_to_fixed_tsamp(datafile_definition *datafile, verbose_definition ver
     printwarning(verbose.debug, "WARNING convert_to_fixed_tsamp: Data already has a fixed sampling time.");
     return 0;
   }
-  period = get_period(*datafile, 0, verbose);
+  ret = get_period(*datafile, 0, &period, verbose);
+  if(ret == 2) {
+    printerror(verbose.debug, "ERROR convert_to_fixed_tsamp (%s): Cannot obtain period", datafile->filename);
+    return 0;
+  }
   if(period <= 0.0) {
     printwarning(verbose.debug, "WARNING convert_to_fixed_tsamp: Period is not set, command is ignored.");
     return 0;
@@ -409,7 +423,7 @@ int convert_to_fixed_tsamp(datafile_definition *datafile, verbose_definition ver
   free(datafile->tsamp_list);
   datafile->tsamp_list = NULL;
   datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
-  datafile->fixedtsamp = get_period(*datafile, 0, verbose)*delta_exp/360.0;
+  datafile->fixedtsamp = period*delta_exp/360.0;
   if(verbose.debug) {
     printf("  convert_to_fixed_tsamp: new sampling time is %lf sec\n", datafile->fixedtsamp);
     printf("Exiting convert_to_fixed_tsamp()\n");
@@ -459,16 +473,17 @@ long double get_mjd_subint(datafile_definition datafile, long subint, verbose_de
   mjd += offset/(3600.0*24.0);
   return mjd;
 }
-double get_channelbw(datafile_definition datafile, long subint, long channel, verbose_definition verbose)
+double get_channelbw(datafile_definition datafile, long subint, long channel, double *channelbw, verbose_definition verbose)
 {
   if(datafile.freqMode != FREQMODE_UNIFORM) {
-    printerror(verbose.debug, "ERROR get_channelbw: Unknown observing frequency");
-    exit(0);
+    printerror(verbose.debug, "ERROR get_channelbw: Unknown observing frequency (freqMode = %d)", datafile.freqMode);
+    return 0;
   }
   if(datafile.isTransposed == 0)
-    return datafile.uniform_bw/(double)datafile.NrFreqChan;
+    *channelbw = datafile.uniform_bw/(double)datafile.NrFreqChan;
   else
-    return datafile.uniform_bw/(double)datafile.NrSubints;
+    *channelbw = datafile.uniform_bw/(double)datafile.NrSubints;
+  return 1;
 }
 double get_bw(datafile_definition datafile, verbose_definition verbose)
 {
@@ -496,12 +511,17 @@ double get_channel_freq(datafile_definition psrdata, long channel, verbose_defin
     }
     exit(0);
   }
+  double chanbw;
+  if(get_channelbw(psrdata, 0, 0, &chanbw, verbose) == 0) {
+    printerror(verbose.debug, "ERROR get_channel_freq (%s): Cannot obtain channel bandwidth.", psrdata.filename);
+    exit(0);
+  }
   if(psrdata.isTransposed == 0) {
-    freq_bottom = psrdata.uniform_freq_cent - 0.5*(double)psrdata.NrFreqChan*get_channelbw(psrdata, 0, 0, verbose);
-    cfreq = freq_bottom + get_channelbw(psrdata, 0, 0, verbose)*(channel+0.5);
+    freq_bottom = psrdata.uniform_freq_cent - 0.5*(double)psrdata.NrFreqChan*chanbw;
+    cfreq = freq_bottom + chanbw*(channel+0.5);
   }else {
-    freq_bottom = psrdata.uniform_freq_cent - 0.5*(double)psrdata.NrSubints*get_channelbw(psrdata, 0, 0, verbose);
-    cfreq = freq_bottom + get_channelbw(psrdata, 0, 0, verbose)*(channel+0.5);
+    freq_bottom = psrdata.uniform_freq_cent - 0.5*(double)psrdata.NrSubints*chanbw;
+    cfreq = freq_bottom + chanbw*(channel+0.5);
   }
   return cfreq;
 }

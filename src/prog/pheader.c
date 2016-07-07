@@ -481,9 +481,16 @@ int main(int argc, char **argv)
       for(i = 0; i < nrwords; i++) {
  sscanf(pickWordFromString(argv[c_index], i+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
  if(strcasecmp(cmd, "p0") == 0 || strcasecmp(cmd, "period") == 0) {
-   if(get_period(datain[index], 0, application.verbose_state) > 0) {
+   double period;
+   int ret;
+   ret = get_period(datain[index], 0, &period, application.verbose_state);
+   if(ret == 2) {
+     printerror(application.verbose_state.debug, "ERROR pheader (%s): Cannot obtain period", datain[index].filename);
+     return 0;
+   }
+   if(period > 0) {
 
-     printf(" %*.*lf", 7+precision, 4+precision, get_period(datain[index], 0, application.verbose_state));
+     printf(" %*.*lf", 7+precision, 4+precision, period);
    }else {
      printf(" SEARCH?");
      footnote_search = 1;
@@ -508,7 +515,12 @@ int main(int argc, char **argv)
  }else if(strcasecmp(cmd, "bw") == 0) {
    printf(" %*.*lf", 7+precision, 1+precision, get_bw(datain[index], application.verbose_state));
  }else if(strcasecmp(cmd, "chbw") == 0 || strcasecmp(cmd, "chanbw") == 0) {
-   printf(" %*.*lf", 9+precision, 3+precision, get_channelbw(datain[index], 0, 0, application.verbose_state));
+   double chanbw;
+   if(get_channelbw(datain[index], 0, 0, &chanbw, application.verbose_state) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pheader (%s): Cannot obtain channel bandwidth.", datain[index].filename);
+     return 0;
+   }
+   printf(" %*.*lf", 9+precision, 3+precision, chanbw);
  }else if(strcasecmp(cmd, "dm") == 0) {
    printf(" %*.*lf", 8+precision, 3+precision, datain[index].dm);
  }else if(strcasecmp(cmd, "rm") == 0) {
@@ -577,7 +589,7 @@ int main(int argc, char **argv)
  }else if(strcasecmp(cmd, "hist") == 0) {
  }else if(strcasecmp(cmd, "weights") == 0) {
  }else {
-   printerror(application.verbose_state.verbose, "\npheader: Unknown header parameter (%s), specify -H for a list", cmd);
+   printerror(application.verbose_state.verbose, "\nERROR pheader: Unknown header parameter (%s), specify -H for a list", cmd);
    return 0;
  }
       }

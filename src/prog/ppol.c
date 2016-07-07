@@ -433,7 +433,14 @@ int main(int argc, char **argv)
       if(datain.isFolded && datain.tsampMode == TSAMPMODE_FIXEDTSAMP) {
  if(get_tsamp(datain, 0, application.verbose_state) <= 0.0) {
    printwarning(application.verbose_state.debug, "WARNING ppol: Assuming full period is stored.");
-   datain.fixedtsamp = get_period(datain, 0, application.verbose_state)/(double)datain.NrBins;
+   double period;
+   int ret;
+   ret = get_period(datain, 0, &period, application.verbose_state);
+   if(ret == 2) {
+     printerror(application.verbose_state.debug, "ERROR ppol (%s): Cannot obtain period", datain.filename);
+     return 0;
+   }
+   datain.fixedtsamp = period/(double)datain.NrBins;
  }
       }
       if(get_tsamp(datain, 0, application.verbose_state) < 0.0000001 || get_tsamp(datain, 0, application.verbose_state) >= 10) {

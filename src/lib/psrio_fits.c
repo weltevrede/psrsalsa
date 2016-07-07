@@ -167,7 +167,19 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
       return 0;
     }
 
-    if(datafile.gentype == GENTYPE_SEARCHMODE || datafile.isFolded != 1 || get_period(datafile, 0, verbose) < 0) {
+    double period;
+    int ret;
+    if(datafile.isFolded) {
+      ret = get_period(datafile, 0, &period, verbose);
+      if(ret == 2) {
+ printerror(verbose.debug, "ERROR writeFITSpulse (%s): Cannot obtain period", datafile.filename);
+ return 0;
+      }
+    }else {
+      ret = 1;
+      period = -1;
+    }
+    if(datafile.gentype == GENTYPE_SEARCHMODE || datafile.isFolded != 1 || ret == 1 || period < 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR writeFITSpulse: This function is not working properly for search mode data. Write out whole subints instead of per channel data.");
       return 0;
@@ -184,7 +196,7 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
       data[i] = (pulse[i]-offset)/scale;
     }
 
-    if(datafile.gentype != GENTYPE_SEARCHMODE && datafile.isFolded == 1 && get_period(datafile, 0, verbose) > 0) {
+    if(datafile.gentype != GENTYPE_SEARCHMODE && datafile.isFolded == 1 && ret == 0 && period >= 0) {
       i = 1+polarization*datafile.NrBins*datafile.NrFreqChan+freq*datafile.NrBins+binnr;
       if(fits_write_col(datafile.fits_fptr, TINT, 18, 1+pulsenr, i, nrSamples, data, &status) != 0) {
  fflush(stdout);
@@ -646,9 +658,21 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
     return 0;
   }
+  double period;
+  int ret;
+  if(datafile->isFolded) {
+    ret = get_period(*datafile, 0, &period, verbose);
+    if(ret == 2) {
+      printerror(verbose.debug, "ERROR writePSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+      return 0;
+    }
+  }else {
+    ret = 1;
+    period = -1;
+  }
   if(datafile->gentype == GENTYPE_RECEIVERMODEL || datafile->gentype == GENTYPE_RECEIVERMODEL2) {
     sprintf(dummy_txt, "PCM");
-  }else if(datafile->gentype != GENTYPE_SEARCHMODE && datafile->isFolded == 1 && get_period(*datafile, 0, verbose) > 0) {
+  }else if(datafile->gentype != GENTYPE_SEARCHMODE && datafile->isFolded == 1 && ret == 0 && period >= 0) {
     if(datafile->gentype == GENTYPE_POLNCAL) {
       sprintf(dummy_txt, "CAL");
     }else {
@@ -901,7 +925,10 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
     return 0;
   }
-  dummy_double = get_channelbw(*datafile, 0, 0, verbose);
+  if(get_channelbw(*datafile, 0, 0, &dummy_double, verbose) == 0) {
+    printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot obtain channel bandwidth.");
+    return 0;
+  }
   if(fits_write_col(datafile->fits_fptr, TDOUBLE, 7, 1, 1, 1, &dummy_double, &status) != 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
@@ -936,7 +963,19 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
   if(datafile->gentype != GENTYPE_RECEIVERMODEL && datafile->gentype != GENTYPE_RECEIVERMODEL2) {
     sprintf(dummy_txt, "%ldD", datafile->NrFreqChan);
     sprintf(dummy_txt2, "%ldE", datafile->NrFreqChan*datafile->NrPols);
-    if(datafile->gentype != GENTYPE_SEARCHMODE && datafile->isFolded == 1 && get_period(*datafile, 0, verbose) > 0) {
+    double period;
+    int ret;
+    if(datafile->isFolded) {
+      ret = get_period(*datafile, 0, &period, verbose);
+      if(ret == 2) {
+ printerror(verbose.debug, "ERROR writePSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+ return 0;
+      }
+    }else {
+      ret = 1;
+      period = -1;
+    }
+    if(datafile->gentype != GENTYPE_SEARCHMODE && datafile->isFolded == 1 && ret == 0 && period >= 0) {
       sprintf(dummy_txt3, "%ldI", datafile->NrFreqChan*datafile->NrPols*datafile->NrBins);
     }else {
       long nrbytes = ceil((datafile->NrFreqChan*datafile->NrPols*datafile->NrBins*datafile->NrBits)/8.0);
@@ -1005,7 +1044,19 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
       printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
       return 0;
     }
-    if(datafile->gentype != GENTYPE_SEARCHMODE && datafile->isFolded == 1 && get_period(*datafile, 0, verbose) > 0) {
+    double period_set;
+    int ret_prd;
+    if(datafile->isFolded) {
+      ret_prd = get_period(*datafile, 0, &period_set, verbose);
+      if(ret_prd == 2) {
+ printerror(verbose.debug, "ERROR writePSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+ return 0;
+      }
+    }else {
+      ret_prd = 1;
+      period = -1;
+    }
+    if(datafile->gentype != GENTYPE_SEARCHMODE && datafile->isFolded == 1 && ret_prd == 0 && period_set >= 0) {
       dummy_int = datafile->NrBins;
       if(fits_write_key(datafile->fits_fptr, TINT, "NBIN", &dummy_int, "Nr of bins (PSR/CAL mode; else 1)", &status) != 0) {
  fflush(stdout);
@@ -1043,7 +1094,11 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
       printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
       return 0;
     }
-    dummy_float = get_channelbw(*datafile, 0, 0, verbose);
+    if(get_channelbw(*datafile, 0, 0, &dummy_double, verbose) == 0) {
+      printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot obtain channel bandwidth.");
+      return 0;
+    }
+    dummy_float = dummy_double;
     if(fits_write_key(datafile->fits_fptr, TFLOAT, "CHAN_BW", &dummy_float, "[MHz] Channel/sub-band width", &status) != 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
@@ -1062,7 +1117,20 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
       return 0;
     }
     for(i = 0; i < datafile->NrSubints; i++) {
-      dummy_double = get_period(*datafile, 0, verbose);
+      int ret_prd;
+      if(datafile->isFolded) {
+ ret_prd = get_period(*datafile, 0, &dummy_double, verbose);
+ if(ret_prd == 2) {
+   printerror(verbose.debug, "ERROR writePSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+   return 0;
+ }
+      }else {
+ ret_prd = -1;
+ dummy_double = -1;
+      }
+      if(ret_prd == 1) {
+ dummy_double = -1;
+      }
       if(fits_write_col(datafile->fits_fptr, TDOUBLE, 19, i+1, 1, 1, &dummy_double, &status) != 0) {
  fflush(stdout);
  printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
@@ -1285,7 +1353,12 @@ void update_freqs_using_DAT_FREQ_column(datafile_definition *datafile, verbose_d
       cfreq /= (double)datafile->NrFreqChan;
       if(fabs(cfreq-datafile->uniform_freq_cent) > 1e-6) {
  if(datafile->uniform_freq_cent > 0) {
-   if(fabs(datafile->uniform_freq_cent-cfreq-0.5*fabs(get_channelbw(*datafile, 0, 0, verbose))) < 1e-6) {
+   double chanbw;
+   if(get_channelbw(*datafile, 0, 0, &chanbw, verbose) == 0) {
+     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain channel bandwidth.", datafile->filename);
+     exit(0);
+   }
+   if(fabs(datafile->uniform_freq_cent-cfreq-0.5*fabs(chanbw)) < 1e-6) {
      if(verbose.debug) {
        printf("  readPSRFITSHeader (%s): Updating centre frequency from %lf to %lf MHz as suggested by the frequency list in the fits table, corresponding to an offset expected from a dropped DC channel.\n", datafile->filename, datafile->uniform_freq_cent, cfreq);
      }
@@ -1301,9 +1374,14 @@ void update_freqs_using_DAT_FREQ_column(datafile_definition *datafile, verbose_d
       }
       if(datafile->NrFreqChan > 1) {
  dfreq = (freq1-freq0)/(double)(datafile->NrFreqChan-1);
- if(fabs(dfreq-get_channelbw(*datafile, 0, 0, verbose)) > 1e-6) {
+ double chanbw;
+ if(get_channelbw(*datafile, 0, 0, &chanbw, verbose) == 0) {
+   printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain channel bandwidth.", datafile->filename);
+   exit(0);
+ }
+ if(fabs(dfreq-chanbw) > 1e-6) {
    fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Updating channel bandwidth from %lf to %lf MHz suggested by the frequency list in the subint table.", datafile->filename, get_channelbw(*datafile, 0, 0, verbose), dfreq);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Updating channel bandwidth from %lf to %lf MHz suggested by the frequency list in the subint table.", datafile->filename, chanbw, dfreq);
    datafile->uniform_bw = dfreq*datafile->NrFreqChan;
  }
       }
@@ -1707,15 +1785,20 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
    periodnotset = 1;
    status = 0;
  }else {
+   double period;
+   if(get_period(*datafile, 0, &period, verbose) == 2) {
+     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+     return 0;
+   }
    if(verbose.debug) {
      fflush(stdout);
-     printf("  readPSRFITSHeader (%s): Period determination - Set sampling time to HISTORY:TBIN = %lf.\n", datafile->filename, get_period(*datafile, 0, verbose));
+     printf("  readPSRFITSHeader (%s): Period determination - Set sampling time to HISTORY:TBIN = %lf.\n", datafile->filename, period);
    }
    datafile->isFolded = 1;
    datafile->foldMode = FOLDMODE_FIXEDPERIOD;
    periodnotset = 0;
    datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
-   datafile->fixedtsamp = get_period(*datafile, 0, verbose);
+   datafile->fixedtsamp = period;
    samptimenotset = 0;
  }
       }
@@ -1749,7 +1832,12 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
        datafile->foldMode = FOLDMODE_FIXEDPERIOD;
        if(verbose.debug) {
   fflush(stdout);
-  printf("  readPSRFITSHeader (%s): Period determination - multiplying HISTORY:TBIN with HISTORY:NBIN_PRD suggests %lf.\n", datafile->filename, get_period(*datafile, 0, verbose));
+  double period;
+  if(get_period(*datafile, 0, &period, verbose) == 2) {
+    printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+    return 0;
+  }
+  printf("  readPSRFITSHeader (%s): Period determination - multiplying HISTORY:TBIN with HISTORY:NBIN_PRD suggests %lf.\n", datafile->filename, period);
        }
      }
    }
@@ -1881,7 +1969,12 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
    datafile->foldMode = FOLDMODE_FIXEDPERIOD;
    if(verbose.debug) {
      fflush(stdout);
-     printf("  readPSRFITSHeader (%s): Period determination - SUBINT:PERIOD suggests %lf.\n", datafile->filename, get_period(*datafile, 0, verbose));
+     double period;
+     if(get_period(*datafile, 0, &period, verbose) == 2) {
+       printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+       return 0;
+     }
+     printf("  readPSRFITSHeader (%s): Period determination - SUBINT:PERIOD suggests %lf.\n", datafile->filename, period);
    }
  }
       }
@@ -1904,7 +1997,12 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       i = fscanf(fin, "%s %lf", command, &(datafile->fixedPeriod));
       if(verbose.debug) {
  fflush(stdout);
- printf("  readPSRFITSHeader (%s): System call to vap suggests period = %lf.\n", datafile->filename, get_period(*datafile, 0, verbose));
+ double period;
+ if(get_period(*datafile, 0, &period, verbose) == 2) {
+   printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+   return 0;
+ }
+ printf("  readPSRFITSHeader (%s): System call to vap suggests period = %lf.\n", datafile->filename, period);
       }
       if(i != 2) {
  datafile->isFolded = 0;
@@ -1985,14 +2083,26 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     }else {
       datafile->NrBits = 16;
     }
+    double period;
+    int ret;
+    if(datafile->isFolded == 1) {
+      ret = get_period(*datafile, 0, &period, verbose);
+      if(ret == 2) {
+ printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+ return 0;
+      }
+    }else {
+      ret = 1;
+      period = -1;
+    }
     if(fits_read_card(datafile->fits_fptr,"TBIN", card, &status)) {
       fflush(stdout);
       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): SUBINT:TBIN keyword does not exist, assuming whole period is stored and using period to get sampling time.", datafile->filename);
-      if(periodnotset || get_period(*datafile, 0, verbose) <= 0) {
+      if(periodnotset || period <= 0) {
  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period is not set, so cannot use period to get sampling time.", datafile->filename);
       }else {
  datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
- datafile->fixedtsamp = get_period(*datafile, 0, verbose)/(double)datafile->NrBins;
+ datafile->fixedtsamp = period/(double)datafile->NrBins;
       }
       status = 0;
     }else {
@@ -2000,15 +2110,15 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       if(value[1] == '*') {
  fflush(stdout);
  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Sampling time not set, assuming whole period is stored to obtain sampling time.", datafile->filename);
- if(periodnotset || get_period(*datafile, 0, verbose) <= 0) {
+ if(periodnotset || period <= 0) {
    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period is not set, so cannot use period to get sampling time.", datafile->filename);
  }else {
    if(verbose.debug) {
      fflush(stdout);
-     printf("  readPSRFITSHeader (%s): Setting sampling time to %lf/%ld.\n", datafile->filename, get_period(*datafile, 0, verbose), datafile->NrBins);
+     printf("  readPSRFITSHeader (%s): Setting sampling time to %lf/%ld.\n", datafile->filename, period, datafile->NrBins);
    }
    datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
-   datafile->fixedtsamp = get_period(*datafile, 0, verbose)/(double)datafile->NrBins;
+   datafile->fixedtsamp = period/(double)datafile->NrBins;
    samptimenotset = 0;
  }
       }else {
@@ -2133,7 +2243,12 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
  }
  if(ok) {
    double expected_duration, testvalue;
-   expected_duration = get_period(*datafile, 0, verbose) * datafile->NrSubints;
+   double period;
+   if(get_period(*datafile, 0, &period, verbose) == 2) {
+     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+     return 0;
+   }
+   expected_duration = period * datafile->NrSubints;
    testvalue = (tot_duration-expected_duration)/expected_duration;
    if(testvalue < 0.01) {
      if(verbose.debug) {
@@ -2169,11 +2284,24 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
      }
    }else {
      fflush(stdout);
-     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Total duration of observation (%lf sec) implies the nr of periods < nr of subintegrations. Something is wrong.", datafile->filename, tot_duration);
-     datafile->tsubMode = TSUBMODE_UNKNOWN;
-     if(gentypenotset) {
-       fflush(stdout);
-       printf("readPSRFITSHeader (%s): Without an observation duration the gentype is not determined.\n", datafile->filename);
+     double period;
+     if(get_period(*datafile, 0, &period, verbose) == 2) {
+       printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain period", datafile->filename);
+       return 0;
+     }
+     if(period != 0) {
+       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Total duration of observation (%lf sec) implies the nr of periods < nr of subintegrations. Something is wrong.", datafile->filename, tot_duration);
+       datafile->tsubMode = TSUBMODE_UNKNOWN;
+       if(gentypenotset) {
+  fflush(stdout);
+  printf("readPSRFITSHeader (%s): Without an observation duration the gentype is not determined.\n", datafile->filename);
+       }
+     }else {
+       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period does not appear to be set. Observation duration cannot be compared to number of subints.", datafile->filename);
+       if(gentypenotset) {
+  fflush(stdout);
+  printf("readPSRFITSHeader (%s): Without an observation duration the gentype is not determined.\n", datafile->filename);
+       }
      }
    }
  }
@@ -2387,7 +2515,19 @@ int writeFITSsubint(datafile_definition datafile, long subintnr, unsigned char *
     printerror(verbose.debug, "ERROR writeFITSsubint: Cannot mode to subint table.");
     return 0;
   }
-  if(datafile.gentype != GENTYPE_SEARCHMODE && datafile.isFolded && get_period(datafile, 0, verbose) > 0) {
+  double period;
+  int ret;
+  if(datafile.isFolded) {
+    ret = get_period(datafile, 0, &period, verbose);
+    if(ret == 2) {
+      printerror(verbose.debug, "ERROR writeFITSsubint (%s): Cannot obtain period", datafile.filename);
+      return 0;
+    }
+  }else {
+    ret = 1;
+    period = -1;
+  }
+  if(datafile.gentype != GENTYPE_SEARCHMODE && datafile.isFolded && ret == 0 && period >= 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writeFITSsubint: This function assumes file is search mode data, which it isn't.");
     return 0;
@@ -2474,7 +2614,19 @@ int writeFITSfile(datafile_definition datafile, float *data, verbose_definition 
   unsigned char *subintdata;
   float *scales, *offsets;
   long n, f, p;
-  if((datafile.gentype != GENTYPE_SEARCHMODE && datafile.isFolded && get_period(datafile, 0, verbose) > 0) || datafile.gentype == GENTYPE_RECEIVERMODEL || datafile.gentype == GENTYPE_RECEIVERMODEL2) {
+  double period;
+  int ret;
+  if(datafile.isFolded) {
+    ret = get_period(datafile, 0, &period, verbose);
+    if(ret == 2) {
+      printerror(verbose.debug, "ERROR writeFITSfile (%s): Cannot obtain period", datafile.filename);
+      return 0;
+    }
+  }else {
+    ret = 1;
+    period = -1;
+  }
+  if((datafile.gentype != GENTYPE_SEARCHMODE && datafile.isFolded && ret == 0 && period >= 0) || datafile.gentype == GENTYPE_RECEIVERMODEL || datafile.gentype == GENTYPE_RECEIVERMODEL2) {
     for(n = 0; n < datafile.NrSubints; n++) {
       if(verbose.verbose && verbose.nocounters == 0) printf("writeFITSfile: pulse %ld/%ld          \r", n+1, datafile.NrSubints);
       for(f = 0; f < datafile.NrFreqChan; f++) {
