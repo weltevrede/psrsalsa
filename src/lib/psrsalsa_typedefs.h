@@ -34,7 +34,7 @@ typedef struct {
 
 typedef struct {
 
-  float centre[maxNrVonMisesComponents], concentration[maxNrVonMisesComponents], height[maxNrVonMisesComponents];
+  double centre[maxNrVonMisesComponents], concentration[maxNrVonMisesComponents], height[maxNrVonMisesComponents];
   int nrcomponents;
 }vonMises_def;
 

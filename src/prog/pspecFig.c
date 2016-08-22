@@ -27,16 +27,16 @@ float labelscale;
 char title2[100];
 datafile_definition twodfs, twodfs2, lrfs, AverageProfile, VarianceProfile, ModProfile, VarianceProfileErr, ModProfileErr;
 
-void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, int nomain, double scaleFig_x, double scaleFig_y, verbose_definition verbose);
-void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int nomain, char *title, double scaleFig_x, double scaleFig_y, verbose_definition verbose);
-void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, int lineColour, char *title, double scaleFig_x, double scaleFig_y, verbose_definition verbose);
+void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, int nomain, double scaleFig_x, double scaleFig_y, int showwedge, int normaliseSide, int nointegrateNumbers, verbose_definition verbose);
+void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int nomain, int showwedge, char *title, double scaleFig_x, double scaleFig_y, int normaliseSide, int nointegrateNumbers, verbose_definition verbose);
+void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, int lineColour, int showwedge, char *title, double scaleFig_x, double scaleFig_y, int normaliseSide, int nointegrateNumbers, int usephase, verbose_definition verbose);
 
 int main(int argc, char **argv)
 {
-  int i, j, xi, SelectP3Region, LoadTwo, NrSelectedOverSaturize, plot_xlabel, plot_ylabel, nomain;
-  int plot_ylabeltop, file_number, ImaxSet, IminSet, type_of_plots, maxSubpulsePhaseSet, minSubpulsePhaseSet, do_phase_slope;
+  int i, j, xi, SelectP3Region, LoadTwo, NrSelectedOverSaturize, plot_xlabel, plot_ylabel, nomain, normaliseSide, nointegrateNumbers;
+  int plot_ylabeltop, file_number, ImaxSet, IminSet, type_of_plots, maxSubpulsePhaseSet, minSubpulsePhaseSet, do_phase_slope, showwedge, normalise_spectra;
   char PlotDevice[100], filename[1000], txt[1000];
-  int title_index, Load2dfs, LoadLRFS, plotvariance, plotmodindex, ok_flag, altProf, lineStyle, lineColour, ret;
+  int title_index, Load2dfs, LoadLRFS, plotvariance, plotmodindex, ok_flag, altProf, lineStyle, lineColour, ret, usephase;
   double P3RegionLow, P3RegionHigh, maxSubpulsePhase, minSubpulsePhase, scaleFig_x, scaleFig_y;
   float I, x, profilescale;
   float maxvalue_mod, maxvalue_stddev, maxsigma_stddev, maxsigma_mod, ImaxValue, IminValue, phase_slope_g, phase_slope_o;
@@ -79,12 +79,15 @@ int main(int argc, char **argv)
     printf("-nolrfs           Do not load lrfs\n");
     printf("-no2dfs           Do not load 2dfs's\n");
     printf("-noside           Don't show side panels\n");
+    printf("-normspectra      Normalise the spectra (peak value=1)\n");
+    printf("-normside         Normalise the side panels (peak value=1)\n");
 
     printf("\nGeneral range options:\n");
     printf("-Imax             Set maximum value of the y-range of the top plot\n");
     printf("-Imin             Set minimum value of the y-range of the top plot\n");
     printf("-l  \"low high\"    Set horizontal range shown lrfs/profile.\n");
-    printf("-dl               Shift lrfs/profile by this amount of degrees.\n");
+    printf("-phase            Use pulse longitude in phase rather than degrees.\n");
+    printf("-dl               Shift lrfs/profile by this amount of degrees or phase.\n");
     printf("\nMode A specific range options:\n");
     printf("-p3 \"low high\"    Set vertical range shown in lrfs/2dfs.\n");
     printf("-p2 \"low high\"    Set horizontal range shown in 2dfs.\n");
@@ -109,6 +112,7 @@ int main(int argc, char **argv)
     printf("-title            Set the title\n");
     printf("-ytop             Show y-label of top plot\n");
     printf("\nMode A specific graphics options:\n");
+    printf("-intnrs           Show nrs along side panels axis, instead of just a tick\n");
     printf("-scalel           Specify scale, default is 1. This option multiplies the lrfs\n");
     printf("                  powers with this factor. This results in clipping, making\n");
     printf("                  weak features clearer\n");
@@ -122,6 +126,7 @@ int main(int argc, char **argv)
     printf("-noxlabels        Don't show xlabels on 2dfs bottom integration panel.\n");
     printf("-nomod            Do not plot a modulation index profile\n");
     printf("-nostddev         Do not plot a standard deviation profile\n");
+    printf("-showwedge        Plot an annotated wedge to show color scale\n");
     printf("-textside         Set the text printed in top left corner of the graph\n");
     printf("-xlabel           Show x-label of LRFS and 2DFS in cpp\n");
     printf("-xlabel2          Show x-label of LRFS and 2DFS in P0/P2\n");
@@ -196,6 +201,11 @@ int main(int argc, char **argv)
   minSubpulsePhaseSet = 0;
   maxSubpulsePhase = 0;
   minSubpulsePhase = 0;
+  showwedge = 0;
+  normalise_spectra = 0;
+  normaliseSide = 0;
+  nointegrateNumbers = 1;
+  usephase = 0;
 
   cleanPSRData(&twodfs, verbose);
   cleanPSRData(&lrfs, verbose);
@@ -277,6 +287,16 @@ int main(int argc, char **argv)
       noylabels = 1;
     }else if(strcmp(argv[i], "-noxlabels") == 0) {
       noxlabels = 1;
+    }else if(strcmp(argv[i], "-showwedge") == 0) {
+      showwedge = 1;
+    }else if(strcmp(argv[i], "-normspectra") == 0) {
+      normalise_spectra = 1;
+    }else if(strcmp(argv[i], "-normside") == 0) {
+      normaliseSide = 1;
+    }else if(strcmp(argv[i], "-intnrs") == 0) {
+      nointegrateNumbers = 0;
+    }else if(strcmp(argv[i], "-phase") == 0) {
+      usephase = 1;
     }else if(strcmp(argv[i], "-linestyle") == 0) {
       ret = sscanf(argv[i+1], "%d", &lineStyle);
       if(ret != 1) {
@@ -476,6 +496,18 @@ int main(int argc, char **argv)
       printf("Reading %s\n", filename);
     if(!openPSRData(&lrfs, filename, 0, 0, 1, 0, verbose))
       return 0;
+    long i;
+    double max;
+    if(normalise_spectra) {
+      for(i = 0; i < lrfs.NrSubints * lrfs.NrBins; i++) {
+ if(i == 0 || fabs(lrfs.data[i]) > max) {
+   max = fabs(lrfs.data[i]);
+ }
+      }
+      for(i = 0; i < lrfs.NrSubints * lrfs.NrBins; i++) {
+ lrfs.data[i] /= 0.999*max;
+      }
+    }
     if(PSRDataHeader_parse_commandline(&lrfs, argc, argv, verbose) == 0)
       return 0;
     double period;
@@ -616,6 +648,10 @@ int main(int argc, char **argv)
   }
   fl_min = 0 + dl;
   fl_max = 360*(AverageProfile.NrBins-1)*get_tsamp(AverageProfile, 0, verbose)/period + dl;
+  if(usephase) {
+    fl_min /= 360.0;
+    fl_max /= 360.0;
+  }
   if(type_of_plots == 1) {
     if(change_filename_extension(argv[argc-1], filename, "amplitude", 1000, verbose) == 0)
       return 0;
@@ -675,6 +711,18 @@ int main(int argc, char **argv)
       printf("Reading %s\n", filename);
     if(!openPSRData(&twodfs, filename, 0, 0, 1, 0, verbose))
       return 0;
+    long i;
+    double max;
+    if(normalise_spectra) {
+      for(i = 0; i < twodfs.NrSubints * twodfs.NrBins; i++) {
+ if(i == 0 || fabs(twodfs.data[i]) > max) {
+   max = fabs(twodfs.data[i]);
+ }
+      }
+      for(i = 0; i < twodfs.NrSubints * twodfs.NrBins; i++) {
+ twodfs.data[i] /= 0.999*max;
+      }
+    }
     if(PSRDataHeader_parse_commandline(&twodfs, argc, argv, verbose) == 0)
       return 0;
     if(verbose.verbose)
@@ -701,6 +749,18 @@ int main(int argc, char **argv)
  printf("Reading %s\n", filename);
       if(!openPSRData(&twodfs2, filename, 0, 0, 1, 0, verbose))
  return 0;
+      long i;
+      double max;
+      if(normalise_spectra) {
+ for(i = 0; i < twodfs2.NrSubints * twodfs2.NrBins; i++) {
+   if(i == 0 || fabs(twodfs2.data[i]) > max) {
+     max = fabs(twodfs2.data[i]);
+   }
+ }
+ for(i = 0; i < twodfs2.NrSubints * twodfs2.NrBins; i++) {
+   twodfs2.data[i] /= 0.999*max;
+ }
+      }
       if(PSRDataHeader_parse_commandline(&twodfs2, argc, argv, verbose) == 0)
  return 0;
       if(verbose.verbose)
@@ -762,7 +822,11 @@ int main(int argc, char **argv)
       return 0;
     }
     for(xi=0; xi < AverageProfile.NrBins; xi++) {
-      if(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period >= fl_min && xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period <= fl_max) {
+      double xpos;
+      xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      if(usephase)
+ xpos /= 360.0;
+      if(xpos >= fl_min && xpos <= fl_max) {
  I = AverageProfile.data[xi];
  if(I > Imax)
    Imax = I;
@@ -776,7 +840,11 @@ int main(int argc, char **argv)
     }
     if(type_of_plots == 0) {
       for(xi=0; xi < ModProfile.NrBins; xi++) {
- if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
+ double xpos;
+ xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+ if(usephase)
+   xpos /= 360.0;
+ if(xpos+dl >= fl_min && xpos+dl <= fl_max) {
    ok_flag = 1;
    if(maxsigma_mod > 0 && ModProfile.data[xi]/ModProfileErr.data[xi] < maxsigma_mod)
      ok_flag = 0;
@@ -792,7 +860,11 @@ int main(int argc, char **argv)
  }
       }
       for(xi=0; xi < VarianceProfile.NrBins; xi++) {
- if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
+ double xpos;
+ xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+ if(usephase)
+   xpos /= 360.0;
+ if(xpos + dl >= fl_min && xpos + dl <= fl_max) {
    I = VarianceProfile.data[xi];
    if(I > Imax)
      Imax = I;
@@ -802,7 +874,11 @@ int main(int argc, char **argv)
       }
     }else {
       for(xi=0; xi < subpulseAmpProfile.NrBins; xi++) {
- if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
+ double xpos;
+ xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+ if(usephase)
+   xpos /= 360.0;
+ if(xpos + dl >= fl_min && xpos + dl <= fl_max) {
    I = subpulseAmpProfile.data[xi];
    if(I > Imax)
      Imax = I;
@@ -849,7 +925,10 @@ int main(int argc, char **argv)
     }
     if(plot_xlabel != 0 && LoadLRFS == 0) {
       ppgsch(0.3*labelscale);
-      ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (deg)");
+      if(usephase)
+ ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (phase)");
+      else
+ ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (deg)");
       ppgsch(0.38*labelscale);
     }
     ppgsls(lineStyle);
@@ -857,13 +936,17 @@ int main(int argc, char **argv)
     ppgsci(lineColour);
     i = 0;
     for(xi=0; xi < AverageProfile.NrBins; xi++) {
-      if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
+      double xpos;
+      xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      if(usephase)
+ xpos /= 360.0;
+      if(xpos+dl >= fl_min && xpos+dl <= fl_max) {
  I = AverageProfile.data[xi]*profilescale;
  if(i == 0) {
-   ppgmove(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl,I);
+   ppgmove(xpos+dl,I);
    i = 1;
  }else {
-   ppgdraw(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl,I);
+   ppgdraw(xpos+dl,I);
  }
       }
     }
@@ -876,7 +959,10 @@ int main(int argc, char **argv)
  ppgscr(20, 0.5, 0.5, 0.5);
  ppgsci(20);
  for(xi=0; xi < AverageProfile.NrBins; xi++) {
-   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
+   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+   if(usephase)
+     x /= 360.0;
+   x += dl;
    if(x >= fl_min && x <= fl_max) {
      I = VarianceProfile.data[xi];
      ok_flag = 1;
@@ -907,7 +993,10 @@ int main(int argc, char **argv)
  ppgsls(1);
  ppgslw(1);
  for(xi=0; xi < ModProfile.NrBins; xi++) {
-   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
+   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+   if(usephase)
+     x /= 360.0;
+   x += dl;
    if(x >= fl_min && x <= fl_max) {
      I = ModProfile.data[xi];
      ok_flag = 1;
@@ -931,7 +1020,10 @@ int main(int argc, char **argv)
  ppgsls(1);
  ppgslw(1);
  for(xi=0; xi < ModProfile.NrBins; xi++) {
-   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
+   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+   if(usephase)
+     x /= 360.0;
+   x += dl;
    if(x >= fl_min && x <= fl_max) {
      I = ModProfile.data[xi];
      ok_flag = 1;
@@ -951,7 +1043,10 @@ int main(int argc, char **argv)
       ppgsls(4);
       ppgslw(1);
       for(xi=0; xi < AverageProfile.NrBins; xi++) {
- x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
+ x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+ if(usephase)
+   x /= 360.0;
+ x += dl;
  if(x >= fl_min && x <= fl_max) {
    I = subpulseAmpProfile.data[xi];
    if(i == 0) {
@@ -979,25 +1074,25 @@ int main(int argc, char **argv)
   if(type_of_plots == 0) {
     if(Load2dfs != 0 && LoadLRFS == 0) {
       if(title_index > 0 && notop && LoadLRFS == 0) {
- Plot2dfsOnly(0, plot_xlabel, plot_ylabel, noside, nomain, argv[title_index], scaleFig_x, scaleFig_y, verbose);
+ Plot2dfsOnly(0, plot_xlabel, plot_ylabel, noside, nomain, showwedge, argv[title_index], scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, verbose);
       }else {
- Plot2dfsOnly(0, plot_xlabel, plot_ylabel, noside, nomain, NULL, scaleFig_x, scaleFig_y, verbose);
+ Plot2dfsOnly(0, plot_xlabel, plot_ylabel, noside, nomain, showwedge, NULL, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, verbose);
       }
       if (LoadTwo != 0)
- Plot2dfsOnly(1, plot_xlabel, plot_ylabel, noside, nomain, NULL, scaleFig_x, scaleFig_y, verbose);
+ Plot2dfsOnly(1, plot_xlabel, plot_ylabel, noside, nomain, showwedge, NULL, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, verbose);
     }
     else {
       if(LoadLRFS != 0) {
  if(title_index > 0 && notop) {
-   PlotLRFS(plot_xlabel, plot_ylabel, noside, plot_ylabeltop, lineColour, argv[title_index], scaleFig_x, scaleFig_y, verbose);
+   PlotLRFS(plot_xlabel, plot_ylabel, noside, plot_ylabeltop, lineColour, showwedge, argv[title_index], scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, usephase, verbose);
  }else {
-   PlotLRFS(plot_xlabel, plot_ylabel, noside, plot_ylabeltop, lineColour, NULL, scaleFig_x, scaleFig_y, verbose);
+   PlotLRFS(plot_xlabel, plot_ylabel, noside, plot_ylabeltop, lineColour, showwedge, NULL, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, usephase, verbose);
  }
       }
       if(Load2dfs != 0)
- Plot2dfs(0, plot_xlabel, plot_ylabel, noside, plot_ylabeltop, nomain, scaleFig_x, scaleFig_y, verbose);
+ Plot2dfs(0, plot_xlabel, plot_ylabel, noside, plot_ylabeltop, nomain, scaleFig_x, scaleFig_y, showwedge, normaliseSide, nointegrateNumbers, verbose);
       if(LoadTwo != 0)
- Plot2dfs(1, plot_xlabel, plot_ylabel, noside, plot_ylabeltop, nomain, scaleFig_x, scaleFig_y, verbose);
+ Plot2dfs(1, plot_xlabel, plot_ylabel, noside, plot_ylabeltop, nomain, scaleFig_x, scaleFig_y, showwedge, normaliseSide, nointegrateNumbers, verbose);
     }
   }else {
     ppgsvp(0.2, 0.2+0.11*scaleFig_x, 0.95-0.3*scaleFig_y, 0.95-0.15*scaleFig_y);
@@ -1007,7 +1102,11 @@ int main(int argc, char **argv)
     Imin = 0;
     Imax = 0;
     for(xi=0; xi < subpulseTrackProfile.NrBins; xi++) {
-      if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
+      double xpos;
+      xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      if(usephase)
+ xpos /= 360.0;
+      if(xpos+dl >= fl_min && xpos+dl <= fl_max) {
  I = subpulseTrackProfile.data[xi];
  if(doFlip)
    I *= -1;
@@ -1041,24 +1140,43 @@ int main(int argc, char **argv)
     }
     if(plot_xlabel != 0 && LoadLRFS == 0) {
       ppgsch(0.3*labelscale);
-      ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (deg)");
+      if(usephase)
+ ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (phase)");
+      else
+ ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (deg)");
       ppgsch(0.38*labelscale);
     }
     if(do_phase_slope) {
       ppgsls(4);
-      x = dl;
-      I = x*phase_slope_g + phase_slope_o;
-      I = derotate_deg(I);
-      ppgmove(x, I);
-      ppgdraw(x+360, I+phase_slope_g*360);
-      ppgmove(x, I-360);
-      ppgdraw(x+360, I-360+phase_slope_g*360);
-      ppgmove(x, I-2*360);
-      ppgdraw(x+360, I-2*360+phase_slope_g*360);
-      ppgmove(x, I+360);
-      ppgdraw(x+360, I+360+phase_slope_g*360);
-      ppgmove(x, I+2*360);
-      ppgdraw(x+360, I+2*360+phase_slope_g*360);
+      if(usephase == 0) {
+ x = dl;
+ I = x*phase_slope_g + phase_slope_o;
+ I = derotate_deg(I);
+ ppgmove(x, I);
+ ppgdraw(x+360, I+phase_slope_g*360);
+ ppgmove(x, I-360);
+ ppgdraw(x+360, I-360+phase_slope_g*360);
+ ppgmove(x, I-2*360);
+ ppgdraw(x+360, I-2*360+phase_slope_g*360);
+ ppgmove(x, I+360);
+ ppgdraw(x+360, I+360+phase_slope_g*360);
+ ppgmove(x, I+2*360);
+ ppgdraw(x+360, I+2*360+phase_slope_g*360);
+      }else {
+ x = dl;
+ I = x*360.0*phase_slope_g + phase_slope_o;
+ I = derotate_deg(I);
+ ppgmove(x, I);
+ ppgdraw(x+1.0, I+phase_slope_g*360);
+ ppgmove(x, I-360);
+ ppgdraw(x+1.0, I-360+phase_slope_g*360);
+ ppgmove(x, I-2*360);
+ ppgdraw(x+1.0, I-2*360+phase_slope_g*360);
+ ppgmove(x, I+360);
+ ppgdraw(x+1.0, I+360+phase_slope_g*360);
+ ppgmove(x, I+2*360);
+ ppgdraw(x+1.0, I+2*360+phase_slope_g*360);
+      }
       ppgsls(1);
     }
     ppgscr(20, 0.5, 0.5, 0.5);
@@ -1066,7 +1184,10 @@ int main(int argc, char **argv)
     ppgsls(1);
     ppgslw(1);
     for(xi=0; xi < subpulseTrackProfile.NrBins; xi++) {
-      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
+      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      if(usephase)
+ x /= 360.0;
+      x += dl;
       if(x >= fl_min && x <= fl_max) {
  I = subpulseTrackProfile.data[xi];
  if(doFlip)
@@ -1079,7 +1200,10 @@ int main(int argc, char **argv)
     ppgsci(1);
     ppgslw(3);
     for(xi=0; xi < subpulseTrackProfile.NrBins; xi++) {
-      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl;
+      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      if(usephase)
+ x /= 360.0;
+      x += dl;
       if(x >= fl_min && x <= fl_max) {
  I = subpulseTrackProfile.data[xi];
  if(doFlip)
@@ -1092,12 +1216,18 @@ int main(int argc, char **argv)
     ppgslw(1);
     if(plot_xlabel != 0) {
       ppgsch(0.3*labelscale);
-      ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (deg)");
+      if(usephase)
+ ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (phase)");
+      else
+ ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (deg)");
       ppgsch(0.38*labelscale);
     }
     if(plot_ylabel != 0) {
       ppgsch(0.3*labelscale);
-      ppgmtxt("l",2.8,0.5,0.5,"Subpulse phase (deg)");
+      if(usephase)
+ ppgmtxt("l",2.8,0.5,0.5,"Subpulse phase (phase)");
+      else
+ ppgmtxt("l",2.8,0.5,0.5,"Subpulse phase (deg)");
       ppgsch(0.38*labelscale);
     }
   }
@@ -1206,7 +1336,7 @@ void GetExtremesSubsetHorizontal(float *Imin, float *Imax, int Number)
   *Imin *= 2.0;
   *Imax *= 2.0;
 }
-void IntegrateSubsetHorizontal(int Number, double scaleFig_x, double scaleFig_y)
+void IntegrateSubsetHorizontal(int Number, double scaleFig_x, double scaleFig_y, int normalise, int nointegrateNumbers)
 {
   float I, Imin, Imax, x, y;
   int xi, yi;
@@ -1218,7 +1348,13 @@ void IntegrateSubsetHorizontal(int Number, double scaleFig_x, double scaleFig_y)
     ppgsvp(0.2-0.04*scaleFig_x, 0.2, 0.95-0.48*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y, 0.95-0.33*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y);
   }
   GetExtremesSubsetHorizontal(&Imin, &Imax, Number);
-  ppgswin(Imin,1.05*Imax, f3_min,f3_max);
+  double scale;
+  scale = fabs(Imax);
+  if(fabs(Imin) > scale)
+    scale = fabs(Imin);
+  if(normalise == 0)
+    scale = 1.0;
+  ppgswin(Imin/scale,1.05*Imax/scale, f3_min,f3_max);
   ppgbox("bcv",0.0,0,"bnsti",0.0,0);
   ppgbox("",0.0,0,"c",0.0,0);
   if(Number == -1) {
@@ -1236,10 +1372,18 @@ void IntegrateSubsetHorizontal(int Number, double scaleFig_x, double scaleFig_y)
       ppgsch(0.38*labelscale);
     }
   }
-  y = floor(log10(Imax));
-  x = floor(Imax/pow(10,y));
-  x = x*pow(10,y)*10;
-  ppgaxis("n",0,f3_max,Imax,f3_max,0,Imax,x,1,0.3,0,0,-0.5,90);
+  y = floor(log10(Imax*0.33/scale));
+  x = floor(Imax*0.33/(pow(10,y)*scale));
+  x = x*pow(10,y);
+  char labelnumbers[3];
+  if(nointegrateNumbers == 0) {
+    strcpy(labelnumbers, "n");
+  }else {
+    strcpy(labelnumbers, "");
+  }
+  ppgsch(0.38*labelscale*0.66);
+  ppgaxis(labelnumbers,0,f3_max,Imax*0.33/scale,f3_max,0,Imax*0.33/scale,x,1,0.3,0,0,-0.5,90);
+  ppgsch(0.38*labelscale);
   if(Number == -1) {
     for(yi = 0; yi < lrfs.NrSubints; yi++) {
       I = 0;
@@ -1250,9 +1394,9 @@ void IntegrateSubsetHorizontal(int Number, double scaleFig_x, double scaleFig_y)
  }
       }
       if(yi == 0) {
- ppgmove(2.0*I, y);
+ ppgmove(2.0*I/scale, y);
       }else {
- ppgdraw(2.0*I, y);
+ ppgdraw(2.0*I/scale, y);
       }
     }
   }else if(Number == 0) {
@@ -1264,9 +1408,9 @@ void IntegrateSubsetHorizontal(int Number, double scaleFig_x, double scaleFig_y)
    I += twodfs.data[yi*twodfs.NrBins+xi];
       }
       if(yi == 0) {
- ppgmove(2.0*I, y);
+ ppgmove(2.0*I/scale, y);
       }else {
- ppgdraw(2.0*I, y);
+ ppgdraw(2.0*I/scale, y);
       }
     }
   }else if(Number == 1) {
@@ -1278,14 +1422,14 @@ void IntegrateSubsetHorizontal(int Number, double scaleFig_x, double scaleFig_y)
    I += twodfs2.data[yi*twodfs2.NrBins+xi];
       }
       if(yi == 0) {
- ppgmove(2.0*I, y);
+ ppgmove(2.0*I/scale, y);
       }else {
- ppgdraw(2.0*I, y);
+ ppgdraw(2.0*I/scale, y);
       }
     }
   }
 }
-void IntegrateSubsetHorizontal_2dfsOnly(int Number, double scaleFig_x, double scaleFig_y)
+void IntegrateSubsetHorizontal_2dfsOnly(int Number, double scaleFig_x, double scaleFig_y, int normalise, int nointegrateNumbers)
 {
   float I, Imin, Imax, x, y, offset;
   int xi, yi;
@@ -1296,7 +1440,13 @@ void IntegrateSubsetHorizontal_2dfsOnly(int Number, double scaleFig_x, double sc
     ppgsvp(0.2-0.04*scaleFig_x, 0.2, 0.95-0.33*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y, 0.95-0.18*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y);
   }
   GetExtremesSubsetHorizontal(&Imin, &Imax, Number);
-  ppgswin(Imin,1.05*Imax, f3_min,f3_max);
+  double scale;
+  scale = fabs(Imax);
+  if(fabs(Imin) > scale)
+    scale = fabs(Imin);
+  if(normalise == 0)
+    scale = 1.0;
+  ppgswin(Imin/scale,1.05*Imax/scale, f3_min,f3_max);
   ppgbox("bcv",0.0,0,"bnsti",0.0,0);
   ppgbox("",0.0,0,"c",0.0,0);
   if(Number == 0) {
@@ -1318,10 +1468,18 @@ void IntegrateSubsetHorizontal_2dfsOnly(int Number, double scaleFig_x, double sc
       ppgsch(0.38*labelscale);
     }
   }
-  y = floor(log10(Imax));
-  x = floor(Imax/pow(10,y));
-  x = x*pow(10,y)*10;
-  ppgaxis("n",0,f3_max,Imax,f3_max,0,Imax,x,1,0.3,0,0,-0.5,90);
+  y = floor(log10(Imax*0.33/scale));
+  x = floor(Imax*0.33/(pow(10,y)*scale));
+  x = x*pow(10,y);
+  char labelnumbers[3];
+  if(nointegrateNumbers == 0) {
+    strcpy(labelnumbers, "n");
+  }else {
+    strcpy(labelnumbers, "");
+  }
+  ppgsch(0.38*labelscale*0.66);
+  ppgaxis(labelnumbers,0,f3_max,Imax*0.33/scale,f3_max,0,Imax*0.33/scale,x,1,0.3,0,0,-0.5,90);
+  ppgsch(0.38*labelscale);
   if(Number == 0) {
     for(yi = 0; yi < twodfs.NrSubints; yi++) {
       I = 0;
@@ -1330,9 +1488,9 @@ void IntegrateSubsetHorizontal_2dfsOnly(int Number, double scaleFig_x, double sc
  I += twodfs.data[yi*twodfs.NrBins+xi];
     }
       if(yi == 0) {
- ppgmove(2.0*I, y);
+ ppgmove(2.0*I/scale, y);
       }else {
- ppgdraw(2.0*I, y);
+ ppgdraw(2.0*I/scale, y);
       }
     }
   }else if(Number == 1) {
@@ -1343,14 +1501,14 @@ void IntegrateSubsetHorizontal_2dfsOnly(int Number, double scaleFig_x, double sc
  I += twodfs2.data[yi*twodfs2.NrBins+xi];
     }
       if(yi == 0) {
- ppgmove(2.0*I, y);
+ ppgmove(2.0*I/scale, y);
       }else {
- ppgdraw(2.0*I, y);
+ ppgdraw(2.0*I/scale, y);
       }
     }
   }
 }
-void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, int lineColour, char *title, double scaleFig_x, double scaleFig_y, verbose_definition verbose)
+void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, int lineColour, int showwedge, char *title, double scaleFig_x, double scaleFig_y, int normaliseSide, int nointegrateNumbers, int usephase, verbose_definition verbose)
 {
   float I;
   int xi, i;
@@ -1371,7 +1529,10 @@ void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, 
   ppgswin(fl_min,fl_max,f3_min,f3_max);
   if(plot_xlabel != 0) {
     ppgsch(0.3*labelscale);
-    ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (deg)");
+    if(usephase)
+      ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (phase)");
+    else
+      ppgmtxt("b",3.0,0.5,0.5,"Pulse longitude (deg)");
     ppgsch(0.38*labelscale);
   }
   if(plot_ylabel != 0) {
@@ -1399,6 +1560,7 @@ void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, 
   pgplot_viewport_def viewport;
   pgplot_box_def pgplotbox;
   clear_pgplot_box(&pgplotbox);
+  pgplotbox.box_labelsize = 0.3*labelscale;
   pgplot_clear_viewport_def(&viewport);
   viewport.dontopen = 1;
   viewport.dontclose = 1;
@@ -1410,7 +1572,11 @@ void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, 
     printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", lrfs.filename);
     exit(0);
   }
-  pgplotMap(viewport, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0+dl, 360*(lrfs.NrBins-1)*get_tsamp(lrfs, 0, verbose)/period+dl, fl_min, fl_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturizel, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+  double xright;
+  xright = 360*(lrfs.NrBins-1)*get_tsamp(lrfs, 0, verbose)/period;
+  if(usephase)
+    xright /= 360.0;
+  pgplotMap(viewport, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0+dl, xright+dl, fl_min, fl_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturizel, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
   ret = get_period(AverageProfile, 0, &period, verbose);
   if(ret == 2) {
     printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
@@ -1422,13 +1588,17 @@ void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, 
     ppgslw(1);
     i = 0;
     for(xi=0; xi < AverageProfile.NrBins; xi++) {
-      if((xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) >= fl_min && (xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl) <= fl_max) {
+      double xpos;
+      xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      if(usephase)
+ xpos /= 360.0;
+      if(xpos+dl >= fl_min && xpos+dl <= fl_max) {
  I = AverageProfile.data[xi]*0.5;
  if(i == 0) {
-   ppgmove(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl,I);
+   ppgmove(xpos+dl,I);
    i = 1;
  }else {
-   ppgdraw(xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period+dl,I);
+   ppgdraw(xpos+dl,I);
  }
       }
     }
@@ -1456,32 +1626,46 @@ void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, 
     }
   }
   if(noside == 0)
-    IntegrateSubsetHorizontal(-1, scaleFig_x, scaleFig_y);
+    IntegrateSubsetHorizontal(-1, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers);
   ppgsch(0.38*labelscale);
 }
-void IntegrateSubsetVertical(int Number, double scaleFig_x, double scaleFig_y)
+void IntegrateSubsetVertical(int Number, double scaleFig_x, double scaleFig_y, int normalise, int nointegrateNumbers)
 {
   float I, Imin, Imax, x, y, offset;
   int xi, yi;
   offset = 0+0.03*(labelscale-1.0)*((float)Number+1.0);
   ppgsvp(0.2, 0.2+0.11*scaleFig_x, 0.95-0.52*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y, 0.95-0.48*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y);
   GetExtremesSubsetVertical(&Imin, &Imax, Number);
+  double scale;
+  scale = fabs(Imax);
+  if(fabs(Imin) > scale)
+    scale = fabs(Imin);
+  if(normalise == 0)
+    scale = 1.0;
   if(Number == 0)
-    ppgswin(f2_min,f2_max,Imin,1.05*Imax);
+    ppgswin(f2_min,f2_max,Imin/scale,1.05*Imax/scale);
   else
-    ppgswin(f2_min2,f2_max2,Imin,1.05*Imax);
+    ppgswin(f2_min2,f2_max2,Imin/scale,1.05*Imax/scale);
   if(noxlabels == 0)
     ppgbox("bnst",0.0,0,"bcvi",0.0,0);
   else
     ppgbox("bst",0.0,0,"bcvi",0.0,0);
   ppgbox("c",0.0,0,"",0.0,0);
-  y = floor(log10(Imax*0.7));
-  x = floor(Imax*0.7/pow(10,y));
+  y = floor(log10(Imax*0.7/scale));
+  x = floor(Imax*0.7/(pow(10,y)*scale));
   x = x*pow(10,y);
+  char labelnumbers[3];
+  if(nointegrateNumbers == 0) {
+    strcpy(labelnumbers, "n");
+  }else {
+    strcpy(labelnumbers, "");
+  }
+  ppgsch(0.38*labelscale*0.66);
   if(Number == 0)
-    ppgaxis("n",f2_min, 0,f2_min, Imax*.7,0,Imax*.7,x,1,0.3,0,0,-0.8,90);
+    ppgaxis(labelnumbers,f2_min, 0,f2_min, Imax*.7/scale,0,Imax*.7/scale,x,1,0.3,0,0,-0.8,90);
   else
-    ppgaxis("n",f2_min2,0,f2_min2,Imax*.7,0,Imax*.7,x,1,0.3,0,0,-0.8,90);
+    ppgaxis(labelnumbers,f2_min2,0,f2_min2,Imax*.7/scale,0,Imax*.7/scale,x,1,0.3,0,0,-0.8,90);
+  ppgsch(0.38*labelscale);
   if(Number == 0) {
     for(xi = 0; xi < twodfs.NrBins; xi++) {
       I = 0;
@@ -1491,9 +1675,9 @@ void IntegrateSubsetVertical(int Number, double scaleFig_x, double scaleFig_y)
    I += twodfs.data[yi*twodfs.NrBins+xi];
       }
       if(xi == 0) {
- ppgmove(x,2.0*I);
+ ppgmove(x,2.0*I/scale);
       }else {
- ppgdraw(x,2.0*I);
+ ppgdraw(x,2.0*I/scale);
       }
     }
   }else if(Number == 1) {
@@ -1505,36 +1689,50 @@ void IntegrateSubsetVertical(int Number, double scaleFig_x, double scaleFig_y)
    I += twodfs2.data[yi*twodfs2.NrBins+xi];
       }
       if(xi == 0) {
- ppgmove(x,2.0*I);
+ ppgmove(x,2.0*I/scale);
       }else {
- ppgdraw(x,2.0*I);
+ ppgdraw(x,2.0*I/scale);
       }
     }
   }
 }
-void IntegrateSubsetVertical_2dfsOnly(int Number, double scaleFig_x, double scaleFig_y, verbose_definition verbose)
+void IntegrateSubsetVertical_2dfsOnly(int Number, double scaleFig_x, double scaleFig_y, int normalise, int nointegrateNumbers, verbose_definition verbose)
 {
   float I, Imin, Imax, x, y, offset;
   int xi, yi;
   offset = 0+0.03*(labelscale-1.0)*((float)Number+1.0);
   ppgsvp(0.2, 0.2+0.11*scaleFig_x, 0.95-0.37*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y, 0.95-0.33*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y);
   GetExtremesSubsetVertical(&Imin, &Imax, Number);
+  double scale;
+  scale = fabs(Imax);
+  if(fabs(Imin) > scale)
+    scale = fabs(Imin);
+  if(normalise == 0)
+    scale = 1.0;
   if(Number == 0)
-    ppgswin(f2_min,f2_max,Imin,1.05*Imax);
+    ppgswin(f2_min,f2_max,Imin/scale,1.05*Imax/scale);
   else
-    ppgswin(f2_min2,f2_max2,Imin,1.05*Imax);
+    ppgswin(f2_min2,f2_max2,Imin/scale,1.05*Imax/scale);
   if(noxlabels == 0)
     ppgbox("bnst",0.0,0,"bcvi",0.0,0);
   else
     ppgbox("bst",0.0,0,"bcvi",0.0,0);
   ppgbox("c",0.0,0,"",0.0,0);
-  y = floor(log10(Imax*0.7));
-  x = floor(Imax*0.7/pow(10,y));
+  y = floor(log10(Imax*0.7/scale));
+  x = floor(Imax*0.7/(pow(10,y)*scale));
   x = x*pow(10,y);
+  char labelnumbers[3];
+  if(nointegrateNumbers == 0) {
+    strcpy(labelnumbers, "n");
+  }else {
+    strcpy(labelnumbers, "");
+  }
+  ppgsch(0.38*labelscale*0.66);
   if(Number == 0)
-    ppgaxis("n",f2_min, 0,f2_min, Imax*.7,0,Imax*.7,x,1,0.3,0,0,-0.8,90);
+    ppgaxis(labelnumbers,f2_min, 0,f2_min, Imax*.7/scale,0,Imax*.7/scale,x,1,0.3,0,0,-0.8,90);
   else
-    ppgaxis("n",f2_min2,0,f2_min2,Imax*.7,0,Imax*.7,x,1,0.3,0,0,-0.8,90);
+    ppgaxis(labelnumbers,f2_min2,0,f2_min2,Imax*.7/scale,0,Imax*.7/scale,x,1,0.3,0,0,-0.8,90);
+  ppgsch(0.38*labelscale);
   if(Number == 0) {
     for(xi = 0; xi < twodfs.NrBins; xi++) {
       I = 0;
@@ -1565,7 +1763,7 @@ void IntegrateSubsetVertical_2dfsOnly(int Number, double scaleFig_x, double scal
     }
   }
 }
-void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, int nomain, double scaleFig_x, double scaleFig_y, verbose_definition verbose)
+void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, int nomain, double scaleFig_x, double scaleFig_y, int showwedge, int normaliseSide, int nointegrateNumbers, verbose_definition verbose)
 {
   float offset;
   offset = 0+0.03*(labelscale-1.0)*((float)Number+1.0);
@@ -1605,6 +1803,7 @@ void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot
   pgplot_viewport_def viewport;
   pgplot_box_def pgplotbox;
   clear_pgplot_box(&pgplotbox);
+  pgplotbox.box_labelsize = 0.3*labelscale;
   pgplot_clear_viewport_def(&viewport);
   viewport.noclear = 1;
   viewport.dontopen = 1;
@@ -1612,15 +1811,15 @@ void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot
   if(!nomain) {
     if(Number == 0) {
       if(doFlip) {
- pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+ pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       }else {
- pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+ pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       }
     }else {
       if(doFlip)
- pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+ pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       else
- pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+ pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
     }
     ppgsch(0.38*labelscale);
     if(noside) {
@@ -1665,7 +1864,7 @@ void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot
       ppgslw(1);
     }
   }
-  IntegrateSubsetVertical(Number, scaleFig_x, scaleFig_y);
+  IntegrateSubsetVertical(Number, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers);
   if(plot_xlabel == 1) {
     ppgsch(0.3*labelscale);
     ppgmtxt("b",3.0,0.5,0.5,"Fluctuation frequency (cpp)");
@@ -1680,9 +1879,9 @@ void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot
     ppgsch(0.38*labelscale);
   }
   if(!noside)
-    IntegrateSubsetHorizontal(Number, scaleFig_x, scaleFig_y);
+    IntegrateSubsetHorizontal(Number, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers);
 }
-void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int nomain, char *title, double scaleFig_x, double scaleFig_y, verbose_definition verbose)
+void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int nomain, int showwedge, char *title, double scaleFig_x, double scaleFig_y, int normaliseSide, int nointegrateNumbers, verbose_definition verbose)
 {
   float offset;
   offset = 0+0.03*(labelscale-1.0)*((float)Number+1.0);
@@ -1731,6 +1930,7 @@ void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int 
   pgplot_viewport_def viewport;
   pgplot_box_def pgplotbox;
   clear_pgplot_box(&pgplotbox);
+  pgplotbox.box_labelsize = 0.3*labelscale;
   pgplot_clear_viewport_def(&viewport);
   viewport.noclear = 1;
   viewport.dontopen = 1;
@@ -1738,14 +1938,14 @@ void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int 
   if(!nomain) {
     if(Number == 0) {
       if(doFlip)
- pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+ pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       else
- pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+ pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
     }else {
       if(doFlip)
- pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+ pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       else
- pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, verbose);
+ pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
     }
     ppgsch(0.38*labelscale);
     if(noside) {
@@ -1789,7 +1989,7 @@ void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int 
       ppgslw(1);
     }
   }
-  IntegrateSubsetVertical_2dfsOnly(Number, scaleFig_x, scaleFig_y, verbose);
+  IntegrateSubsetVertical_2dfsOnly(Number, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, verbose);
   if(plot_xlabel == 1) {
     ppgsch(0.3*labelscale);
     ppgmtxt("b",3.0,0.5,0.5,"Fluctuation frequency (cpp)");
@@ -1804,5 +2004,5 @@ void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int 
     ppgsch(0.38*labelscale);
   }
   if(!noside)
-    IntegrateSubsetHorizontal_2dfsOnly(Number, scaleFig_x, scaleFig_y);
+    IntegrateSubsetHorizontal_2dfsOnly(Number, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers);
 }

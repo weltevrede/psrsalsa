@@ -92,20 +92,18 @@ int preprocess_rebin(datafile_definition original, datafile_definition *clone, l
   }
   return 1;
 }
-
-
-
-
-
-
-int preprocess_fftshift(datafile_definition original, float shiftPhase, verbose_definition verbose)
+int preprocess_fftshift(datafile_definition original, float shiftPhase, int addslope, float slope, verbose_definition verbose)
 {
   long p, f, n;
   int i;
+  float offset;
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
-    printf("Rotating data by %f phase\n", shiftPhase);
+    if(addslope == 0)
+      printf("Rotating data by %f phase\n", shiftPhase);
+    else
+      printf("Rotating data by %f phase + %e/subint\n", shiftPhase, slope);
   }
   if(original.format != MEMORY_format) {
     fflush(stdout);
@@ -117,12 +115,15 @@ int preprocess_fftshift(datafile_definition original, float shiftPhase, verbose_
     printerror(verbose.debug, "ERROR preprocess_fftshift: Cannot handle PA data.");
     return 0;
   }
-
-
   for(p = 0; p < original.NrPols; p++) {
     for(f = 0; f < original.NrFreqChan; f++) {
       for(n = 0; n < original.NrSubints; n++) {
- if(rotateSinglepulse(&(original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))]), original.NrBins, shiftPhase*original.NrBins, verbose) == 0)
+ if(addslope) {
+   offset = (shiftPhase+n*slope)*original.NrBins;
+ }else {
+   offset = shiftPhase*original.NrBins;
+ }
+ if(rotateSinglepulse(&(original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))]), original.NrBins, offset, verbose) == 0)
    return 0;
         if(verbose.verbose && verbose.nocounters == 0) {
    long doprint;
@@ -146,12 +147,6 @@ int preprocess_fftshift(datafile_definition original, float shiftPhase, verbose_
   }
   return 1;
 }
-
-
-
-
-
-
 int preprocess_channelselect(datafile_definition original, datafile_definition *clone, long chanelnr, verbose_definition verbose)
 {
   long p, f, n;
@@ -177,11 +172,9 @@ int preprocess_channelselect(datafile_definition original, datafile_definition *
     printerror(verbose.debug, "ERROR preprocess_chanelselect: Invalid frequency chanel number.");
     return 0;
   }
-
   cleanPSRData(clone, verbose);
   copy_params_PSRData(original, clone, verbose);
   clone->NrFreqChan = 1;
-
   clone->uniform_bw = get_bw(original, verbose);
   clone->uniform_freq_cent = get_channel_freq(original, chanelnr, verbose);
   clone->freqMode = FREQMODE_UNIFORM;
@@ -192,9 +185,6 @@ int preprocess_channelselect(datafile_definition original, datafile_definition *
     printerror(verbose.debug, "ERROR preprocess_chanelselect: Memory allocation error.");
     return 0;
   }
-
-
-
   for(p = 0; p < clone->NrPols; p++) {
     for(f = 0; f < original.NrFreqChan; f++) {
       for(n = 0; n < clone->NrSubints; n++) {

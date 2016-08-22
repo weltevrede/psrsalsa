@@ -377,6 +377,7 @@ int main(int argc, char **argv)
   }
 
 
+
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }

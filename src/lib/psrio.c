@@ -472,9 +472,15 @@ int set_scanID_PSRData(datafile_definition *datafile_dest, char *scanID, verbose
 int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
 {
   FILE *fin;
-  char txt[10001];
+  char *txt;
   int i, indent, ok;
   float fdummy;
+  txt = malloc(10001);
+  if(txt == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR guessPSRData_format: Cannot allocate memory");
+    return -1;
+  }
   if(verbose.verbose) {
     for(indent = 0; indent < verbose.indent; indent++)
       printf(" ");
@@ -489,6 +495,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
   if(fin == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR guessPSRData_format: opening file '%s' failed.", filename);
+    free(txt);
     return -1;
   }
   i = fread(txt, 1, 3, fin);
@@ -496,6 +503,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
   if(i != 3) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR guessPSRData_format: reading file '%s' failed.", filename);
+    free(txt);
     return -1;
   }
   if(verbose.debug) {
@@ -510,6 +518,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
     if(verbose.verbose)
       printf("  file is in WSRT PuMa 1 format.\n");
     fclose(fin);
+    free(txt);
     return PUMA_format;
   }else if(verbose.debug) {
     if(verbose.verbose) {
@@ -526,13 +535,14 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
     if(verbose.verbose)
       printf("  file is in PSRCHIVE ASCII format.\n");
     fclose(fin);
+    free(txt);
     return PSRCHIVE_ASCII_format;
   }else if(verbose.debug) {
     if(verbose.verbose) {
       for(indent = 0; indent < verbose.indent; indent++)
  printf(" ");
     }
-    printf("  file is not in PSRCHIVE ASCII format.\n");
+    printf("  file is not PSRCHIVE ASCII format.\n");
   }
   if(strcmp(txt, "EPN") == 0) {
     if(verbose.verbose) {
@@ -542,6 +552,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
     if(verbose.verbose)
       printf("  file is in EPN format.\n");
     fclose(fin);
+    free(txt);
     return EPN_format;
   }else if(verbose.debug) {
     if(verbose.verbose) {
@@ -558,6 +569,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
     if(verbose.verbose)
       printf("  file is in SIGPROC format.\n");
     fclose(fin);
+    free(txt);
     return SIGPROC_format;
   }else if(verbose.debug) {
     if(verbose.verbose) {
@@ -574,6 +586,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
     if(verbose.verbose)
       printf("  file is in PSRFITS format.\n");
     fclose(fin);
+    free(txt);
     return FITS_format;
   }else if(verbose.debug) {
     if(verbose.verbose) {
@@ -592,10 +605,12 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
       printf("  File might be in PPOL or PPOLSHORT format.\n");
     if(fgets(txt, 10000, fin) == NULL) {
       printf("ERROR guessPSRData_format: Cannot read first line\n");
+      free(txt);
       return 0;
     }
     if(fgets(txt, 10000, fin) == NULL) {
       printf("ERROR guessPSRData_format: Cannot read second line\n");
+      free(txt);
       return 0;
     }
     ok = 0;
@@ -613,6 +628,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
    printf(" ");
       }
       if(verbose.verbose) printf("  file is in PPOL format.\n");
+      free(txt);
       return PPOL_format;
     }else if(ok == 1) {
       if(verbose.verbose) {
@@ -620,6 +636,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
    printf(" ");
       }
       if(verbose.verbose) printf("  file is in PPOLSHORT format.\n");
+      free(txt);
       return PPOL_SHORT_format;
     }else if(verbose.debug) {
       if(verbose.verbose) {
@@ -646,6 +663,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
     }
   }
   fclose(fin);
+  free(txt);
   return 0;
 }
 int openPSRData(datafile_definition *datafile, char *filename, int format, int enable_write, int read_in_memory, int nowarnings, verbose_definition verbose)
@@ -1584,13 +1602,19 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
     datafile->datastart = 0;
   if(fabs(datafile->telescope_X) < 1e-6 && fabs(datafile->telescope_Y) < 1e-6 && fabs(datafile->telescope_Z) < 1e-6) {
     fflush(stdout);
-    if(nowarnings == 0) {
-      printwarning(verbose.debug, "WARNING readHeaderPSRData (%s): Telescope location not set, try to determine location from name '%s'", datafile->filename, datafile->observatory);
-    }
-    if(setITRFlocation_by_name(datafile, datafile->observatory, verbose2) == 0) {
-      fflush(stdout);
+    if(strlen(datafile->observatory) == 0) {
       if(nowarnings == 0) {
- printwarning(verbose.debug, "WARNING readHeaderPSRData (%s): Telescope location not recognized by name", datafile->filename);
+ printwarning(verbose.debug, "WARNING readHeaderPSRData (%s): Telescope location not set", datafile->filename);
+      }
+    }else {
+      if(nowarnings == 0) {
+ printwarning(verbose.debug, "WARNING readHeaderPSRData (%s): Telescope location not set, try to determine location from name '%s'", datafile->filename, datafile->observatory);
+      }
+      if(setITRFlocation_by_name(datafile, datafile->observatory, verbose2) == 0) {
+ fflush(stdout);
+ if(nowarnings == 0) {
+   printwarning(verbose.debug, "WARNING readHeaderPSRData (%s): Telescope location not recognized by name", datafile->filename);
+ }
       }
     }
   }

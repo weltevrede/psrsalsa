@@ -35,7 +35,7 @@ int readVonMisesModel(char *filename, vonMises_def *components, verbose_definiti
     return 0;
   }
   for(components->nrcomponents = 0; components->nrcomponents < maxNrVonMisesComponents; (components->nrcomponents)++) {
-    i = fscanf(fin, "%f %f %f", &(components->centre[components->nrcomponents]), &(components->concentration[components->nrcomponents]), &(components->height[components->nrcomponents]));
+    i = fscanf(fin, "%lf %lf %lf", &(components->centre[components->nrcomponents]), &(components->concentration[components->nrcomponents]), &(components->height[components->nrcomponents]));
     if(i != 3) {
       break;
     }else if(verbose.verbose) {
@@ -53,19 +53,19 @@ int readVonMisesModel(char *filename, vonMises_def *components, verbose_definiti
 }
 
 
-float calcVonMisesFunction2(float centre, float concentration, float height, float phase, float shift)
+double calcVonMisesFunction2(double centre, double concentration, double height, double phase, double shift)
 {
-  float y;
+  double y;
   y = exp((cos(2.0*M_PI*(phase-centre-shift))-1.0)*concentration) * height;
   return y;
 }
 
 
 
-float calcVonMisesFunction(vonMises_def components, float phase, float shift)
+double calcVonMisesFunction(vonMises_def components, double phase, double shift)
 {
   int n;
-  float y;
+  double y;
   y = 0;
   if(components.nrcomponents > 0) {
     for(n = 0; n < components.nrcomponents; n++) {
@@ -77,16 +77,16 @@ float calcVonMisesFunction(vonMises_def components, float phase, float shift)
 
 
 
-void calcVonMisesProfile(vonMises_def components, int nrbins, float *profile, float shift, int normalize)
+void calcVonMisesProfile(vonMises_def components, int nrbins, float *profile, double shift, int normalize)
 {
   int i;
-  float x, Imax = -1;
+  double x, Imax = -1;
 
   for(i = 0; i < nrbins; i++) {
     profile[i] = 0;
   }
   for(i = 0; i < nrbins; i++) {
-    x = i/(float)nrbins;
+    x = i/(double)nrbins;
     profile[i] = calcVonMisesFunction(components, x, shift);
   }
   if(normalize) {

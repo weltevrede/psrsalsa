@@ -880,7 +880,7 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
  return 0;
       swap_orig_clone(psrdata, &clone, application->verbose_state);
     }else {
-     if(preprocess_fftshift(*psrdata, application->shiftPhase, verbose2) == 0)
+      if(preprocess_fftshift(*psrdata, application->shiftPhase, 0, 0, verbose2) == 0)
  return 0;
     }
   }
