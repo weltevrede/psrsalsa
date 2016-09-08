@@ -121,8 +121,8 @@ int main(int argc, char **argv)
   char wedgelabel[1000];
   long i, j, k;
   int ignorebins, ignorebins2;
-  int ignorelastpulses;
-  float xmax_oscil, xmin_oscil;
+  int ignorelastpulses, scalerange;
+  float xmax_oscil, xmin_oscil, scalerange_min, scalerange_max;
   psrsalsaApplication application;
   datafile_definition fin, clone;
 
@@ -240,6 +240,7 @@ int main(int argc, char **argv)
   yUnitsTobs = 0;
   yUnitsMHz = 0;
   clear_pgplot_frame(&pgplot_frame);
+  scalerange = 0;
 
   if(argc < 2) {
     printf("Program to plot pulsar data in various ways.\n");
@@ -289,6 +290,7 @@ int main(int argc, char **argv)
     printf("-scale2     Specify scale2 (a value between 0 and 1), default is 0, only used in\n");
     printf("            map mode. This clips the low intensity values to emphasize the\n");
     printf("            bright features.\n");
+    printf("-scalerange \"min max\" In map mode: The used color range is between min and max.\n");
     printf("-dl         Shift plot in pulse longitude.\n");
     printf("-half       Shift pulses by half a pulse.\n");
     printf("-0          Force first pulse to be plotted as pulse zero (ignored with -map).\n");
@@ -415,6 +417,14 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-scale2") == 0) {
  scale2_start = atof(argv[i+1]);
  i++;
+      }else if(strcmp(argv[i], "-scalerange") == 0) {
+ j = sscanf(argv[i+1], "%f %f", &scalerange_min, &scalerange_max);
+ i++;
+ if(j != 2) {
+   printerror(application.verbose_state.debug, "pplot: Error parsing option %s", argv[i]);
+   return 0;
+ }
+ scalerange = 1;
       }else if(strcmp(argv[i], "-title") == 0) {
  strcpy(title, argv[i+1]);
  notitleset = 0;
@@ -744,6 +754,11 @@ int main(int argc, char **argv)
      printwarning(application.verbose_state.debug, "The file appears to be penergy output. The \"polarization channels\" correspond to peak intensity (on & off-pulse), integrated energy (on & off-pulse), rms (on & off-pulse) and the S/N of the on-pulse region. The \"subintegrations\" correspond to the different polarizations in the original file.\n");
    }
  }
+ if(fin.poltype == POLTYPE_ILVPAdPA && fin.NrSubints == 1 && fin.NrFreqChan == 1) {
+   if(application.verbose_state.verbose) {
+     printwarning(application.verbose_state.debug, "The file appears to be ppol output. Plotting this data with ppol allows the profile and PA-swing to be shown in a single figure.\n");
+   }
+ }
 
  if(fin.isFolded && fin.foldMode == FOLDMODE_FIXEDPERIOD) {
    if(fin.fixedPeriod <= 0.0) {
@@ -1040,7 +1055,7 @@ int main(int argc, char **argv)
  float max, min, oldmin, oldmax;
  float xleft, xright, xleft2, xright2;
  min = max = dataSubset[stack_state[current_stack_pos-1].x1+ignorebins];
- for(i = stack_state[current_stack_pos-1].x1; i < stack_state[current_stack_pos-1].x2; i++) {
+ for(i = stack_state[current_stack_pos-1].x1; i <= stack_state[current_stack_pos-1].x2; i++) {
    for(j = 0; j <= stack_state[current_stack_pos-1].subint_end-stack_state[current_stack_pos-1].subint_start; j++) {
      if(dataSubset[(j+stack_state[current_stack_pos-1].subint_start-firstPulsedataSubset)*fin.NrBins+i] > max)
        max = dataSubset[(j+stack_state[current_stack_pos-1].subint_start-firstPulsedataSubset)*fin.NrBins+i];
@@ -1117,6 +1132,11 @@ int main(int argc, char **argv)
  int levelset = 1;
  if(didtranspose_orig_nrbin)
    levelset = 0;
+ if(scalerange) {
+   levelset = 1;
+   min = scalerange_min;
+   max = scalerange_max;
+ }
  if(pgplotMap(viewport, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, pgplotbox, application.cmap, application.itf, 0, 0, NULL, 1, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
    printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot data.");
    return 0;

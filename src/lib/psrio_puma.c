@@ -706,7 +706,7 @@ int puma_nrpol(Header_type hdr)
   if(hdr.redn.OI) {
       NrPol = 1;
       if(hdr.redn.OQ && hdr.redn.OU && hdr.redn.OV) NrPol=4;
-      if (hdr.redn.OTheta) NrPol=9;
+      if(hdr.redn.OP && hdr.redn.OV && hdr.redn.OTheta && hdr.redn.Op && hdr.redn.Ov == 0 && hdr.redn.Opoldeg == 0) NrPol=5;
   }
   return NrPol;
 }
@@ -989,14 +989,6 @@ int readWSRTHeader(datafile_definition *datafile, verbose_definition verbose)
       return 0;
     }
   }
-  if(datafile->poltype == POLTYPE_ILVPAdPA) {
-    if(datafile->NrPols != 3) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readWSRTHeader: For gentype ILVPA the nr of polarization is expected to be (wrongly) set to be 3 in the header, it was %ld. The number of polarizations channels will be set to 5. If incorrect, expect things to go wrong (badly).", datafile->NrPols);
-      datafile->NrPols = 5;
-    }
-    datafile->NrPols = 5;
-  }
   return 1;
 }
 void FillPuMaHeader(Header_type *hdr, int obsID, int timefilenr, int freqband, int NFiles, int FileNum, int nrTimeSamples, int DataMJD, double DataTime, int StartMJD, char *ObsName, int StTime, double MaserOffset, double Dur, char *pulsar, double RA, double Dec, char *Epoch, Band_type *bands, int *BandsToClusMap, float *XPolScaleFac, int FIRFactor, int NSHARCsAdded, int NSampsAdded, int NFreqInFile, int Tsamp, int polmode, double AdjustInterval, int BitsPerSamp, double SigmaRange, int NrFrames, char *observatoryname, double longitude, double latitude, double height)
@@ -1239,6 +1231,12 @@ int writeWSRTHeader(datafile_definition datafile, verbose_definition verbose)
     puma_hdr.redn.OI = TRUE;
     puma_hdr.redn.OP = TRUE;
     puma_hdr.redn.OV = TRUE;
+  }else if(datafile.NrPols == 5 && datafile.poltype == POLTYPE_ILVPAdPA) {
+    puma_hdr.redn.OI = TRUE;
+    puma_hdr.redn.OP = TRUE;
+    puma_hdr.redn.OV = TRUE;
+    puma_hdr.redn.OTheta = TRUE;
+    puma_hdr.redn.Op = TRUE;
   }else {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writeWSRTHeader: Cannot write out %ld polarization channels", datafile.NrPols);

@@ -67,6 +67,8 @@ int main(int argc, char **argv)
   application.switch_changeRefFreq = 1;
   application.switch_fchan = 1;
   application.switch_history_cmd_only = 1;
+  application.switch_nskip = 1;
+  application.switch_nread = 1;
   application.oformat = PPOL_format;
   curpanelnrx = 0;
   curpanelnry = 0;
@@ -492,8 +494,10 @@ int main(int argc, char **argv)
 
     if(compute_PA) {
       if(datain.NrSubints > 1) {
- printf("Data contains multiple subints. Data will be written out in FITS format.\n");
- application.oformat = FITS_format;
+ if(application.oformat == PPOL_format) {
+   printf("Data contains multiple subints. Data will be written out in FITS format.\n");
+   application.oformat = FITS_format;
+ }
  if(showtotPol) {
    fflush(stdout);
    printerror(application.verbose_state.debug, "ERROR ppol: The -totpol option is not supported when multiple subints are present");
@@ -501,8 +505,10 @@ int main(int argc, char **argv)
  }
       }
       if(datain.NrFreqChan > 1) {
- printf("Data contains multiple frequency channels. Data will be written out in FITS format.\n");
- application.oformat = FITS_format;
+ if(application.oformat == PPOL_format) {
+   printf("Data contains multiple frequency channels. Data will be written out in FITS format.\n");
+   application.oformat = FITS_format;
+ }
  if(showtotPol) {
    fflush(stdout);
    printerror(application.verbose_state.debug, "ERROR ppol: The -totpol option is not supported when multiple frequency channels are present");
@@ -598,7 +604,13 @@ int main(int argc, char **argv)
  else
    verbose2.verbose = 0;
 
- if(make_paswing_fromIQUV(&datain, Ppulse, application.onpulse, normalize, correctLbias, correctQV, correctV, loffset, verbose2) == 0)
+ int nolongitudes;
+ if(datain.NrFreqChan > 1 || datain.NrSubints > 1) {
+   nolongitudes = 1;
+ }else {
+   nolongitudes = 0;
+ }
+ if(make_paswing_fromIQUV(&datain, Ppulse, application.onpulse, normalize, correctLbias, correctQV, correctV, nolongitudes, loffset, verbose2) == 0)
  return 0;
     }
 
@@ -728,7 +740,14 @@ int main(int argc, char **argv)
  extended = 0;
  onlysignificantPA = 1;
       }
-      if(dataout.format == FITS_format) {
+      if(dataout.format == PPOL_format || dataout.format == PPOL_SHORT_format) {
+ dataout.offpulse_rms = datain.offpulse_rms;
+ if(writePPOLfile(dataout, datain.data, extended, onlysignificantPA, twoprofiles, PAoffset, application.verbose_state) == 0) {
+   fflush(stdout);
+   printerror(application.verbose_state.debug, "ERROR ppol: Cannot write data");
+   return 0;
+ }
+      }else {
  for(j = 0; j < datain.NrPols; j++) {
    for(i = 0; i < datain.NrSubints; i++) {
      for(f = 0; f < datain.NrFreqChan; f++) {
@@ -739,13 +758,6 @@ int main(int argc, char **argv)
        }
      }
    }
- }
-      }else {
- dataout.offpulse_rms = datain.offpulse_rms;
- if(writePPOLfile(dataout, datain.data, extended, onlysignificantPA, twoprofiles, PAoffset, application.verbose_state) == 0) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Cannot write data");
-   return 0;
  }
       }
     }

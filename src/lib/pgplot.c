@@ -70,8 +70,14 @@ int pgplotMapCoordinate(float x, float y, int *nx, int *ny)
 
 void pgplotMapCoordinateInverse_dbl(double *x, double *y, int nx, int ny)
 {
-  *x = ((double)nx)*(internal_pgplot_xmax-internal_pgplot_xmin)/((double)internal_pgplot_nrx-1.0) + internal_pgplot_xmin;
-  *y = ((double)ny)*(internal_pgplot_ymax-internal_pgplot_ymin)/((double)internal_pgplot_nry-1.0) + internal_pgplot_ymin;
+  if(internal_pgplot_nrx != 1)
+    *x = ((double)nx)*(internal_pgplot_xmax-internal_pgplot_xmin)/((double)internal_pgplot_nrx-1.0) + internal_pgplot_xmin;
+  else
+    *x = internal_pgplot_xmin;
+  if(internal_pgplot_nry != 1)
+    *y = ((double)ny)*(internal_pgplot_ymax-internal_pgplot_ymin)/((double)internal_pgplot_nry-1.0) + internal_pgplot_ymin;
+  else
+    *y = internal_pgplot_ymin;
 }
 
 void pgplotMapCoordinateInverse(float *x, float *y, int nx, int ny)
@@ -114,8 +120,20 @@ void pgplot_makeframe(pgplot_frame_def_internal *frame)
     ppgsvp(frame->svp_x1, frame->svp_x2, frame->svp_y1, frame->svp_y2);
   if(frame->swin) {
     ppgswin(frame->swin_x1, frame->swin_x2, frame->swin_y1, frame->swin_y2);
-    frame->TR[0] = internal_pgplot_xmin - (internal_pgplot_xmax-internal_pgplot_xmin)/(float)(internal_pgplot_nrx-1);
-    frame->TR[1] = (internal_pgplot_xmax-internal_pgplot_xmin)/(float)(internal_pgplot_nrx-1); frame->TR[2] = 0;
+
+    if(internal_pgplot_nrx != 1) {
+      frame->TR[0] = internal_pgplot_xmin - (internal_pgplot_xmax-internal_pgplot_xmin)/(float)(internal_pgplot_nrx-1);
+      frame->TR[1] = (internal_pgplot_xmax-internal_pgplot_xmin)/(float)(internal_pgplot_nrx-1);
+    }else {
+      if(internal_pgplot_xmin != internal_pgplot_xmax) {
+ frame->TR[0] = internal_pgplot_xmin - (internal_pgplot_xmax-internal_pgplot_xmin);
+ frame->TR[1] = internal_pgplot_xmax-internal_pgplot_xmin;
+      }else {
+ frame->TR[0] = internal_pgplot_xmin - (frame->swin_x2 - frame->swin_x1);
+ frame->TR[1] = frame->swin_x2 - frame->swin_x1;
+      }
+    }
+    frame->TR[2] = 0;
     frame->TR[3] = internal_pgplot_ymin - (internal_pgplot_ymax-internal_pgplot_ymin)/(float)(internal_pgplot_nry-1); frame->TR[4] = 0; frame->TR[5] = (internal_pgplot_ymax-internal_pgplot_ymin)/(float)(internal_pgplot_nry-1);
     if(internal_pgplot_nry == 1) {
       frame->TR[3] = internal_pgplot_ymin;
@@ -984,7 +1002,11 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     subset_x0 = (nrx-1)*(xminshow - xmin)/(xmax-xmin)-1;
     if(subset_x0 < 0)
       subset_x0 = 0;
-    subset_nrx = (nrx-1)*(xmaxshow - xmin)/(xmax-xmin)+1 - subset_x0;
+    if(nrx != 1) {
+      subset_nrx = (nrx-1)*(xmaxshow - xmin)/(xmax-xmin)+1 - subset_x0;
+    }else {
+      subset_nrx = 1 - subset_x0;
+    }
     if(subset_nrx > nrx)
       subset_nrx = nrx;
     subset_y0 = (nry-1)*(yminshow - ymin)/(ymax-ymin)-1;
@@ -1008,6 +1030,9 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
       if(cmap_subset == NULL) {
  fflush(stdout);
  printwarning(verbose.debug, "WARNING pgplotMap: Cannot allocate memory to plot subset of the map");
+ if(verbose.debug) {
+   printwarning(verbose.debug, "Tried to allocate %ld x %ld floating points", subset_nrx, subset_nry);
+ }
  plotSubset = 0;
       }
     }

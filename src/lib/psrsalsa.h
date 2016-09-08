@@ -76,7 +76,7 @@ void psrfits_set_use_weighted_freq(int val);
 int filterPApoints(datafile_definition *datafile, verbose_definition verbose);
 int readPPOLfile(datafile_definition *datafile, float *data, int extended, float add_longitude_shift, verbose_definition verbose);
 int writePPOLfile(datafile_definition datafile, float *data, int extended, int onlysignificantPA, int twoprofiles, float PAoffset, verbose_definition verbose);
-int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, float loffset, verbose_definition verbose);
+int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, verbose_definition verbose);
 int preprocess_make_profile(datafile_definition original, datafile_definition *profile, int stokesI, verbose_definition verbose);
 int preprocess_addNoise(datafile_definition original, datafile_definition *clone, float rms, verbose_definition verbose);
 int preprocess_shuffle(datafile_definition original, datafile_definition *clone, int fixseed, verbose_definition verbose);
@@ -98,6 +98,9 @@ int preprocess_polselect(datafile_definition original, datafile_definition *clon
 int preprocess_transposeRawFBdata(datafile_definition original, datafile_definition *clone, verbose_definition verbose);
 int preprocess_norm(datafile_definition original, float normvalue, regions_definition *onpulse, verbose_definition verbose);
 int preprocess_scale(datafile_definition original, float factor, float offset, verbose_definition verbose);
+int preprocess_checknan(datafile_definition original, int generate_warning, verbose_definition verbose);
+int preprocess_removenan(datafile_definition original, verbose_definition verbose);
+int preprocess_checkinf(datafile_definition original, int generate_warning, verbose_definition verbose);
 int preprocess_corrParAng(datafile_definition *original, datafile_definition *clone, int undo, verbose_definition verbose);
 int rotateSinglepulse(float *data, int npts, float epsilon, verbose_definition verbose);
 int crosscorrelation_fft(float *data1, float *data2, int ndata, float *cc, verbose_definition verbose);

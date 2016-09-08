@@ -181,8 +181,9 @@ int main(int argc, char **argv)
     printf("                      in pulse periods.\n");
     printf("  -p3fold_noonpulse   Ignore selected pulse longitude range, but use the full\n");
     printf("                      range when doing the cross correlations\n");
-    printf("  -p2zap              Zap fluctuations in this P2 range.\n");
-    printf("  -p3zap              Zap fluctuations in this P3 range.\n");
+    printf("  -p2zap              \"P2min P2max\" Zap fluctuations in this P2 range in cpp.\n");
+    printf("  -p3zap              \"P3min P3max\" Zap fluctuations in this P3 range.\n");
+    printf("                      P3min and P3max can be specified as bins or in cpp.\n");
     printf("\nGraphics options:\n");
     printf("  -onpulsed           Set pgplot device for the selection of the onpulse region.\n");
     printf("  -profd              Set pgplot device for the pulse profile.\n");
@@ -922,7 +923,11 @@ int main(int argc, char **argv)
      return 0;
    }
    for(j = 0; j < (1+fft_size/2); j++) {
-     p3 = j/(float)fft_size;
+     if(zapmin > 0.9 || zapmax > 0.9) {
+       p3 = j;
+     }else {
+       p3 = j/(float)fft_size;
+     }
      if(p3 >= zapmin && p3 <= zapmax) {
        for(k = application.onpulse.left_bin[regionnr]; k <= application.onpulse.right_bin[regionnr]; k++) {
   twodfs[j*(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1)+(k-application.onpulse.left_bin[regionnr])] = 0;

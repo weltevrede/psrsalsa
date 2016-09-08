@@ -43,7 +43,7 @@ int main(int argc, char **argv)
   FILE *fout_ascii;
   long k;
   datafile_definition clone, subpulseTrackProfile, subpulseTrackProfileErr, subpulseAmpProfile;
-  verbose_definition verbose;
+  verbose_definition verbose, noverbose;
 
 
 
@@ -116,7 +116,9 @@ int main(int argc, char **argv)
     printf("-scalel           Specify scale, default is 1. This option multiplies the lrfs\n");
     printf("                  powers with this factor. This results in clipping, making\n");
     printf("                  weak features clearer\n");
-    printf("-scale2           Similar to -scalel, but for 2dfs instead of lrfs\n");
+    printf("-scale2           Similar to -scalel, but for 2dfs instead of lrfs\n\n");
+    printf("                  When this option is used twice, the 2nd time the\n");
+    printf("                  option is used applies to the second 2dfs shown.\n");
     printf("-scalep           Scale profile by this factor\n");
     printf("-f                Do not flip 2DFS horizontally. If specified positive drift\n");
     printf("                  corresponds to power in the left-hand side of the diagram.\n");
@@ -535,6 +537,8 @@ int main(int argc, char **argv)
       swap_orig_clone(&lrfs, &clone, verbose);
     }
   }
+  copyVerboseState(verbose, &noverbose);
+  noverbose.verbose = 0;
   if(verbose.verbose)
     printf("Reading %s\n", argv[argc-1]);
   if(!openPSRData(&AverageProfile, argv[argc-1], 0, 0, 0, 0, verbose))
@@ -568,9 +572,22 @@ int main(int argc, char **argv)
     return 0;
   }
   AverageProfile.format = MEMORY_format;
+  AverageProfile.NrSubints = 1;
+  AverageProfile.NrFreqChan = 1;
+  AverageProfile.NrPols = 1;
   AverageProfile.data = malloc(AverageProfile.NrBins*sizeof(float));
   if(AverageProfile.data == NULL) {
     printerror(verbose.debug, "Memory allocation error");
+    return 0;
+  }
+  if(change_filename_extension(argv[argc-1], filename, "profile", 1000, verbose) == 0)
+    return 0;
+  if(altProf > 0) {
+    strncpy(filename, argv[altProf], 1000);
+  }
+  if(set_filename_PSRData(&AverageProfile, filename, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR psecFig: Setting file name failed.");
     return 0;
   }
   if(type_of_plots == 0) {
@@ -597,11 +614,6 @@ int main(int argc, char **argv)
       printerror(verbose.debug, "Memory allocation error");
       return 0;
     }
-  }
-  if(change_filename_extension(argv[argc-1], filename, "profile", 1000, verbose) == 0)
-    return 0;
-  if(altProf > 0) {
-    strncpy(filename, argv[altProf], 1000);
   }
   if(verbose.verbose)
     printf("Reading %s\n", filename);
@@ -1229,6 +1241,57 @@ int main(int argc, char **argv)
       else
  ppgmtxt("l",2.8,0.5,0.5,"Subpulse phase (deg)");
       ppgsch(0.38*labelscale);
+    }
+  }
+  if(preprocess_checknan(AverageProfile, 1, noverbose)) {
+    printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+  }
+  if(preprocess_checkinf(AverageProfile, 1, noverbose)) {
+    printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+  }
+  if(type_of_plots == 0) {
+    if(preprocess_checknan(VarianceProfile, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checkinf(VarianceProfile, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checknan(ModProfile, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checkinf(ModProfile, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checknan(VarianceProfileErr, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checkinf(VarianceProfileErr, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checknan(ModProfileErr, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checkinf(ModProfileErr, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+    }
+  }else {
+    if(preprocess_checknan(subpulseTrackProfile, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checkinf(subpulseTrackProfile, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checknan(subpulseTrackProfileErr, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checkinf(subpulseTrackProfileErr, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checknan(subpulseAmpProfile, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+    }
+    if(preprocess_checkinf(subpulseAmpProfile, 1, noverbose)) {
+      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
     }
   }
   ppgend();

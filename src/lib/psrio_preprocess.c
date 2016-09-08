@@ -92,6 +92,93 @@ int preprocess_rebin(datafile_definition original, datafile_definition *clone, l
   }
   return 1;
 }
+
+
+
+
+
+
+int preprocess_checknan(datafile_definition original, int generate_warning, verbose_definition verbose)
+{
+  long p, f, n, b;
+  int i;
+  float I;
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("Checking data for NaN's\n");
+  }
+  if(original.format != MEMORY_format) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_checknan: only works if data is loaded into memory.");
+    return 0;
+  }
+
+
+  for(p = 0; p < original.NrPols; p++) {
+    for(f = 0; f < original.NrFreqChan; f++) {
+      for(n = 0; n < original.NrSubints; n++) {
+ for(b = 0; b < original.NrBins; b++) {
+   if(readPulsePSRData(&original, n, p, f, b, 1, &I, verbose) != 1) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR preprocess_checknan: Cannot read data.");
+     exit(-1);
+   }
+   if(isnan(I)) {
+     if(generate_warning) {
+       printwarning(verbose.debug, "WARNING Found a NaN in file %s. First occurance is at pulse number %ld, freq channel %ld, pol channel %ld and bin number %ld.", original.filename, n+1, f+1, p+1, b+1);
+     }
+     return 1;
+   }
+ }
+      }
+    }
+  }
+  return 0;
+}
+
+
+
+
+
+int preprocess_checkinf(datafile_definition original, int generate_warning, verbose_definition verbose)
+{
+  long p, f, n, b;
+  int i;
+  float I;
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("Checking data for INF's\n");
+  }
+  if(original.format != MEMORY_format) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_checkinf: only works if data is loaded into memory.");
+    return 0;
+  }
+
+
+  for(p = 0; p < original.NrPols; p++) {
+    for(f = 0; f < original.NrFreqChan; f++) {
+      for(n = 0; n < original.NrSubints; n++) {
+ for(b = 0; b < original.NrBins; b++) {
+   if(readPulsePSRData(&original, n, p, f, b, 1, &I, verbose) != 1) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR preprocess_checkinf: Cannot read data.");
+     exit(-1);
+   }
+   if(isinf(I) != 0) {
+     if(generate_warning) {
+       printwarning(verbose.debug, "WARNING Found a INF (or -INF) in file %s. First occurance is at pulse number %ld, freq channel %ld, pol channel %ld and bin number %ld.", original.filename, n+1, f+1, p+1, b+1);
+     }
+     return 1;
+   }
+ }
+      }
+    }
+  }
+  return 0;
+}
 int preprocess_fftshift(datafile_definition original, float shiftPhase, int addslope, float slope, verbose_definition verbose)
 {
   long p, f, n;

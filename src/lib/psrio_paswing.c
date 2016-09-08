@@ -96,7 +96,7 @@ int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
   datafile->NrBins = nrpoints;
   return datafile->NrBins;
 }
-int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, float loffset, verbose_definition verbose)
+int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, verbose_definition verbose)
 {
   int indent;
   long i, j, NrOffpulseBins, pulsenr, freqnr;
@@ -178,15 +178,22 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
   Poffpulse = (float *)malloc((datafile->NrBins)*sizeof(float));
   newdata = (float *)malloc(datafile->NrBins*datafile->NrSubints*datafile->NrFreqChan*5*sizeof(float));
   datafile->offpulse_rms = (float *)malloc(datafile->NrSubints*datafile->NrFreqChan*5*sizeof(float));
-  datafile->tsamp_list = (double *)malloc(datafile->NrBins*sizeof(double));
-  if(Loffpulse == NULL || Poffpulse == NULL || newdata == NULL || datafile->offpulse_rms == NULL || datafile->tsamp_list == NULL) {
+  if(Loffpulse == NULL || Poffpulse == NULL || newdata == NULL || datafile->offpulse_rms == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Memory allocation error.");
     return 0;
   }
-  for(j = 0; j < (datafile->NrBins); j++) {
-    datafile->tsamp_list[j] = get_pulse_longitude(*datafile, 0, j, verbose);
-    datafile->tsamp_list[j] += loffset;
+  if(nolongitudes == 0) {
+    datafile->tsamp_list = (double *)malloc(datafile->NrBins*sizeof(double));
+    if(datafile->tsamp_list == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Memory allocation error.");
+      return 0;
+    }
+    for(j = 0; j < (datafile->NrBins); j++) {
+      datafile->tsamp_list[j] = get_pulse_longitude(*datafile, 0, j, verbose);
+      datafile->tsamp_list[j] += loffset;
+    }
   }
   if(normalize && (datafile->NrSubints > 1 || datafile->NrFreqChan > 1)) {
     fflush(stdout);
@@ -321,7 +328,9 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
   }
   free(datafile->data);
   datafile->data = newdata;
-  datafile->tsampMode = TSAMPMODE_LONGITUDELIST;
+  if(nolongitudes == 0) {
+    datafile->tsampMode = TSAMPMODE_LONGITUDELIST;
+  }
   datafile->NrPols = 5;
   datafile->poltype = POLTYPE_ILVPAdPA;
   free(Loffpulse);

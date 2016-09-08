@@ -486,7 +486,11 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
    exit(0);
  }
  for(j = 0; j <= (fft_size/2); j++) {
-   p3 = j/(float)(fft_size);
+   if(zapmin > 0.9 || zapmax > 0.9) {
+     p3 = j;
+   }else {
+     p3 = j/(float)(fft_size);
+   }
    if(p3 >= zapmin && p3 <= zapmax) {
      for(k = 0; k < nrx; k++) {
        lrfs[j*nrx+k] = 0;

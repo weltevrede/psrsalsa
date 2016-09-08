@@ -61,7 +61,7 @@ int main(int argc, char **argv)
     printf("Program to show the header information of pulsar data. Usage:\n\n");
     printApplicationHelp(application);
     printf("-c            Specify things to show (or run in verbose to show all)\n");
-    printf("              Example: -c \"nbin nfreq\".");
+    printf("              Example: -c \"nbin nfreq\".\n");
     printf("-H            show list of things that can be specified with -c\n");
     printf("-linenr       Print line numbers\n");
     printf("-nohead       Do not print a header at the top of the table\n");

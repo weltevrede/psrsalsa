@@ -79,6 +79,8 @@ int isValidPSRDATA_format(int format)
     return 1;
   if(format == SIGPROC_ASCII_format)
     return 1;
+  if(format == PSRSALSA_BINARY_format)
+    return 1;
   if(format == MEMORY_format)
     return 1;
   printerror(0, "ERROR isValidPSRDATA_format: specified data format is not recognized.");
@@ -118,6 +120,8 @@ void printPSRDataFormats(FILE *printdevice, int nrspaces)
   fprintf(printdevice, "(PPOLSHORT)    - PPOL SHORT format (longitude, pa, pa error)\n");
   for(i = 0; i < nrspaces; i++) fprintf(printdevice, " ");
   fprintf(printdevice, "(SIGPROCASCII) - Sigproc ascii format\n");
+  for(i = 0; i < nrspaces; i++) fprintf(printdevice, " ");
+  fprintf(printdevice, "(PSRSALSA)     - PSRSALSA binary format\n");
 }
 
 
@@ -128,6 +132,8 @@ int parsePSRDataFormats(char *cmd)
     return PSRCHIVE_ASCII_format;
   else if(strcasecmp(cmd, "PSRFITS") == 0 || strcasecmp(cmd, "FITS") == 0 || atoi(cmd) == FITS_format)
     return FITS_format;
+  else if(strcasecmp(cmd, "PSRSALSA") == 0 || strcasecmp(cmd, "SALSA") == 0 || atoi(cmd) == PSRSALSA_BINARY_format)
+    return PSRSALSA_BINARY_format;
   else if(strcasecmp(cmd, "PUMA") == 0 || atoi(cmd) == PUMA_format)
     return PUMA_format;
   else if(strcasecmp(cmd, "EPN") == 0 || atoi(cmd) == EPN_format)
@@ -412,6 +418,1116 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
   }while(ok);
   return 1;
 }
+int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbose)
+{
+  int ret, dummyi;
+  char identifier[] = "PSRSALSAdump";
+  int version = 1;
+  ret = fwrite(identifier, 12, 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&version, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  dummyi = strlen(datafile->psrname);
+  ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fwrite(datafile->psrname, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  dummyi = strlen(datafile->scanID);
+  ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fwrite(datafile->scanID, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  dummyi = strlen(datafile->observatory);
+  ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fwrite(datafile->observatory, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  dummyi = strlen(datafile->instrument);
+  ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fwrite(datafile->instrument, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  dummyi = strlen(datafile->institute);
+  ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fwrite(datafile->institute, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fwrite(&(datafile->telescope_X), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->telescope_Y), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->telescope_Z), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->NrBits), sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->isDeDisp), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->isDeFarad), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->isDePar), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->isDebase), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->cableSwap), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->cableSwapcor), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->dm), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->rm), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->freq_ref), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->feedtype), sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->poltype), sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->mjd_start), sizeof(long double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->NrSubints), sizeof(long), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->NrBins), sizeof(long), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->NrPols), sizeof(long), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->NrFreqChan), sizeof(long), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->isFolded), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->foldMode), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->fixedPeriod), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->tsampMode), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->fixedtsamp), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(datafile->tsampMode == TSAMPMODE_LONGITUDELIST) {
+    ret = fwrite(datafile->tsamp_list, sizeof(double), datafile->NrBins, datafile->fptr_hdr);
+    if(ret != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fwrite(&(datafile->tsubMode), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(datafile->tsubMode == TSUBMODE_TSUBLIST) {
+    ret = fwrite(datafile->tsub_list, sizeof(double), datafile->NrSubints, datafile->fptr_hdr);
+    if(ret != datafile->NrSubints) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s (return value is %ld)", datafile->filename, ret);
+      return 0;
+    }
+  }else {
+    ret = fwrite(datafile->tsub_list, sizeof(double), 1, datafile->fptr_hdr);
+    if(ret != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fwrite(&(datafile->ra), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->dec), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->freqMode), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->uniform_freq_cent), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->uniform_bw), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->gentype), sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->isTransposed), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(datafile->xrangeset), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(datafile->xrangeset) {
+    ret = fwrite(datafile->xrange, sizeof(float), 2, datafile->fptr_hdr);
+    if(ret != 2) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fwrite(&(datafile->yrangeset), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(datafile->yrangeset) {
+    ret = fwrite(datafile->yrange, sizeof(float), 2, datafile->fptr_hdr);
+    if(ret != 2) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  datafile->datastart = ftell(datafile->fptr_hdr);
+  return 1;
+}
+int writeHistoryPSRSALSA(datafile_definition *datafile, verbose_definition verbose)
+{
+  datafile_history_entry_definition *curHistoryEntry;
+  int nrHistoryLines, dummyi;
+  size_t ret;
+  char *history_id = "HISTORY";
+  curHistoryEntry = &(datafile->history);
+  nrHistoryLines = 0;
+  do {
+    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->nextEntry != NULL) {
+      nrHistoryLines++;
+      curHistoryEntry = curHistoryEntry->nextEntry;
+    }
+  }while(curHistoryEntry != NULL);
+  if(verbose.debug) {
+    printf("Start writing history in PSRSALSA binary format (%d lines)\n", nrHistoryLines);
+  }
+  ret = fwrite(history_id, 1, strlen(history_id), datafile->fptr_hdr);
+  if(ret != strlen(history_id)) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  ret = fwrite(&(nrHistoryLines), sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  curHistoryEntry = &(datafile->history);
+  do {
+    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->nextEntry != NULL) {
+      if(curHistoryEntry->timestamp == NULL) {
+ dummyi = 0;
+      }else {
+ dummyi = strlen(curHistoryEntry->timestamp);
+      }
+      ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ ret = fwrite(curHistoryEntry->timestamp, sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+   return 0;
+ }
+      }
+      if(curHistoryEntry->user == NULL) {
+ dummyi = 0;
+      }else {
+ dummyi = strlen(curHistoryEntry->user);
+      }
+      ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ ret = fwrite(curHistoryEntry->user, sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+   return 0;
+ }
+      }
+      if(curHistoryEntry->hostname == NULL) {
+ dummyi = 0;
+      }else {
+ dummyi = strlen(curHistoryEntry->hostname);
+      }
+      ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ ret = fwrite(curHistoryEntry->hostname, sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+   return 0;
+ }
+      }
+      if(curHistoryEntry->cmd == NULL) {
+ dummyi = 0;
+      }else {
+ dummyi = strlen(curHistoryEntry->cmd);
+      }
+      ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ ret = fwrite(curHistoryEntry->cmd, sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+   return 0;
+ }
+      }
+      curHistoryEntry = curHistoryEntry->nextEntry;
+    }
+  }while(curHistoryEntry != NULL);
+  datafile->datastart = ftell(datafile->fptr_hdr);
+  return 1;
+}
+int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, verbose_definition verbose)
+{
+  int ret, dummyi;
+  char identifier[13], *txt;
+  int version;
+  txt = malloc(10000);
+  if(txt == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error", datafile->filename);
+    return 0;
+  }
+  ret = fread(identifier, 1, 12, datafile->fptr_hdr);
+  if(ret != 12) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  identifier[12] = 0;
+  if(strcmp(identifier, "PSRSALSAdump") != 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: File does not appear to be in the expected format", datafile->filename);
+    return 0;
+  }
+  ret = fread(&version, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  if(version < 1 || version > 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: File %s is in an unsupported version number (%d)", datafile->filename, version);
+    return 0;
+  }
+  ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 9999) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Maximum string length exceeded for %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fread(txt, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    txt[dummyi] = 0;
+    if(set_psrname_PSRData(datafile, txt, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Setting pulsar name failed for %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 9999) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Maximum string length exceeded for %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fread(txt, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    txt[dummyi] = 0;
+    if(set_scanID_PSRData(datafile, txt, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Setting scan ID failed for %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 9999) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Maximum string length exceeded for %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fread(txt, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    txt[dummyi] = 0;
+    if(set_observatory_PSRData(datafile, txt, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Setting observatory name failed for %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 9999) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Maximum string length exceeded for %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fread(txt, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    txt[dummyi] = 0;
+    if(set_instrument_PSRData(datafile, txt, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Setting instrument name failed for %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 9999) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Maximum string length exceeded for %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fread(txt, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    txt[dummyi] = 0;
+    if(set_institute_PSRData(datafile, txt, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Setting institute name failed for %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fread(&(datafile->telescope_X), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->telescope_Y), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->telescope_Z), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->NrBits), sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->isDeDisp), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->isDeFarad), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->isDePar), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->isDebase), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->cableSwap), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->cableSwapcor), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->dm), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->rm), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->freq_ref), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->feedtype), sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->poltype), sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->mjd_start), sizeof(long double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->NrSubints), sizeof(long), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->NrBins), sizeof(long), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->NrPols), sizeof(long), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->NrFreqChan), sizeof(long), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->isFolded), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->foldMode), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->fixedPeriod), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->tsampMode), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->fixedtsamp), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  datafile->tsamp_list = NULL;
+  if(datafile->tsampMode == TSAMPMODE_LONGITUDELIST) {
+    datafile->tsamp_list = (double *)malloc(sizeof(double)*datafile->NrBins);
+    if(datafile->tsamp_list == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error while reading %s", datafile->filename);
+      return 0;
+    }
+    ret = fread(datafile->tsamp_list, sizeof(double), datafile->NrBins, datafile->fptr_hdr);
+    if(ret != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fread(&(datafile->tsubMode), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  if(datafile->tsub_list != NULL)
+    free(datafile->tsub_list);
+  if(datafile->tsubMode == TSUBMODE_TSUBLIST) {
+    datafile->tsub_list = (double *)malloc(sizeof(double)*datafile->NrSubints);
+    if(datafile->tsub_list == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error while reading %s", datafile->filename);
+      return 0;
+    }
+    ret = fread(datafile->tsub_list, sizeof(double), datafile->NrSubints, datafile->fptr_hdr);
+    if(ret != datafile->NrSubints) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+  }else {
+    datafile->tsub_list = (double *)malloc(sizeof(double));
+    if(datafile->tsub_list == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error while reading %s", datafile->filename);
+      return 0;
+    }
+    ret = fread(datafile->tsub_list, sizeof(double), 1, datafile->fptr_hdr);
+    if(ret != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fread(&(datafile->ra), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->dec), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->freqMode), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->uniform_freq_cent), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->uniform_bw), sizeof(double), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->gentype), sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->isTransposed), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  ret = fread(&(datafile->xrangeset), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  if(datafile->xrangeset) {
+    ret = fread(datafile->xrange, sizeof(float), 2, datafile->fptr_hdr);
+    if(ret != 2) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+  }
+  ret = fread(&(datafile->yrangeset), sizeof(char), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+    return 0;
+  }
+  if(datafile->yrangeset) {
+    ret = fread(datafile->yrange, sizeof(float), 2, datafile->fptr_hdr);
+    if(ret != 2) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+  }
+  int readhistory;
+  off_t filepos;
+  filepos = ftello(datafile->fptr_hdr);
+  readhistory = 1;
+  ret = fread(identifier, 1, 7, datafile->fptr_hdr);
+  if(ret != 7) {
+    fflush(stdout);
+    if(nohistory_expected == 0) {
+      printwarning(verbose.debug, "WARNING readPSRSALSAHeader: No history table found in %s", datafile->filename);
+    }
+    readhistory = 0;
+    fseeko(datafile->fptr_hdr, filepos, SEEK_SET);
+  }else {
+    identifier[7] = 0;
+    if(strcmp(identifier, "HISTORY") != 0) {
+      fflush(stdout);
+      if(nohistory_expected == 0) {
+ printwarning(verbose.debug, "WARNING readPSRSALSAHeader: No history table found in %s", datafile->filename);
+      }
+      if(verbose.debug) {
+ printf("First bytes are '%c' '%c' and '%c'.\n", identifier[0], identifier[1], identifier[2]);
+      }
+      readhistory = 0;
+      fseeko(datafile->fptr_hdr, filepos, SEEK_SET);
+    }
+  }
+  if(nohistory_expected && readhistory) {
+    printwarning(verbose.debug, "WARNING readPSRSALSAHeader: History table found in %s, while this was not expected.", datafile->filename);
+  }
+  if(readhistory) {
+    datafile_history_entry_definition *curHistoryEntry;
+    int curline, nrHistoryLines;
+    ret = fread(&nrHistoryLines, sizeof(int), 1, datafile->fptr_hdr);
+    if(ret != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    curHistoryEntry = &(datafile->history);
+    for(curline = 0; curline < nrHistoryLines; curline++) {
+      ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ curHistoryEntry->timestamp = malloc(dummyi+1);
+ if(curHistoryEntry->timestamp == NULL) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error while reading in %s", datafile->filename);
+   return 0;
+ }
+ ret = fread(curHistoryEntry->timestamp, sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+   return 0;
+ }
+ curHistoryEntry->timestamp[dummyi] = 0;
+      }
+      ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ curHistoryEntry->user = malloc(dummyi+1);
+ if(curHistoryEntry->user == NULL) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error while reading in %s", datafile->filename);
+   return 0;
+ }
+ ret = fread(curHistoryEntry->user, sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+   return 0;
+ }
+ curHistoryEntry->user[dummyi] = 0;
+      }
+      ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ curHistoryEntry->hostname = malloc(dummyi+1);
+ if(curHistoryEntry->hostname == NULL) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error while reading in %s", datafile->filename);
+   return 0;
+ }
+ ret = fread(curHistoryEntry->hostname, sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+   return 0;
+ }
+ curHistoryEntry->hostname[dummyi] = 0;
+      }
+      ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ curHistoryEntry->cmd = malloc(dummyi+1);
+ if(curHistoryEntry->cmd == NULL) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error while reading in %s", datafile->filename);
+   return 0;
+ }
+ ret = fread(curHistoryEntry->cmd, sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+   return 0;
+ }
+ curHistoryEntry->cmd[dummyi] = 0;
+      }
+      if(curline < nrHistoryLines - 1) {
+ curHistoryEntry->nextEntry = malloc(sizeof(datafile_history_entry_definition));
+ if(curHistoryEntry->nextEntry == NULL) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error while reading in %s", datafile->filename);
+   return 0;
+ }
+ curHistoryEntry = curHistoryEntry->nextEntry;
+ curHistoryEntry->timestamp = NULL;
+ curHistoryEntry->cmd = NULL;
+ curHistoryEntry->user = NULL;
+ curHistoryEntry->hostname = NULL;
+ curHistoryEntry->nextEntry = NULL;
+      }
+    }
+  }
+  datafile->datastart = ftell(datafile->fptr_hdr);
+  free(txt);
+  return 1;
+}
+int readPulsePSRSALSAData(datafile_definition datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose)
+{
+  long long filepos;
+  size_t ret;
+  filepos = datafile.NrBins*(polarization+datafile.NrPols*(freq+pulsenr*datafile.NrFreqChan))+binnr;
+  filepos *= sizeof(float);
+  filepos += datafile.datastart;
+  fseeko(datafile.fptr, filepos, SEEK_SET);
+  ret = fread(pulse, sizeof(float), nrSamples, datafile.fptr);
+  if(ret != nrSamples) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPulsePSRSALSAData: File read failed.");
+    return 0;
+  }
+  return 1;
+}
+int writePulsePSRSALSAData(datafile_definition datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose)
+{
+  long long filepos;
+  size_t ret;
+  filepos = datafile.NrBins*(polarization+datafile.NrPols*(freq+pulsenr*datafile.NrFreqChan))+binnr;
+  filepos *= sizeof(float);
+  filepos += datafile.datastart;
+  fseeko(datafile.fptr, filepos, SEEK_SET);
+  ret = fwrite(pulse, sizeof(float), nrSamples, datafile.fptr);
+  if(ret != nrSamples) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePulsePSRSALSAData: File write failed.");
+    return 0;
+  }
+  return 1;
+}
+int readPSRSALSAfile(datafile_definition datafile, float *data, verbose_definition verbose)
+{
+  long n, f, p;
+  size_t ret;
+  if(verbose.verbose) {
+    printf("Start reading PSRSALSA binary file\n");
+  }
+  fseeko(datafile.fptr, datafile.datastart, SEEK_SET);
+  for(n = 0; n < datafile.NrSubints; n++) {
+    for(f = 0; f < datafile.NrFreqChan; f++) {
+      for(p = 0; p < datafile.NrPols; p++) {
+ if(verbose.verbose && verbose.nocounters == 0)
+   printf("  Progress reading PSRSALSA binary file (%.1f%%)\r", 100.0*(p+(f+n*datafile.NrFreqChan)*datafile.NrPols)/(float)(datafile.NrSubints*datafile.NrFreqChan*datafile.NrPols));
+ ret = fread(&data[datafile.NrBins*(p+datafile.NrPols*(f+n*datafile.NrFreqChan))], sizeof(float), datafile.NrBins, datafile.fptr);
+ if(ret != datafile.NrBins) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAfile: File read failed.");
+   return 0;
+ }
+      }
+    }
+  }
+  if(verbose.verbose) printf("  Reading is done.                                \n");
+  return 1;
+}
+int writePSRSALSAfile(datafile_definition datafile, float *data, verbose_definition verbose)
+{
+  long n, f, p;
+  size_t ret;
+  fseeko(datafile.fptr, datafile.datastart, SEEK_SET);
+  for(n = 0; n < datafile.NrSubints; n++) {
+    for(f = 0; f < datafile.NrFreqChan; f++) {
+      for(p = 0; p < datafile.NrPols; p++) {
+ if(verbose.verbose && verbose.nocounters == 0)
+   printf("  Progress writing PSRSALSA binary file (%.1f%%)\r", 100.0*(p+(f+n*datafile.NrFreqChan)*datafile.NrPols)/(float)(datafile.NrSubints*datafile.NrFreqChan*datafile.NrPols));
+ ret = fwrite(&data[datafile.NrBins*(p+datafile.NrPols*(f+n*datafile.NrFreqChan))], sizeof(float), datafile.NrBins, datafile.fptr);
+ if(ret != datafile.NrBins) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR writePSRSALSAfile: File write failed.");
+   return 0;
+ }
+      }
+    }
+  }
+  if(verbose.verbose) printf("  Writing is done.                                   \n");
+  return 1;
+}
 int set_string_PSRData(char **dest, char *source, verbose_definition verbose)
 {
   int i;
@@ -510,13 +1626,64 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
     printf("  First three bytes have values %d, %d and %d.\n", txt[0], txt[1], txt[2]);
     printf("  This corresponds to characters '%c', '%c' and '%c'.\n", txt[0], txt[1], txt[2]);
   }
-  if(strcmp(txt, "DPC") == 0) {
+  if(strcmp(txt, "PSR") == 0) {
+    if(verbose.debug) {
+      if(verbose.verbose) {
+ for(indent = 0; indent < verbose.indent; indent++)
+   printf(" ");
+      }
+      printf("  file might be in PSRSALSA binary format.\n");
+    }
+    rewind(fin);
+    i = fread(txt, 1, 12, fin);
+    txt[12] = 0;
+    if(i != 12) {
+      fflush(stdout);
+      if(verbose.debug) {
+ if(verbose.verbose) {
+   for(indent = 0; indent < verbose.indent; indent++)
+     printf(" ");
+   printf("  file is not in PSRSALSA binary format.\n");
+ }
+      }
+      rewind(fin);
+      i = fread(txt, 1, 3, fin);
+      txt[3] = 0;
+    }else {
+      if(strcmp(txt, "PSRSALSAdump") == 0) {
+ if(verbose.verbose) {
+   for(indent = 0; indent < verbose.indent; indent++)
+     printf(" ");
+   printf("  file is in PSRSALSA binary format.\n");
+ }
+ fclose(fin);
+ free(txt);
+ return PSRSALSA_BINARY_format;
+      }else {
+ fflush(stdout);
+ if(verbose.debug) {
+   for(indent = 0; indent < verbose.indent; indent++)
+     printf(" ");
+   printf("  file is not in PSRSALSA binary format.\n");
+ }
+ rewind(fin);
+ i = fread(txt, 1, 3, fin);
+ txt[3] = 0;
+      }
+    }
+  }else if(verbose.debug) {
     if(verbose.verbose) {
       for(indent = 0; indent < verbose.indent; indent++)
  printf(" ");
     }
-    if(verbose.verbose)
+    printf("  file is not in PSRSALSA binary format.\n");
+  }
+  if(strcmp(txt, "DPC") == 0) {
+    if(verbose.verbose) {
+      for(indent = 0; indent < verbose.indent; indent++)
+ printf(" ");
       printf("  file is in WSRT PuMa 1 format.\n");
+    }
     fclose(fin);
     free(txt);
     return PUMA_format;
@@ -525,7 +1692,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
       for(indent = 0; indent < verbose.indent; indent++)
  printf(" ");
     }
-    printf("  file is not WSRT PuMa 1 format.\n");
+    printf("  file is not in WSRT PuMa 1 format.\n");
   }
   if(strcmp(txt, "Fil") == 0) {
     if(verbose.verbose) {
@@ -745,7 +1912,7 @@ int openPSRData(datafile_definition *datafile, char *filename, int format, int e
       printf("Opening file '%s' for reading\n", filename);
     }
   }
-  if(format == PUMA_format ||
+  if(format == PUMA_format || format == PSRSALSA_BINARY_format ||
      format == SIGPROC_format) {
     strcat(open_mode, "b");
     datafile->fptr = fopen(filename, open_mode);
@@ -756,8 +1923,7 @@ int openPSRData(datafile_definition *datafile, char *filename, int format, int e
     }else {
       datafile->opened_flag = 1;
     }
-  }else
-    if(format == PSRCHIVE_ASCII_format || format == PPOL_format || format == PPOL_SHORT_format || format == SIGPROC_ASCII_format || format == EPN_format
+  }else if(format == PSRCHIVE_ASCII_format || format == PPOL_format || format == PPOL_SHORT_format || format == SIGPROC_ASCII_format || format == EPN_format
        ) {
     datafile->fptr = fopen(filename, open_mode);
     if(datafile->fptr == NULL) {
@@ -956,6 +2122,7 @@ static char * internal_format_string_PSRCHIVEAscii = "PSRCHIVE ascii";
 static char * internal_format_string_PSRFITS = "PSRfits";
 static char * internal_format_string_SIGPROC = "Sigproc";
 static char * internal_format_string_SIGPROCAscii = "Sigproc (ascii)";
+static char * internal_format_string_PSRSALSA = "PSRSALSA binary";
 static char * internal_format_string_Memory = "Loaded in RAM";
 static char * internal_format_string_bug = "BUG, undefined????";
 char *returnFileFormat_str(int format)
@@ -969,6 +2136,7 @@ char *returnFileFormat_str(int format)
   case SIGPROC_ASCII_format: return internal_format_string_SIGPROCAscii; break;
   case PSRCHIVE_ASCII_format: return internal_format_string_PSRCHIVEAscii; break;
   case FITS_format: return internal_format_string_PSRFITS; break;
+  case PSRSALSA_BINARY_format: return internal_format_string_PSRSALSA; break;
   case MEMORY_format: return internal_format_string_Memory; break;
   default: return internal_format_string_bug; break;
   }
@@ -1516,7 +2684,14 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
   }
   copyVerboseState(verbose, &verbose2);
   verbose2.indent = verbose.indent + 2;
-  if(datafile->format == PUMA_format) {
+  if(datafile->format == PSRSALSA_BINARY_format) {
+    if(verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      printf("Reading PSRSALSA binary header\n");
+    }
+    ret = readPSRSALSAHeader(datafile, 0, verbose);
+  }else if(datafile->format == PUMA_format) {
     if(verbose.verbose) {
       for(i = 0; i < verbose.indent; i++)
  printf(" ");
@@ -1730,7 +2905,19 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
 {
   int i, debug, ret;
   debug = 0;
-  if(datafile->format == PUMA_format) {
+  if(datafile->format == PSRSALSA_BINARY_format) {
+    if(verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      if(verbose.verbose) printf("Write PSRSALSA header.\n");
+    }
+    ret = writePSRSALSAHeader(datafile, verbose);
+    if(verbose.debug) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      if(verbose.verbose) printf("Writing PSRSALSA header done.\n");
+    }
+  }else if(datafile->format == PUMA_format) {
     if(verbose.verbose) {
       for(i = 0; i < verbose.indent; i++)
  printf(" ");
@@ -1740,7 +2927,7 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
     if(verbose.debug) {
       for(i = 0; i < verbose.indent; i++)
  printf(" ");
-      if(verbose.verbose) printf("Write PuMa header done.\n");
+      if(verbose.verbose) printf("Writing PuMa header done.\n");
     }
   }else if(datafile->format == PSRCHIVE_ASCII_format) {
     if(verbose.verbose) {
@@ -1759,7 +2946,7 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
     if(verbose.debug) {
       for(i = 0; i < verbose.indent; i++)
  printf(" ");
-      if(verbose.verbose) printf("Write PSRFITS header done.\n");
+      if(verbose.verbose) printf("Writing PSRFITS header done.\n");
     }
   }else if(datafile->format == EPN_format) {
     if(verbose.verbose) {
@@ -1790,7 +2977,7 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
     ret = 0;
   }
   if(ret != 0) {
-    if(datafile->format == FITS_format || datafile->format == PUMA_format) {
+    if(datafile->format == PSRSALSA_BINARY_format || datafile->format == FITS_format || datafile->format == PUMA_format) {
       writeHistoryPSRData(datafile, argc, argv, cmdOnly, verbose);
     }
   }
@@ -1801,7 +2988,9 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
 }
 int readPulsePSRData(datafile_definition *datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose)
 {
-  if(datafile->format == PUMA_format)
+  if(datafile->format == PSRSALSA_BINARY_format)
+    return readPulsePSRSALSAData(*datafile, pulsenr, polarization, freq, binnr, nrSamples, pulse, verbose);
+  else if(datafile->format == PUMA_format)
     return readPulseWSRTData(*datafile, pulsenr, polarization, freq, binnr, nrSamples, pulse);
   else if(datafile->format == FITS_format)
     return readFITSpulse(datafile, pulsenr, polarization, freq, binnr, nrSamples, pulse, verbose);
@@ -1845,6 +3034,8 @@ int writePulsePSRData(datafile_definition *datafile, long pulsenr, int polarizat
       }
     }
     memcpy(&datafile->data[datafile->NrBins*(polarization+datafile->NrPols*(freq+pulsenr*datafile->NrFreqChan))+binnr], pulse, sizeof(float)*nrSamples);
+  }else if(datafile->format == PSRSALSA_BINARY_format) {
+    return writePulsePSRSALSAData(*datafile, pulsenr, polarization, freq, binnr, nrSamples, pulse, verbose);
   }else if(datafile->format == PUMA_format) {
     return writePulseWSRTData(*datafile, pulsenr, polarization, freq, binnr, nrSamples, pulse);
   }else if(datafile->format == FITS_format) {
@@ -1862,7 +3053,9 @@ int writePulsePSRData(datafile_definition *datafile, long pulsenr, int polarizat
 }
 int readPSRData(datafile_definition *datafile, float *data, verbose_definition verbose)
 {
-  if(datafile->format == PUMA_format)
+  if(datafile->format == PSRSALSA_BINARY_format)
+    return readPSRSALSAfile(*datafile, data, verbose);
+  else if(datafile->format == PUMA_format)
     return readPuMafile(*datafile, data, verbose);
   else if(datafile->format == PSRCHIVE_ASCII_format)
     return readPSRCHIVE_ASCIIfile(*datafile, data, verbose);
@@ -1887,7 +3080,9 @@ int writePSRData(datafile_definition *datafile, float *data, verbose_definition 
 {
   if(verbose.verbose) printf("Writing %ld x %ld x %ld x %ld samples\n", datafile->NrSubints, datafile->NrFreqChan, datafile->NrBins, datafile->NrPols);
   datafile->dumpOnClose = 0;
-  if(datafile->format == PUMA_format) {
+  if(datafile->format == PSRSALSA_BINARY_format) {
+    return writePSRSALSAfile(*datafile, data, verbose);
+  }else if(datafile->format == PUMA_format) {
     return writePuMafile(*datafile, data, verbose);
   }else if(datafile->format == EPN_format) {
     return writeEPNfile(*datafile, data, verbose);
@@ -2507,7 +3702,9 @@ int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, in
       strcpy(curHistoryEntry->hostname, hostname);
     }
   }
-  if(datafile->format == FITS_format) {
+  if(datafile->format == PSRSALSA_BINARY_format) {
+    ret = writeHistoryPSRSALSA(datafile, verbose);
+  }else if(datafile->format == FITS_format) {
     ret = writeHistoryFITS(*datafile, verbose);
   }else if(datafile->format == PUMA_format) {
     ret = writeHistoryPuma(*datafile, verbose);
@@ -2565,7 +3762,7 @@ int showHistory(datafile_definition datafile, verbose_definition verbose)
       curHistoryEntry = curHistoryEntry->nextEntry;
       rownr++;
     }
-  }while(curHistoryEntry != NULL);
+  }while(curHistoryEntry != NULL && rownr != 0);
   if(rownr > 0)
     return 1;
   else

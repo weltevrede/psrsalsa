@@ -2066,20 +2066,21 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     fits_parse_value(card, value, comment, &status);
     sscanf(value, "%ld", &(datafile->NrBins));
     if(datafile->NrBins == 1) {
-      if (fits_read_card(datafile->fits_fptr,"NSBLK", card, &status)) {
+      if(fits_read_card(datafile->fits_fptr,"NSBLK", card, &status)) {
  fflush(stdout);
- printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): NSBLK keyword does not exist, while NrBins=1 suggests this is a search-mode file.", datafile->filename);
- return 0;
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NSBLK keyword does not exist, while NrBins=1 suggests this is a search-mode file. Proceed with reading file as being in folded mode.", datafile->filename);
+ datafile->NrBits = 16;
+      }else {
+ fits_parse_value(card, value, comment, &status);
+ sscanf(value, "%ld", &(datafile->NrBins));
+ if (fits_read_card(datafile->fits_fptr,"NBITS", card, &status)) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): NBITS keyword does not exist, while NrBins=1 suggests this is a search-mode file.", datafile->filename);
+   return 0;
+ }
+ fits_parse_value(card, value, comment, &status);
+ sscanf(value, "%d", &(datafile->NrBits));
       }
-      fits_parse_value(card, value, comment, &status);
-      sscanf(value, "%ld", &(datafile->NrBins));
-      if (fits_read_card(datafile->fits_fptr,"NBITS", card, &status)) {
- fflush(stdout);
- printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): NBITS keyword does not exist, while NrBins=1 suggests this is a search-mode file.", datafile->filename);
- return 0;
-      }
-      fits_parse_value(card, value, comment, &status);
-      sscanf(value, "%d", &(datafile->NrBits));
     }else {
       datafile->NrBits = 16;
     }
