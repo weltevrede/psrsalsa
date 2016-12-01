@@ -217,7 +217,7 @@ int main(int argc, char **argv)
       index = i;
       if(processCommandLine(&application, argc, argv, &index)) {
  i = index;
-      }else if(strcmp(argv[i], "-nfft") == 0) {
+      }else if(strcmp(argv[i], "-nfft") == 0 || strcmp(argv[i], "-fft_size") == 0 || strcmp(argv[i], "-fftsize") == 0) {
  j = sscanf(argv[i+1], "%d", &fft_size);
  if(j != 1) {
    printerror(application.verbose_state.debug, "Cannot parse '%s' option.", argv[i]);

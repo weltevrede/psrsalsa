@@ -437,9 +437,9 @@ double get_tsub(datafile_definition datafile, long subint, verbose_definition ve
   }else if(datafile.tsubMode == TSUBMODE_TSUBLIST) {
     return datafile.tsub_list[subint];
   }else {
-    printerror(verbose.debug, "ERROR get_tsub: Unknown folding mode", datafile.tsubMode);
+    printerror(verbose.debug, "ERROR get_tsub: Unknown subint duration mode", datafile.tsubMode);
     if(verbose.debug) {
-      printerror(verbose.debug, "Foldmode is set to %d", datafile.tsubMode);
+      printerror(verbose.debug, "Subint duration mode is set to %d", datafile.tsubMode);
     }
     exit(0);
   }

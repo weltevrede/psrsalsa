@@ -97,8 +97,8 @@ int main(int argc, char **argv)
     printf("                 useful to decide which model distribution fits an observed\n");
     printf("                 distribution best, but the chi square itself is not immediately\n");
     printf("                 meaningful. Example: pstat -chi2cdf file1 file2\n");
-    printf("-correl          Produces the cross correlation function (as function of lag) in\n");
-    printf("                 the Fourier domain assuming equal sampling.\n");
+    printf("-correl          Produces the cross correlation function (as function of lag)\n");
+    printf("                 calculated in the Fourier domain assuming equal sampling.\n");
     printf("                 Examples: pstat -correl -col1 1 -col2 1 file1 file2\n");
     printf("                 or:       pstat -correl -col \"1 2\" file1\n");
     printf("-ks              Kolmogorov-Smirnov test: Assess difference between two\n");

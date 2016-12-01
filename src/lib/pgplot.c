@@ -820,6 +820,18 @@ int pgplot_set_maptype(int maptype, verbose_definition verbose)
     float datag[] = {0.0, 0.0, 0.0, 1.0};
     float datab[] = {0.0, 1.0, 1.0, 1.0};
     ppgctab(datal, datar, datag, datab, 4, contrast, brightness);
+  }else if(maptype == PPGPLOT_DIVREDBLUE) {
+    float datal[] = {0.0, 0.5, 1.0};
+    float datar[] = {1.0, 1.0, 0.0};
+    float datag[] = {0.0, 1.0, 0.0};
+    float datab[] = {0.0, 1.0, 1.0};
+    ppgctab(datal, datar, datag, datab, 3, contrast, brightness);
+  }else if(maptype == PPGPLOT_INVERTED_DIVREDBLUE) {
+    float datal[] = {0.0, 0.5, 1.0};
+    float datar[] = {0.0, 1.0, 1.0};
+    float datag[] = {0.0, 1.0, 0.0};
+    float datab[] = {1.0, 1.0, 0.0};
+    ppgctab(datal, datar, datag, datab, 3, contrast, brightness);
   }else {
     fflush(stdout);
     printerror(verbose.debug, "ERROR pgplot_set_maptype: Maptype undefined");
@@ -1507,6 +1519,8 @@ void printCMAPCommandlineOptions(FILE *printdevice)
   fprintf(printdevice, "  INVERTED_HEAT4\n");
   fprintf(printdevice, "  COLD\n");
   fprintf(printdevice, "  INVERTED_COLD\n");
+  fprintf(printdevice, "  DIVREDBLUE\n");
+  fprintf(printdevice, "  INVERTED_DIVREDBLUE\n");
 }
 int cmap_parse_commandline(int argc, char **argv, int debug)
 {
@@ -1551,6 +1565,10 @@ int cmap_parse_commandline(int argc, char **argv, int debug)
    type = PPGPLOT_COLD;
  }else if(strcasecmp(identifier,"INVERTED_COLD") == 0) {
    type = PPGPLOT_INVERTED_COLD;
+ }else if(strcasecmp(identifier,"DIVREDBLUE") == 0) {
+   type = PPGPLOT_DIVREDBLUE;
+ }else if(strcasecmp(identifier,"INVERTED_DIVREDBLUE") == 0) {
+   type = PPGPLOT_INVERTED_DIVREDBLUE;
  }else if(strcasecmp(identifier,"HEAT2") == 0) {
    type = PPGPLOT_HEAT2;
  }else if(strcasecmp(identifier,"INVERTED_HEAT2") == 0) {

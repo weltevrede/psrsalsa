@@ -730,7 +730,7 @@ int main(int argc, char **argv)
  dataout.fptr_hdr = stdout;
  dataout.format = application.oformat;
       }
-      dataout.poltype = POLTYPE_ILVPAdPA;
+ dataout.poltype = POLTYPE_ILVPAdPA;
       if(!writeHeaderPSRData(&dataout, argc, argv, application.history_cmd_only, application.verbose_state))
  return 0;
       if(application.oformat == PPOL_format) {

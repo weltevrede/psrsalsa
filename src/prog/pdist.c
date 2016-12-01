@@ -24,11 +24,11 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 int main(int argc, char **argv)
 {
-  int read_log, centered_at_zero, file_column1, file_column2, colspecified, polspecified, filename, truncate, cdf;
+  int read_log, centered_at_zero, file_column1, file_column2, colspecified, polspecified, filename, truncate, cdf, select;
   long ndata, i, j, k, nrbins, nrbinsy, *distr;
   float *cmap, *distr_float;
   double *data_x, *data_y, min_x_data, max_x_data, min_y_data, max_y_data;
-  double min_x, max_x, min_y, max_y, dx, dy, x, y, s, rangex_min, rangex_max, rangey_min, rangey_max, extra_phase;
+  double min_x, max_x, min_y, max_y, dx, dy, x, y, s, rangex_min, rangex_max, rangey_min, rangey_max, extra_phase, select1, select2;
   int nrbins_specified, dx_specified, dy_specified, output_sigma, output_fraction, nrbins_specifiedy, twoDmode, showGraphics, rangex_set, rangey_set, plotlog, file_column2_defined, xlabelset;
   char title[500], *filename_ptr, output_suffix[100], *oname;
   FILE *ofile;
@@ -77,6 +77,7 @@ int main(int argc, char **argv)
   filename = 0;
   truncate = 0;
   cdf = 0;
+  select = 0;
 
   if(argc < 2) {
     printf("Program to generate or plot a histogram by binning data. Also a cummulative\n");
@@ -112,6 +113,10 @@ int main(int argc, char **argv)
     printf("                 should include all input values (see also -trunc). It therefore\n");
     printf("                 allows more bins to be generated than strictly necessary.\n");
     printf("-rangey          As -rangex, but now for second input column.\n");
+    printf("-select \"v1 v2\"  Enabling this option will no longer result in a distribution.\n");
+    printf("                 Instead all samples within the range of values specified with\n");
+    printf("                 v1 and v2 will be outputted as two columns: the sample number\n");
+    printf("                 and the value.\n");
     printf("-trunc           Modifies behaviour of -rangex and -rangey. Values outside the\n");
     printf("                 specified range are set to the extremes of the range.\n");
     printf("-zero            By default one of the bins will be centred at zero. This option\n");
@@ -243,6 +248,14 @@ int main(int argc, char **argv)
    return 0;
  }
  i++;
+      }else if(strcmp(argv[i], "-select") == 0) {
+ select = 1;
+ j = sscanf(argv[i+1], "%lf %lf", &select1, &select2);
+ if(j != 2) {
+   printerror(application.verbose_state.debug, "Cannot parse the %s option, need 2 values.\n", argv[i]);
+   return 0;
+ }
+ i++;
       }else if(strcmp(argv[i], "-trunc") == 0) {
  truncate = 1;
       }else if(strcmp(argv[i], "-sigma") == 0) {
@@ -283,6 +296,29 @@ int main(int argc, char **argv)
     return 0;
   }
 
+  if(select) {
+    if(twoDmode) {
+      printerror(application.verbose_state.debug, "ERROR pdist: The -2 option cannot be used with -select.\n");
+      return 0;
+    }
+    if(cdf) {
+      printerror(application.verbose_state.debug, "ERROR pdist: The -cdf option cannot be used with -select.\n");
+      return 0;
+    }
+    if(showGraphics) {
+      printerror(application.verbose_state.debug, "ERROR pdist: No plots can be generated when using -select.\n");
+      return 0;
+    }
+    if(output_fraction) {
+      printerror(application.verbose_state.debug, "ERROR pdist: The -frac option cannot be used with -select.\n");
+      return 0;
+    }
+    if(output_sigma) {
+      printerror(application.verbose_state.debug, "ERROR pdist: The -sigma option cannot be used with -select.\n");
+      return 0;
+    }
+  }
+
   if(cdf) {
     if(nrbins_specified || dx_specified) {
       printerror(application.verbose_state.debug, "ERROR pdist: For a cdf -n and -dx should not be used.\n");
@@ -301,14 +337,16 @@ int main(int argc, char **argv)
       return 0;
     }
   }else {
-    if(nrbins_specified == 0 && dx_specified == 0) {
-      printerror(application.verbose_state.debug, "ERROR pdist: Specify resolution with the -n or -dx option.\n");
-      return 0;
-    }
-    if(twoDmode) {
-      if(nrbins_specifiedy == 0 && dy_specified == 0) {
+    if(select == 0) {
+      if(nrbins_specified == 0 && dx_specified == 0) {
+ printerror(application.verbose_state.debug, "ERROR pdist: Specify resolution with the -n or -dx option.\n");
+ return 0;
+      }
+      if(twoDmode) {
+ if(nrbins_specifiedy == 0 && dy_specified == 0) {
  printerror(application.verbose_state.debug, "ERROR pdist: Specify resolution with the -ny or -dy option.\n");
  return 0;
+ }
       }
     }
   }
@@ -376,6 +414,7 @@ int main(int argc, char **argv)
       ndata = 0;
       total_x = 0;
       total_y = 0;
+      min_x_data = max_x_data = 0;
       for(subintnr = 0; subintnr < datain.NrSubints; subintnr++) {
  for(freqnr = 0; freqnr < datain.NrFreqChan; freqnr++) {
    for(binnr = 0; binnr < datain.NrBins; binnr++) {
@@ -468,10 +507,15 @@ int main(int argc, char **argv)
    }
    return 0;
  }
+ data_y = malloc(datain.NrSubints*datain.NrFreqChan*datain.NrBins*sizeof(double));
+ if(data_y == NULL) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Memory allocation error.\n");
+   return 0;
+ }
       }
     }
 
-    if(cdf == 0) {
+    if(cdf == 0 && select == 0) {
       switch(set_binning_histogram(min_x_data, max_x_data, rangex_set, rangex_min, rangex_max, nrbins_specified, nrbins, centered_at_zero, extra_phase, &min_x, &max_x, &dx, application.verbose_state)) {
       case 0: break;
       case 1:
@@ -538,13 +582,14 @@ int main(int argc, char **argv)
     }
 
 
-    if(cdf == 0)
+    if(cdf == 0 && select == 0)
       nrbins = calculate_bin_number(max_x, dx, min_x, centered_at_zero, extra_phase) + 1;
     else
       nrbins = ndata;
 
 
-    fprintf(stdout, "Distribution will have %ld bins.\n", nrbins);
+    if(select == 0)
+      fprintf(stdout, "Distribution will have %ld bins.\n", nrbins);
     if(twoDmode) {
       nrbinsy = calculate_bin_number(max_y, dy, min_y, centered_at_zero, extra_phase)+ 1;
       fprintf(stdout, "Distribution will have %ld y-bins.\n", nrbinsy);
@@ -713,41 +758,68 @@ int main(int argc, char **argv)
  }
  free(cmap);
       }
-      free(data_y);
     }else {
-      if(cdf == 0) {
+
+      if(select) {
+ nrbins = 0;
  for(i = 0; i < ndata; i++) {
-   j = calculate_bin_number(data_x[i], dx, min_x, centered_at_zero, extra_phase);
-   if(j < 0 || j >= nrbins) {
-     printerror(application.verbose_state.debug, "BUG! bin number %ld outside range.\n", j);
-     exit(0);
+   if(data_x[i] >= select1 && data_x[i] <= select2) {
+     nrbins++;
    }
-   distr[j] += 1;
+ }
+ j = 0;
+ for(i = 0; i < ndata; i++) {
+   if(data_x[i] >= select1 && data_x[i] <= select2) {
+     distr[j] = i;
+     data_y[j] = data_x[i];
+     j++;
+   }
  }
       }else {
- gsl_sort(data_x, 1, ndata);
- data_y = malloc(ndata*sizeof(double));
- if(data_y == NULL) {
-   printerror(application.verbose_state.debug, "ERROR pdist: Memory allocation error.\n");
-   return 0;
- }
- for(i = 0; i < ndata; i++) {
-   data_y[i] = (i+1)/(double)(ndata);
+ if(cdf == 0) {
+   for(i = 0; i < ndata; i++) {
+     j = calculate_bin_number(data_x[i], dx, min_x, centered_at_zero, extra_phase);
+     if(j < 0 || j >= nrbins) {
+       printerror(application.verbose_state.debug, "BUG! bin number %ld outside range.\n", j);
+       exit(0);
+     }
+     distr[j] += 1;
+   }
+ }else {
+   gsl_sort(data_x, 1, ndata);
+   data_y = malloc(ndata*sizeof(double));
+   if(data_y == NULL) {
+     printerror(application.verbose_state.debug, "ERROR pdist: Memory allocation error.\n");
+     return 0;
+   }
+   for(i = 0; i < ndata; i++) {
+     data_y[i] = (i+1)/(double)(ndata);
+   }
  }
       }
 
       if(!showGraphics) {
  for(i = 0; i < nrbins; i++) {
    x = i*dx;
-     if(cdf == 0)
-       fprintf(ofile, "%e", calculate_bin_location(i, dx, min_x, centered_at_zero, extra_phase));
-     else
+     if(cdf == 0) {
+       if(select == 0) {
+  fprintf(ofile, "%e", calculate_bin_location(i, dx, min_x, centered_at_zero, extra_phase));
+       }else {
+  fprintf(ofile, "%ld", distr[i]);
+       }
+     }else {
        fprintf(ofile, "%e", data_x[i]);
+     }
    if(!output_fraction) {
-       if(cdf == 0)
-  fprintf(ofile, " %ld", distr[i]);
-       else
+       if(cdf == 0) {
+  if(select == 0) {
+    fprintf(ofile, " %ld", distr[i]);
+  }else {
+    fprintf(ofile, " %e", data_y[i]);
+  }
+       }else {
   fprintf(ofile, " %e", data_y[i]);
+       }
    }else {
        if(cdf == 0) {
   fprintf(ofile, " %e", distr[i]/(double)ndata);
@@ -842,6 +914,7 @@ int main(int argc, char **argv)
 
 
     free(data_x);
+    free(data_y);
     free(distr);
     if(showGraphics == 0) {
       fclose(ofile);

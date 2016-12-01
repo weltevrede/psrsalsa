@@ -191,7 +191,7 @@ char * pickWordFromString(char *string, int n, int *nrwords, int replacetabs, ch
     }
     exit(0);
   }
-  if(separator != ' ' && separator != ',') {
+  if(separator != ' ' && separator != ',' && separator != ':') {
     fflush(stdout);
     fprintf(stderr, "ERROR pickWordFromString: This particular separator (ascii code %d) is not supported", separator);
     exit(0);
@@ -232,6 +232,8 @@ char * pickWordFromString(char *string, int n, int *nrwords, int replacetabs, ch
       sscanf(ptr, "%100[^ ]%n", field, &nrchars);
     else if(separator == ',')
       sscanf(ptr, "%100[^,]%n", field, &nrchars);
+    else if(separator == ':')
+      sscanf(ptr, "%100[^:]%n", field, &nrchars);
     (*nrwords) ++;
     if(*nrwords == n)
       ret = ptr;

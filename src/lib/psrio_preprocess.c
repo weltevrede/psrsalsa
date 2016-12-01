@@ -1102,11 +1102,11 @@ int preprocess_rotateStokes(datafile_definition *original, datafile_definition *
   }
   return 1;
 }
-int preprocess_norm(datafile_definition original, float normvalue, regions_definition *onpulse, verbose_definition verbose)
+int preprocess_norm(datafile_definition original, float normvalue, regions_definition *onpulse, int global, verbose_definition verbose)
 {
-  int ok, first;
+  int ok, first, itt;
   long p, f, n, b, i;
-  float max, fac;
+  float max, fac, globalmax;
   regions_definition onpulse_converted;
   if(onpulse != NULL) {
     memcpy(&onpulse_converted, onpulse, sizeof(regions_definition));
@@ -1115,7 +1115,10 @@ int preprocess_norm(datafile_definition original, float normvalue, regions_defin
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
-    printf("Normalize data to %f (individual channels/subints)\n", normvalue);
+    if(global)
+      printf("Normalize data to %f (same scaling for each channels/subint)\n", normvalue);
+    else
+      printf("Normalize data to %f (individual channels/subints)\n", normvalue);
   }
   if(original.format != MEMORY_format) {
     fflush(stdout);
@@ -1127,32 +1130,109 @@ int preprocess_norm(datafile_definition original, float normvalue, regions_defin
     printerror(verbose.debug, "ERROR preprocess_norm: Cannot handle PA data.");
     return 0;
   }
-  for(f = 0; f < original.NrFreqChan; f++) {
-    for(n = 0; n < original.NrSubints; n++) {
-      p = 0;
-      max = original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))];
-      first = 1;
-      for(b = 0; b < original.NrBins; b++) {
- ok = 0;
- if(onpulse == NULL) {
-   ok = 1;
- }else {
-   if(checkRegions(b, &onpulse_converted, 0, verbose) != 0 || onpulse_converted.nrRegions == 0) {
+  for(itt = 0; itt < 2; itt++) {
+    if(global == 0)
+      itt = 1;
+    if(global && verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      if(itt == 0)
+ printf("  Find normalisation contant\n");
+      else
+ printf("  Applying normalisation contant %e                   \n", fac);
+    }
+    for(f = 0; f < original.NrFreqChan; f++) {
+      for(n = 0; n < original.NrSubints; n++) {
+ p = 0;
+ max = original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))];
+ if(f == 0 && n == 0 && itt == 0)
+   globalmax = max;
+ first = 1;
+ for(b = 0; b < original.NrBins; b++) {
+   ok = 0;
+   if(onpulse == NULL) {
      ok = 1;
+   }else {
+     if(checkRegions(b, &onpulse_converted, 0, verbose) != 0 || onpulse_converted.nrRegions == 0) {
+       ok = 1;
+     }
+   }
+   if((original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b] > max || first == 1) && ok == 1) {
+     max = original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b];
+     first = 0;
    }
  }
- if((original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b] > max || first == 1) && ok == 1) {
-   max = original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b];
-   first = 0;
+ if(itt == 0) {
+   if(max > globalmax) {
+     globalmax = max;
+     if(globalmax != 0)
+       fac = normvalue/globalmax;
+     else
+       fac = 1;
+   }
+ }else if(global == 0) {
+   if(max != 0)
+     fac = normvalue/max;
+   else
+     fac = 1;
+ }
+ if(itt == 1) {
+   for(p = 0; p < original.NrPols; p++) {
+     for(b = 0; b < original.NrBins; b++) {
+       original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b] *= fac;
+     }
+   }
+ }
+ if(verbose.verbose && verbose.nocounters == 0) {
+   long doprint;
+   doprint = 1;
+   if(original.NrFreqChan > 4 && n != 0)
+     doprint = 0;
+   if(doprint) {
+     for(i = 0; i < verbose.indent; i++)
+       printf(" ");
+     printf("  %.1f%%     \r", (100.0*(f*original.NrSubints+n))/(float)(original.NrSubints*original.NrFreqChan));
+     fflush(stdout);
+   }
  }
       }
-      if(max != 0)
- fac = normvalue/max;
-      else
- fac = 1;
+    }
+  }
+  if(verbose.verbose && verbose.nocounters == 0) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("  done                              \n");
+  }
+  return 1;
+}
+int preprocess_clip(datafile_definition original, float clipvalue, verbose_definition verbose)
+{
+  long p, f, n, b, i;
+  float value;
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("Clip all samples exceeding %e (will be set to threshold value)\n", clipvalue);
+  }
+  if(original.format != MEMORY_format) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_clip: only works if data is loaded into memory.");
+    return 0;
+  }
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+    fflush(stdout);
+    printwarning(verbose.debug, "WARNING preprocess_clip: Clipping of data that represents PA values and error-bars might not be what you want.");
+  }
+  for(f = 0; f < original.NrFreqChan; f++) {
+    for(n = 0; n < original.NrSubints; n++) {
       for(p = 0; p < original.NrPols; p++) {
  for(b = 0; b < original.NrBins; b++) {
-   original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b] *= fac;
+   value = original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b];
+   if(value > clipvalue) {
+     original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b] = clipvalue;
+   }else if(value < -clipvalue) {
+     original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b] = -clipvalue;
+   }
  }
       }
       if(verbose.verbose && verbose.nocounters == 0) {

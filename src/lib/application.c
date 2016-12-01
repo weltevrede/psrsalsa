@@ -121,6 +121,11 @@ void initApplication(psrsalsaApplication *application, char *name, char *genusag
   application->switch_norm = 0;
   application->normvalue = 1;
   application->do_norm = 0;
+  application->switch_normglobal = 0;
+  application->do_normglobal = 0;
+  application->switch_clip = 0;
+  application->do_clip = 0;
+  application->clipvalue = 0;
   application->switch_rotateQU = 0;
   application->dorotateQU = 0;
   application->switch_rotateUV = 0;
@@ -203,11 +208,15 @@ void printApplicationHelp(psrsalsaApplication application)
     if(application.switch_templatedata)
       fprintf(stdout, "  -templatedata file Use this data file as a template profile\n");
   }
-  if(application.switch_polselect || application.switch_rebin || application.switch_nread || application.switch_nskip || application.switch_conshift || application.switch_circshift || application.switch_rot || application.switch_rotdeg || application.switch_tscr || application.switch_TSCR || application.switch_tscr_complete || application.switch_fscr || application.switch_FSCR || application.switch_dedisperse || application.switch_deFaraday || application.switch_stokes || application.switch_coherence || application.switch_changeRefFreq || application.switch_scale || application.switch_debase || application.switch_deparang || application.switch_insertparang || application.switch_norm || application.switch_rotateQU || application.switch_rotateUV || application.switch_fchan || application.switch_blocksize || application.switch_shuffle
+  if(application.switch_polselect || application.switch_rebin || application.switch_nread || application.switch_nskip || application.switch_conshift || application.switch_circshift || application.switch_rot || application.switch_rotdeg || application.switch_tscr || application.switch_TSCR || application.switch_tscr_complete || application.switch_fscr || application.switch_FSCR || application.switch_dedisperse || application.switch_deFaraday || application.switch_stokes || application.switch_coherence || application.switch_changeRefFreq || application.switch_scale || application.switch_debase || application.switch_deparang || application.switch_insertparang || application.switch_norm || application.switch_normglobal || application.switch_rotateQU || application.switch_rotateUV || application.switch_fchan || application.switch_blocksize || application.switch_shuffle || application.switch_clip
 ) {
     fprintf(stdout, "\nGeneral preprocess options:\n");
     if(application.switch_blocksize)
       fprintf(stdout, "  -blocksize b    Only read in a multiple of b subintegrations.\n");
+    if(application.switch_clip) {
+      fprintf(stdout, "  -clip           Specify threshhold value above which the value clipped\n");
+      fprintf(stdout, "                  Clipping happens if sample > threshold or < -threshold.\n");
+    }
     if(application.switch_dedisperse)
       fprintf(stdout, "  -dedisp         Dedisperse the data.\n");
     if(application.switch_deFaraday) {
@@ -225,6 +234,9 @@ void printApplicationHelp(psrsalsaApplication application)
       fprintf(stdout, "  -norm           Normalize peak value of each subint/channel independently. If\n");
       fprintf(stdout, "                  an onpulse region is set, the peak of that region is used. The\n");
       fprintf(stdout, "                  normalization is determined by the first polarization channel.\n");
+    }
+    if(application.switch_normglobal) {
+      fprintf(stdout, "  -norm_global    As -norm, but use global factor for all subints/channels.\n");
     }
     if(application.switch_nskip)
       fprintf(stdout, "  -nskip n        Skip n subintegrations in input data (default is 0)\n");
@@ -261,7 +273,7 @@ void printApplicationHelp(psrsalsaApplication application)
     if(application.switch_scale)
       fprintf(stdout, "  -scale          \"scale offset\". output = scale*(input+offset)\n");
     if(application.switch_shuffle)
-      fprintf(stdout, "  -shuffle        Shuffle the order of the subints\n");
+      fprintf(stdout, "  -shuffle        Shuffle the subints in a random order\n");
     if(application.switch_stokes)
       fprintf(stdout, "  -stokes         Convert to Stokes parameters\n");
     if(application.switch_tscr) {
@@ -564,14 +576,25 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     application->dodebase = 1;
     return 1;
   }else if(strcmp(argv[*index], "-norm") == 0 && application->switch_norm) {
-    application->normvalue = 1;
     application->do_norm = 1;
+    return 1;
+  }else if(strcmp(argv[*index], "-norm_global") == 0 && application->switch_normglobal) {
+    application->do_normglobal = 1;
     return 1;
   }else if(strcmp(argv[*index], "-TSCR") == 0 && application->switch_TSCR) {
     application->doTSCR = 1;
     return 1;
   }else if(strcmp(argv[*index], "-FSCR") == 0 && application->switch_FSCR) {
     application->doFSCR = 1;
+    return 1;
+  }else if(strcmp(argv[*index], "-clip") == 0 && application->switch_clip) {
+    j = sscanf(argv[++(*index)], "%f", &application->clipvalue);
+    if(j != 1) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one floating point value.", argv[(*index)-1]);
+      exit(0);
+    }
+    application->do_clip = 1;
     return 1;
   }else if(strcmp(argv[*index], "-reffreq") == 0 && application->switch_changeRefFreq) {
     j = sscanf(argv[++(*index)], "%lf", &application->newRefFreq);
@@ -922,7 +945,15 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
       return 0;
   }
   if(application->do_norm) {
-    if(preprocess_norm(*psrdata, application->normvalue, &(application->onpulse), verbose1) == 0)
+    if(preprocess_norm(*psrdata, application->normvalue, &(application->onpulse), 0, verbose1) == 0)
+      return 0;
+  }
+  if(application->do_normglobal) {
+    if(preprocess_norm(*psrdata, application->normvalue, &(application->onpulse), 1, verbose1) == 0)
+      return 0;
+  }
+  if(application->do_clip) {
+    if(preprocess_clip(*psrdata, application->clipvalue, verbose1) == 0)
       return 0;
   }
   if(application->doscale) {

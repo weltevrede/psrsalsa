@@ -164,6 +164,8 @@ int main(int argc, char **argv)
   application.switch_deparang = 1;
   application.switch_changeRefFreq = 1;
   application.switch_norm = 1;
+  application.switch_normglobal = 1;
+  application.switch_clip = 1;
   application.switch_align = 1;
   application.switch_templatedata = 1;
   application.switch_template = 1;
@@ -637,7 +639,7 @@ int main(int argc, char **argv)
     }
 
     int firstPulsedataSubset;
-    int ytitle_set_to_intensity, ytitle_set_to_pulsenumber, ytitle_set_to_subint, ytitle_set_to_freqchannel, ytitle_set_to_fluctuationFreq, ytitle_set_to_padist, ytitle_set_to_pulselongitude, ytitle_set_to_p3fold, ytitle_set_to_spectral_power, ytitle_set_to_harmonic_number;
+    int ytitle_set_to_intensity, ytitle_set_to_pulsenumber, ytitle_set_to_subint, ytitle_set_to_freqchannel, ytitle_set_to_fluctuationFreq, ytitle_set_to_padist, ytitle_set_to_pulselongitude, ytitle_set_to_p3fold, ytitle_set_to_spectral_power, ytitle_set_to_harmonic_number, ytitle_set_to_lag_number;
     ytitle_set_to_intensity = 0;
     ytitle_set_to_pulsenumber = 0;
     ytitle_set_to_subint = 0;
@@ -648,6 +650,7 @@ int main(int argc, char **argv)
     ytitle_set_to_p3fold = 0;
     ytitle_set_to_spectral_power = 0;
     ytitle_set_to_harmonic_number = 0;
+    ytitle_set_to_lag_number = 0;
     firstPulsedataSubset = 0;
     do {
       float currentPanelScaling, currentPanelScalingx, currentPanelScalingy;
@@ -830,6 +833,7 @@ int main(int argc, char **argv)
  ytitle_set_to_p3fold = 0;
  ytitle_set_to_spectral_power = 0;
  ytitle_set_to_harmonic_number = 0;
+ ytitle_set_to_lag_number = 0;
 
  if(fin.NrFreqChan > 1) {
    didtranspose_orig_nrbin = fin.NrBins;
@@ -874,6 +878,8 @@ int main(int argc, char **argv)
        ytitle_set_to_spectral_power = 1;
      }else if(fin.gentype == GENTYPE_HRFS) {
        ytitle_set_to_harmonic_number = 1;
+     }else if(fin.gentype == GENTYPE_LRAC) {
+       ytitle_set_to_lag_number = 1;
      }else if((fin.gentype == GENTYPE_LRCC) && (vectorMinMaxSpecified == 0 && fin.yrangeset == 1)) {
        ytitle_set_to_pulselongitude = 1;
      }else if((fin.gentype == GENTYPE_PADIST) && (vectorMinMaxSpecified == 0 && fin.yrangeset == 1)) {
@@ -1480,6 +1486,8 @@ int main(int argc, char **argv)
      strcpy(ytitle, "Spectral Power");
    }else if(ytitle_set_to_harmonic_number) {
      strcpy(ytitle, "Harmonic Number");
+   }else if(ytitle_set_to_lag_number) {
+     strcpy(ytitle, "Lag number");
    }else if((ytitle_set_to_pulsenumber || ytitle_set_to_subint) && yUnitsSwitch) {
      strcpy(ytitle, "Time (sec)");
    }else if(ytitle_set_to_fluctuationFreq && yUnitsSwitch) {

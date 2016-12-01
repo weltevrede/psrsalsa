@@ -35,7 +35,7 @@ int main(int argc, char **argv)
   int debase_flag, debase_offset_flag, index, deviceOpened, read_whole_file;
   int zapoption, inverseZap, fzapoption, finverseZap, zapColumn, zapColumn2, nrZapCols, zapSkipLines;
   int blockMode, remove_pulses_flag, prange_set;
-  int nrPol, nrBins, NrFreqChan, addnoise_flag;
+  int nrPol, nrBins, NrFreqChan, addnoise_flag, removeOnPulse_flag;
   int selectMoreOnpulseRegions;
   int outputlist, filename;
   int *zapMask, *fzapMask;
@@ -115,6 +115,7 @@ int main(int argc, char **argv)
   addnoise_flag = 0;
   noiseRMS = 0;
   selectMoreOnpulseRegions = 0;
+  removeOnPulse_flag = 0;
   strcpy(output_suffix, "debase.gg");
   strcpy(output_suffix2, "zapped.gg");
   pgplot_clear_viewport_def(&viewport);
@@ -123,14 +124,16 @@ int main(int argc, char **argv)
     printf("Program to modify pulsar data in various ways. Usage:\n\n");
     printApplicationHelp(application);
     printf("Action options:\n\n");
-    printf("-debase            Subtract baseline from observation\n");
-    printf("-debase_length     Specify number of pulses before and after the pulse to\n");
-    printf("                   determine running baseline (default is -debase_length 0).\n");
-    printf("                   Note that the number of pulses used is 2N+1\n");
-    printf("-debase_value      Subtract the specified value baseline (fixed value) rather\n");
-    printf("                   than the determined baseline, i.e. -debase_value 1.234\n");
-    printf("-list              List the zap list to a file\n");
-    printf("-addnoise rms      Add noise with RMS rms to the data.\n");
+    printf("-debase              Subtract baseline from observation\n");
+    printf("-debase_length       Specify number of pulses before and after the pulse to\n");
+    printf("                     determine running baseline (default is -debase_length 0).\n");
+    printf("                     Note that the number of pulses used is 2N+1\n");
+    printf("-debase_value        Subtract the specified value baseline (fixed value) rather\n");
+    printf("                     than the determined baseline, i.e. -debase_value 1.234\n");
+    printf("-list                List the zap list to a file\n");
+    printf("-addnoise rms        Add white noise with RMS rms to the data.\n");
+    printf("-onpulse_subst_noise Substitute the onpulse region with white noise based on the\n");
+    printf("                     (running) off-pulse rms\n");
     printf("\nData selection options:\n\n");
     printf("-zapfile file     Specify filename with pulse numbers to zap (first pulse is 0).\n");
     printf("                  Expected format: see -format.\n");
@@ -183,6 +186,8 @@ int main(int argc, char **argv)
  debase_offset_flag = 1;
  debase_flag = 1;
  i++;
+      }else if(strcmp(argv[i], "-onpulse_subst_noise") == 0) {
+ removeOnPulse_flag = 1;
       }else if(strcmp(argv[i], "-debase_length") == 0) {
  j = sscanf(argv[i+1], "%ld", &baseline_length);
  if(j != 1) {
@@ -511,7 +516,7 @@ int main(int argc, char **argv)
 
 
 
-    if(debase_flag
+    if(debase_flag || removeOnPulse_flag
        ) {
       if(read_profilePSRData(datain, profileI, zapMask, 0, application.verbose_state) != 1) {
  printerror(application.verbose_state.debug, "Error pmod: Cannot form pulse profile");
@@ -519,7 +524,7 @@ int main(int argc, char **argv)
       }
     }
 
-      if((debase_flag && debase_offset_flag == 0)
+      if((debase_flag && debase_offset_flag == 0) || removeOnPulse_flag
   ) {
  if(selectMoreOnpulseRegions || application.onpulse.nrRegions == 0) {
    viewport.dontopen = deviceOpened;
@@ -656,8 +661,7 @@ int main(int argc, char **argv)
      }
    }
 
-   if(debase_flag
-      ) {
+   if(debase_flag || removeOnPulse_flag) {
      read_rmsPSRData(datain, &rms[datain.NrSubints*k], &runningBaseline[datain.NrSubints*k], zapMask, &(application.onpulse), 0, k, l, application.verbose_state);
 
 
@@ -741,6 +745,16 @@ int main(int argc, char **argv)
        for(j = 0; j < nrBins; j++) {
   if(runningBaseline[i+datain.NrSubints*k] != 0.0) {
     profileI[j] -= debase_offset_value;
+  }
+       }
+     }
+     if(removeOnPulse_flag) {
+       for(j = 0; j < nrBins; j++) {
+  if(checkRegions(j, &(application.onpulse), 0, application.verbose_state) != 0) {
+
+
+
+    profileI[j] = gsl_ran_gaussian(rand_num_gen, runningRMS[i+datain.NrSubints*k]);
   }
        }
      }

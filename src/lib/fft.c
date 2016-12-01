@@ -108,6 +108,21 @@ int crosscorrelation_fft(float *data1, float *data2, int ndata, float *cc, verbo
   fftwf_free(dataFFT2);
   return 1;
 }
+
+
+
+
+
+int crosscorrelation_fft_padding_cclength(int ndata, int extrazeropad)
+{
+  int i, ndata_padded;
+  i = (int) (log10(1.0 * (ndata+extrazeropad))/log10(2.0));
+  ndata_padded = pow(2.0,(i+1));
+
+  if(ndata_padded/2 == ndata)
+    ndata_padded = ndata;
+  return ndata_padded;
+}
 int crosscorrelation_fft_padding(float *data1, float *data2, int ndata, int extrazeropad, float **cc, int *cclength, verbose_definition verbose)
 {
   float *padded1, *padded2;
@@ -122,8 +137,7 @@ int crosscorrelation_fft_padding(float *data1, float *data2, int ndata, int extr
       printf("  Padding at least %d zero's after data\n", extrazeropad);
     }
   }
-  i = (int) (log10(1.0 * (ndata+extrazeropad))/0.301031);
-  ndata_padded = pow(2.0,(i+1));
+  ndata_padded = crosscorrelation_fft_padding_cclength(ndata, extrazeropad);
   if(ndata_padded == ndata) {
     if(verbose.verbose) {
       for(i = 0; i < verbose.indent; i++)

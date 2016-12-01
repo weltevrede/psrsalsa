@@ -220,6 +220,8 @@ typedef struct {
   int switch_insertparang, switch_deparang, do_parang_corr;
   int switch_history_cmd_only, history_cmd_only;
   int switch_norm, do_norm; float normvalue;
+  int switch_normglobal, do_normglobal;
+  int switch_clip, do_clip; float clipvalue;
   int switch_rotateQU, dorotateQU; float rotateQUangle;
   int switch_rotateUV, dorotateUV; float rotateUVangle;
   int switch_fchan, fchan_select;

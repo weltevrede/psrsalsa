@@ -2075,6 +2075,7 @@ static char * internal_gentype_string_s2dfsp3 = "S2DFS P3 map";
 static char * internal_gentype_string_s2dfsp2 = "S2DFS P2 map";
 static char * internal_gentype_string_p3fold = "P3 fold";
 static char * internal_gentype_string_lrcc = "LRCC";
+static char * internal_gentype_string_lrac = "LRAC";
 static char * internal_gentype_string_padist = "PA distr.";
 static char * internal_gentype_string_recmodel = "Receiver model";
 static char * internal_gentype_string_recmodel2 = "Receiver model with chi^2";
@@ -2100,6 +2101,7 @@ char *returnGenType_str(int gentype)
   case GENTYPE_S2DFSP2: return internal_gentype_string_s2dfsp2; break;
   case GENTYPE_P3FOLD: return internal_gentype_string_p3fold; break;
   case GENTYPE_LRCC: return internal_gentype_string_lrcc; break;
+  case GENTYPE_LRAC: return internal_gentype_string_lrac; break;
   case GENTYPE_PADIST: return internal_gentype_string_padist; break;
   case GENTYPE_RECEIVERMODEL: return internal_gentype_string_recmodel; break;
   case GENTYPE_RECEIVERMODEL2: return internal_gentype_string_recmodel2; break;
