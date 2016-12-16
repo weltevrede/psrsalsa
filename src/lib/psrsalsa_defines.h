@@ -119,7 +119,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #define MaxNrApplicationFilenames 1025
 
-
+#define maxNrRotateStokes 10
 
 
 

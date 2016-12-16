@@ -56,7 +56,7 @@ int main(int argc, char **argv)
   application.switch_TSCR = 1;
   application.switch_FSCR = 1;
   application.switch_debase = 1;
-  application.switch_rotateQU = 1;
+  application.switch_rotateStokes = 1;
   application.switch_nocounters = 1;
   application.switch_stokes = 1;
   application.switch_deparang = 1;

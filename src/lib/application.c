@@ -15,6 +15,8 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include <string.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
 #include "psrsalsa.h"
 
 int internal_application_cmdline_FilenameList[MaxNrApplicationFilenames];
@@ -126,10 +128,6 @@ void initApplication(psrsalsaApplication *application, char *name, char *genusag
   application->switch_clip = 0;
   application->do_clip = 0;
   application->clipvalue = 0;
-  application->switch_rotateQU = 0;
-  application->dorotateQU = 0;
-  application->switch_rotateUV = 0;
-  application->dorotateUV = 0;
   application->switch_fchan = 0;
   application->fchan_select = -1;
   application->switch_history_cmd_only = 0;
@@ -151,6 +149,8 @@ void initApplication(psrsalsaApplication *application, char *name, char *genusag
   sprintf(application->outputname, "output.dat");
   application->switch_shuffle = 0;
   application->doshuffle = 0;
+  application->switch_rotateStokes = 0;
+  application->nr_rotateStokes = 0;
 
   application->fzapMask = NULL;
   application->doautot = 0;
@@ -160,6 +160,139 @@ void printCitationInfo()
 {
   printf("If you make use of PSRSALSA, please cite \"Weltevrede 2016, A&A, 590, A109\" and refer to the following website: https://github.com/weltevrede/psrsalsa\n");
 }
+
+
+int parse_command_string(verbose_definition verbose, int argc, char **argv, int argv_index, char *format, ...)
+{
+  va_list args;
+  long i, curargnr, nrarguments;
+  void *ptr;
+
+  va_start(args, format);
+
+  if(argv_index >= argc) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR parse_command_string: the command line option to be parsed does not appear to be followed by input values/text.", format);
+    return 1;
+  }
+
+  if(verbose.debug) {
+    printf("parse_command_string: start parsing the \"%s\" option\n", argv[argv_index-1]);
+    printf("parse_command_string: parsing \"%s\" as format \"%s\"\n", argv[argv_index], format);
+  }
+  nrarguments = 0;
+  for(i = 0; i < strlen(format); i++) {
+    if(format[i] == '%') {
+      nrarguments++;
+    }
+  }
+  if(verbose.debug) {
+    printf("parse_command_string: expected number of arguments = %ld\n", nrarguments);
+  }
+  if(nrarguments == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR parse_command_string: format string '%s' suggest no variables need to be parsed.", format);
+    return 1;
+  }
+  for(i = 0; i < nrarguments; i++) {
+    ptr = va_arg(args, void *);
+
+    if(ptr == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR parse_command_string: %ld pointers are expected to be passed to this function, but at least one of them appears to be the NULL pointer, suggestive of a bug in the programme.", nrarguments);
+      return 1;
+    }
+  }
+  ptr = va_arg(args, void *);
+
+  if(ptr != NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR parse_command_string: %ld pointers are expected to be passed to this function followed by the NULL pointer. However, the NULL pointer is not detected, suggestive of a bug in the programme.", nrarguments);
+    return 1;
+  }
+  va_end(args);
+
+  int nrwords;
+  ptr = pickWordFromString(argv[argv_index], 1, &nrwords, 1, ' ', verbose);
+  if(nrwords != nrarguments) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR parse_command_string: string \"%s\" appears to contain %d words, while the program expects %ld options to be provided.", argv[argv_index], nrwords, nrarguments);
+    return 1;
+  }
+
+  va_start(args, format);
+
+
+  curargnr = 0;
+  int expecttype;
+  expecttype = 0;
+  for(i = 0; i < strlen(format); i++) {
+    if(expecttype) {
+      char *word_ptr, *word;
+      word_ptr = pickWordFromString(argv[argv_index], curargnr, &nrwords, 1, ' ', verbose);
+      word = malloc(strlen(word_ptr));
+      if(word == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR parse_command_string: Memory allocation error");
+ return 1;
+      }
+      sscanf(word_ptr, "%s", word);
+      if(format[i] == 'c') {
+ if(verbose.debug) {
+   printf("parse_command_string: Parsing \"%s\" as a character\n", word);
+ }
+ if(strlen(word) != 1) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a character, since it is not 1 character in length", word);
+   return 1;
+ }
+ char *char_ptr;
+ char_ptr = va_arg(args, char *);
+ char_ptr[0] = word[0];
+ if(verbose.debug) {
+   printf("parse_command_string: Parsing \"%s\" as a character '%c'\n", word, char_ptr[0]);
+ }
+      }else if(format[i] == 'f') {
+ if(verbose.debug) {
+   printf("parse_command_string: Parsing \"%s\" as a floating point\n", word);
+ }
+
+ float *float_ptr;
+ char *endptr;
+ float_ptr = va_arg(args, float *);
+ *float_ptr = strtof(word, &endptr);
+ if(endptr == word || endptr == NULL || endptr != word+strlen(word)) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a floating point", word);
+ }
+ if(verbose.debug) {
+   printf("parse_command_string: Parsing \"%s\" as a %f\n", word, *float_ptr);
+ }
+      }else {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR parse_command_string: format string \"%s\" contains a unrecognized data type '%c'.", format, format[i]);
+ free(word);
+ return 1;
+      }
+      expecttype = 0;
+      free(word);
+    }else {
+      if(format[i] == '%') {
+ curargnr++;
+ expecttype = 1;
+      }else if(format[i] == ' ' || format[i] == '\t') {
+      }else {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR parse_command_string: format string \"%s\" does not appear of the expected format, indicating a bug.", format);
+ return 1;
+      }
+    }
+  }
+
+  va_end(args);
+  return 0;
+}
+
 
 void printApplicationHelp(psrsalsaApplication application)
 {
@@ -208,7 +341,7 @@ void printApplicationHelp(psrsalsaApplication application)
     if(application.switch_templatedata)
       fprintf(stdout, "  -templatedata file Use this data file as a template profile\n");
   }
-  if(application.switch_polselect || application.switch_rebin || application.switch_nread || application.switch_nskip || application.switch_conshift || application.switch_circshift || application.switch_rot || application.switch_rotdeg || application.switch_tscr || application.switch_TSCR || application.switch_tscr_complete || application.switch_fscr || application.switch_FSCR || application.switch_dedisperse || application.switch_deFaraday || application.switch_stokes || application.switch_coherence || application.switch_changeRefFreq || application.switch_scale || application.switch_debase || application.switch_deparang || application.switch_insertparang || application.switch_norm || application.switch_normglobal || application.switch_rotateQU || application.switch_rotateUV || application.switch_fchan || application.switch_blocksize || application.switch_shuffle || application.switch_clip
+  if(application.switch_polselect || application.switch_rebin || application.switch_nread || application.switch_nskip || application.switch_conshift || application.switch_circshift || application.switch_rot || application.switch_rotdeg || application.switch_tscr || application.switch_TSCR || application.switch_tscr_complete || application.switch_fscr || application.switch_FSCR || application.switch_dedisperse || application.switch_deFaraday || application.switch_stokes || application.switch_coherence || application.switch_changeRefFreq || application.switch_scale || application.switch_debase || application.switch_deparang || application.switch_insertparang || application.switch_norm || application.switch_normglobal || application.switch_fchan || application.switch_blocksize || application.switch_shuffle || application.switch_clip || application.switch_rotateStokes
 ) {
     fprintf(stdout, "\nGeneral preprocess options:\n");
     if(application.switch_blocksize)
@@ -266,10 +399,15 @@ void printApplicationHelp(psrsalsaApplication application)
       fprintf(stdout, "  -rot ph         Rotate each individual subint by ph pulse phase\n");
     if(application.switch_rotdeg)
       fprintf(stdout, "  -rotdeg ph      ditto, but in degrees\n");
-    if(application.switch_rotateQU)
-      fprintf(stdout, "  -rotateQU ph    Rotate Stokes Q and U by this amount in degrees\n");
-    if(application.switch_rotateUV)
-      fprintf(stdout, "  -rotateUV ph    Rotate Stokes U and V by this amount in degrees\n");
+    if(application.switch_rotateStokes) {
+      fprintf(stdout, "  -rotateStokes   \"S1 S2 ph\" Rotate the polarization vectors in Stokes space\n");
+      fprintf(stdout, "                  (Q,U,V) by ph degrees. S1 and S2 specify the direction of the\n");
+      fprintf(stdout, "                  rotation, such that for instance \"Q U 10\" would be a\n");
+      fprintf(stdout, "                  rotation about the Stokes V axis such that a vector in the\n");
+      fprintf(stdout, "                  Q direction gets rotated towards the U axis. This option can\n");
+      fprintf(stdout, "                  be used multiple times, and they are executed in the order\n");
+      fprintf(stdout, "                  as specified on the command line.\n");
+    }
     if(application.switch_scale)
       fprintf(stdout, "  -scale          \"scale offset\". output = scale*(input+offset)\n");
     if(application.switch_shuffle)
@@ -313,7 +451,7 @@ void printApplicationHelp(psrsalsaApplication application)
       fprintf(stdout, "                (0=linear (default), 1=logarithmic, 2=square-root)\n");
     }
     if(application.switch_size)
-      fprintf(stdout, "  -size         \"width height\". Specify window width and height (in pixels).\n");
+      fprintf(stdout, "  -size         \"width height\". Specify resolution of plot device (in pixels).\n");
   }
   if(application.switch_onpulse || application.switch_onpulsef || application.switch_onpulsegr
 ) {
@@ -652,23 +790,53 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
       exit(0);
     }
     return 1;
-  }else if(strcmp(argv[*index], "-rotateQU") == 0 && application->switch_rotateQU) {
-    application->dorotateQU = 1;
-    j = sscanf(argv[++(*index)], "%f", &application->rotateQUangle);
-    if(j != 1) {
+  }else if(strcasecmp(argv[*index], "-rotateStokes") == 0 && application->switch_rotateStokes) {
+    if(application->nr_rotateStokes == maxNrRotateStokes) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "Maximum number of uses of the '%s' option is exceeded.", argv[(*index)-1]);
+      exit(0);
+    }
+
+
+    char s1, s2;
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), "%c %c %f", &s1, &s2, &(application->rotateStokesAngle[application->nr_rotateStokes]), NULL)) {
       fflush(stdout);
       printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one float.", argv[(*index)-1]);
       exit(0);
     }
-    return 1;
-  }else if(strcmp(argv[*index], "-rotateUV") == 0 && application->switch_rotateUV) {
-    application->dorotateUV = 1;
-    j = sscanf(argv[++(*index)], "%f", &application->rotateUVangle);
-    if(j != 1) {
+
+    if(s1 == 'i' || s1 == 'I') {
+      application->rotateStokes1[application->nr_rotateStokes] = 0;
+    }else if(s1 == 'q' || s1 == 'Q') {
+      application->rotateStokes1[application->nr_rotateStokes] = 1;
+    }else if(s1 == 'u' || s1 == 'U') {
+      application->rotateStokes1[application->nr_rotateStokes] = 2;
+    }else if(s1 == 'v' || s1 == 'V') {
+      application->rotateStokes1[application->nr_rotateStokes] = 3;
+    }else {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one float.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option: cannot interpret '%c' as a Stokes parameter.", argv[(*index)-1], s1);
       exit(0);
     }
+    if(s2 == 'i' || s2 == 'I') {
+      application->rotateStokes2[application->nr_rotateStokes] = 0;
+    }else if(s2 == 'q' || s2 == 'Q') {
+      application->rotateStokes2[application->nr_rotateStokes] = 1;
+    }else if(s2 == 'u' || s2 == 'U') {
+      application->rotateStokes2[application->nr_rotateStokes] = 2;
+    }else if(s2 == 'v' || s2 == 'V') {
+      application->rotateStokes2[application->nr_rotateStokes] = 3;
+    }else {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option: cannot interpret '%c' as a Stokes parameter.", argv[(*index)-1], s2);
+      exit(0);
+    }
+    if(application->rotateStokes1[application->nr_rotateStokes] == application->rotateStokes2[application->nr_rotateStokes]) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option: Cannot rotate a Stokes parameter towards the same Stokes parameter.", argv[(*index)-1]);
+      exit(0);
+    }
+    (application->nr_rotateStokes)++;
     return 1;
   }else if(application->switch_deparang && strcmp(argv[*index], "-deparang") == 0) {
     application->do_parang_corr = 1;
@@ -744,13 +912,11 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     if(preprocess_coherency(psrdata, verbose1) == 0)
       return 0;
   }
-  if(application->dorotateQU) {
-    if(preprocess_rotateStokes(psrdata, &clone, 1, -1, application->rotateQUangle, 1, 2, verbose1) == 0)
-      return 0;
-  }
-  if(application->dorotateUV) {
-    if(preprocess_rotateStokes(psrdata, &clone, 1, -1, application->rotateUVangle, 2, 3, verbose1) == 0)
-      return 0;
+  if(application->nr_rotateStokes > 0) {
+    for(i = 0; i < application->nr_rotateStokes; i++) {
+      if(preprocess_rotateStokes(psrdata, &clone, 1, -1, application->rotateStokesAngle[i], application->rotateStokes1[i], application->rotateStokes2[i], verbose1) == 0)
+ return 0;
+    }
   }
   if(application->do_parang_corr > 0) {
     if(application->do_parang_corr == 2) {

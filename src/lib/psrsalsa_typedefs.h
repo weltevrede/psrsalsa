@@ -222,8 +222,6 @@ typedef struct {
   int switch_norm, do_norm; float normvalue;
   int switch_normglobal, do_normglobal;
   int switch_clip, do_clip; float clipvalue;
-  int switch_rotateQU, dorotateQU; float rotateQUangle;
-  int switch_rotateUV, dorotateUV; float rotateUVangle;
   int switch_fchan, fchan_select;
   int switch_fixseed, fixseed;
   int switch_templatedata, template_data_index; datafile_definition template_file;
@@ -235,6 +233,7 @@ typedef struct {
   int switch_ext; char *extension;
   int switch_output; char outputname[MaxOutputNameLength];
   int switch_shuffle, doshuffle;
+  int switch_rotateStokes; int nr_rotateStokes, rotateStokes1[maxNrRotateStokes], rotateStokes2[maxNrRotateStokes]; float rotateStokesAngle[maxNrRotateStokes];
   int doautot;
   int *fzapMask;
 }psrsalsaApplication;
