@@ -93,6 +93,7 @@ int main(int argc, char **argv)
   application.switch_align = 1;
   application.switch_shuffle = 1;
   application.switch_rotateStokes = 1;
+  application.switch_libversions = 1;
 
 
   debase_flag = 0;

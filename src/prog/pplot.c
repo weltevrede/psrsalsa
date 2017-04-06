@@ -169,6 +169,7 @@ int main(int argc, char **argv)
   application.switch_align = 1;
   application.switch_templatedata = 1;
   application.switch_template = 1;
+  application.switch_libversions = 1;
   application.cmap = PPGPLOT_INVERTED_HEAT;
 
   strcpy(application.pgplotdevice, "/xs");

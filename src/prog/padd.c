@@ -122,18 +122,14 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-n") == 0) {
  circularShift = 1;
  noinput = 1;
- j = sscanf(argv[i+1], "%d", &shift);
- if(j != 1) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR padd: Cannot parse option %s, expected one integer number", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%d", &shift, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR padd: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-nsub") == 0) {
- j = sscanf(argv[i+1], "%ld", &sumNsub);
- if(j != 1) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR padd: Cannot parse option %s, expected one integer number", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &sumNsub, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR padd: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  if(sumNsub < 1) {

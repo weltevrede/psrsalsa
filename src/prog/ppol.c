@@ -31,7 +31,7 @@ int main(int argc, char **argv)
   long i, j, f;
   float *profileI, *Ppulse, loffset, correctQV, correctV, sigma_limit;
   float xsize, ysize, ysizepa, xtick, plotI1, plotI2, titlech;
-  float plotl1, plotl2, plotp1, plotp2, PAoffset;
+  float plotl1, plotl2, plotp1, plotp2, PAoffset, PAoffset_data;
   float overlayalpha, overlaybeta, overlaypa0, overlayl0;
   float jump_longitude[MaxNrJumps], jump_offset[MaxNrJumps];
   char *filename_ptr, title[1000], txt[100], PlotDevice[100], PlotDevice2[100], *extension;
@@ -104,6 +104,7 @@ int main(int argc, char **argv)
   plotp2 = 180;
   plotI1 = plotI2 = 0;
   PAoffset = 0;
+  PAoffset_data = 0;
   datalinewidth = 1;
   dashed = 0;
   noylabel = 0;
@@ -126,7 +127,9 @@ int main(int argc, char **argv)
     fprintf(stdout, "                   applying the better de-bias method of Wardle & Kronberg.\n");
     fprintf(stdout, "-noLdebias         Simply use L^2=Q^2+U^2, which is biased.\n");
     fprintf(stdout, "-nonorm            Do not normalize the output profile.\n");
-    fprintf(stdout, "-paoffset          Add this angle to PA.\n");
+    fprintf(stdout, "-paoffset          Add this angle to PA (in degrees). Only affects plots.\n");
+    fprintf(stdout, "-paoffsetoutput    Add this angle to PA (in degrees). Affects output data (and\n");
+    fprintf(stdout, "                   the plots).\n");
     fprintf(stdout, "-selectonpulse     Enables manual graphical selection of more on-pulse regions\n");
     fprintf(stdout, "                   in addition to any provided on the command line.\n");
     fprintf(stdout, "-sigma             Set sigma limit on L required for PA calculation [def=%.1f].\n", sigma_limit);
@@ -198,6 +201,9 @@ int main(int argc, char **argv)
         i++;
       }else if(strcmp(argv[i], "-paoffset") == 0) {
  PAoffset = atof(argv[i+1]);
+ i++;
+      }else if(strcmp(argv[i], "-paoffsetoutput") == 0) {
+ PAoffset_data = atof(argv[i+1]);
  i++;
       }else if(strcmp(argv[i], "-loffset") == 0) {
  loffset = atof(argv[i+1]);
@@ -610,7 +616,7 @@ int main(int argc, char **argv)
  }else {
    nolongitudes = 0;
  }
- if(make_paswing_fromIQUV(&datain, Ppulse, application.onpulse, normalize, correctLbias, correctQV, correctV, nolongitudes, loffset, verbose2) == 0)
+ if(make_paswing_fromIQUV(&datain, Ppulse, application.onpulse, normalize, correctLbias, correctQV, correctV, nolongitudes, loffset, PAoffset_data, verbose2) == 0)
  return 0;
     }
 
@@ -700,7 +706,7 @@ int main(int argc, char **argv)
       pgplotbox.title_lw = titlelw;
       pgplotbox.label_ch *= currentPanelScaling;
       pgplotbox.box_labelsize *= currentPanelScaling;
-      pgplotPAplot(datain, Ppulse, viewport, pgplotbox, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", plotl1, plotl2, plotI1, plotI2, plotp1, plotp2, PAoffset, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-herrorbar", "-herrorbar2", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, application.verbose_state);
+      pgplotPAplot(datain, Ppulse, viewport, pgplotbox, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", plotl1, plotl2, plotI1, plotI2, plotp1, plotp2, PAoffset, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-herrorbar", "-herrorbar2", "-verrorbar", "-verrorbar2", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, application.verbose_state);
       if(firstfiletoopen) {
  ppgqid(&deviceID);
       }

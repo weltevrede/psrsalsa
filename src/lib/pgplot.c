@@ -29,6 +29,15 @@ static double internal_pgplot_ymax = 1;
 static int internal_pgplot_nrx = 1;
 static int internal_pgplot_nry = 1;
 
+void print_pgplot_version_used(FILE *stream)
+{
+  char version[25];
+  int length = 20;
+  cpgqinf("VERSION", version, &length);
+  fprintf(stream, "%s (library)", version);
+}
+
+
 
 
 
@@ -145,7 +154,7 @@ void pgplot_makeframe(pgplot_frame_def_internal *frame)
     }
   }
 }
-int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def viewport, pgplot_box_def box, char *xlabel, char *ylabel, char *ylabel_pa, float longitude_left, float longitude_right, float Imin, float Imax, float pa_bottom, float pa_top, float PAoffset, float sigma_limit, float datalinewidth, float ysize2, int dashed, int noynumbers, char *textoption, char *herrorbaroption, char *herrorbaroption2, int argc, char **argv, int outline_txt, int outline_lw, int outline_color, int overlayPA, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, verbose_definition verbose)
+int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def viewport, pgplot_box_def box, char *xlabel, char *ylabel, char *ylabel_pa, float longitude_left, float longitude_right, float Imin, float Imax, float pa_bottom, float pa_top, float PAoffset, float sigma_limit, float datalinewidth, float ysize2, int dashed, int noynumbers, char *textoption, char *herrorbaroption, char *herrorbaroption2, char *verrorbaroption, char *verrorbaroption2, int argc, char **argv, int outline_txt, int outline_lw, int outline_color, int overlayPA, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, verbose_definition verbose)
 {
   int deviceID, text_ci, text_lw, text_f, ok, domove;
   float ymin, ymax, text_x, text_y, text_ch, I, Iold;
@@ -347,6 +356,30 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
       }
     }
   }
+  if(verrorbaroption != NULL && argv != NULL && argc != 0) {
+    for(j = 0; j < argc; j++) {
+      float verr_y1, verr_y2, verr_y3, verr_x, verr_size, verr_lw;
+      int verr_ci;
+      if(strcmp(argv[j], verrorbaroption) == 0) {
+ i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &verr_x, &verr_y1, &verr_y2, &verr_y3, &verr_size, &verr_lw, &verr_ci);
+ if(i != 7) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", verrorbaroption);
+   return 0;
+ }
+ ppgsch(verr_size);
+ ppgsci(verr_ci);
+ ppgslw(verr_lw);
+ ppgpt1(verr_x, verr_y2*(frame.swin_y2-frame.swin_y1)+frame.swin_y1, 2);
+ ppgerr1(2, verr_x, verr_y2*(frame.swin_y2-frame.swin_y1)+frame.swin_y1, verr_y3-verr_y2, verr_size);
+ ppgerr1(4, verr_x, verr_y2*(frame.swin_y2-frame.swin_y1)+frame.swin_y1, verr_y2-verr_y1, verr_size);
+ ppgsch(1);
+ ppgslw(1);
+ ppgsci(1);
+ j += 1;
+      }
+    }
+  }
   ppgsls(1);
   ppgsci(1);
   ppgslw(1);
@@ -460,6 +493,30 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
  ppgpt1(herr_x2, herr_y, 2);
  ppgerr1(1, herr_x2, herr_y, herr_x3-herr_x2, herr_size);
  ppgerr1(3, herr_x2, herr_y, herr_x2-herr_x1, herr_size);
+ ppgsch(1);
+ ppgslw(1);
+ ppgsci(1);
+ j += 1;
+      }
+    }
+  }
+  if(verrorbaroption2 != NULL && argv != NULL && argc != 0) {
+    for(j = 0; j < argc; j++) {
+      float verr_y1, verr_y2, verr_y3, verr_x, verr_size, verr_lw;
+      int verr_ci;
+      if(strcmp(argv[j], verrorbaroption2) == 0) {
+ i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &verr_x, &verr_y1, &verr_y2, &verr_y3, &verr_size, &verr_lw, &verr_ci);
+ if(i != 7) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", verrorbaroption);
+   return 0;
+ }
+ ppgsch(verr_size);
+ ppgsci(verr_ci);
+ ppgslw(verr_lw);
+ ppgpt1(verr_x, verr_y2, 2);
+ ppgerr1(2, verr_x, verr_y2, verr_y3-verr_y2, verr_size);
+ ppgerr1(4, verr_x, verr_y2, verr_y2-verr_y1, verr_size);
  ppgsch(1);
  ppgslw(1);
  ppgsci(1);

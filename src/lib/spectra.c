@@ -596,7 +596,8 @@ void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size,
     }
   }
 }
-void foldP3_simple(float *data, long nry, long starty, long nrx, float *map, float *nrcounts, int nr_p3_bins, float foldp3, float offset, int noNormalise, int noSmooth, float smoothWidth, float slope, float offset2)
+void foldP3_simple(float *data, long nry, long starty, long nrx, float *map, float *nrcounts, int nr_p3_bins, float foldp3, float offset, int noNormalise, int noSmooth, float smoothWidth, float slope, float offset2,
+     int debug)
 {
   float p3, j_frac, weight, weightnext, dp3;
   int i, j, b, jnext;
@@ -613,6 +614,11 @@ void foldP3_simple(float *data, long nry, long starty, long nrx, float *map, flo
  p3 = derotate_deg(p3);
  if(p3 == 360.0)
    p3 = 0;
+ if(b == 0) {
+   if(debug) {
+     printf("DEBUG foldP3_simple: pulse=%d (block=%ld ... %ld) folded at P3=%f P, with an offset=%f P and additional offset2=%f deg: Subpulse phase of pulse longitude bin 0 = %f deg\n", i, starty, nry-1, foldp3, offset, offset2, p3);
+   }
+ }
  j = (p3/360.0)*nr_p3_bins;
  if(noSmooth) {
    j_frac = 0;
@@ -621,7 +627,7 @@ void foldP3_simple(float *data, long nry, long starty, long nrx, float *map, flo
  }
  weight = 1.0-j_frac;
  if(j >= nr_p3_bins || j < 0)
-   fprintf(stderr, "i=%d, j=%d (nr_p3_bins=%d) p3=%f\n", i, j, nr_p3_bins, p3);
+   fprintf(stderr, "ERROR foldP3_simple: Buffer overflow for i=%d, j=%d (nr_p3_bins=%d) p3=%f\n", i, j, nr_p3_bins, p3);
  map[j*nrx+b] += weight*data[i*nrx+b];
  nrcounts[j*nrx+b] += weight;
  if(noSmooth == 0) {
@@ -640,6 +646,11 @@ void foldP3_simple(float *data, long nry, long starty, long nrx, float *map, flo
    p3 = derotate_deg(p3);
    if(p3 == 360.0)
      p3 = 0;
+   if(b == 0 && j == 0) {
+     if(debug) {
+       printf("DEBUG foldP3_simple: pulse=%d (block=%ld ... %ld) folded at P3=%f P, with an offset=%f P and additional offset2=%f deg: Subpulse phase of pulse longitude bin 0 = %f deg\n", i, starty, nry-1, foldp3, offset, offset2, p3);
+     }
+   }
    p3 *= nr_p3_bins/360.0;
    dp3 = fabs(p3-j);
    if(fabs(p3-j+nr_p3_bins) < dp3) {
@@ -694,7 +705,8 @@ int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float fo
     return 0;
   }
   if(refine <= 0) {
-    foldP3_simple(data, nry, 0, nrx, map, nrcounts, nr_p3_bins, foldp3, 0, 0, noSmooth, smoothWidth, slope, subpulse_offset);
+    foldP3_simple(data, nry, 0, nrx, map, nrcounts, nr_p3_bins, foldp3, 0, 0, noSmooth, smoothWidth, slope, subpulse_offset,
+    0*verbose.debug);
   }else {
     blockmap = (float *)malloc(nr_p3_bins*nrx*sizeof(float));
     if(blockmap == NULL) {
@@ -730,7 +742,8 @@ int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float fo
  {
    maxcorrel = 0;
    for(offset = 0; offset < nr_p3_bins; offset++) {
-     foldP3_simple(data, startpulse+dN, startpulse, nrx, blockmap, nrcounts_block, nr_p3_bins, foldp3, offset*foldp3/(float)nr_p3_bins, 1, noSmooth, smoothWidth, slope, subpulse_offset);
+     foldP3_simple(data, startpulse+dN, startpulse, nrx, blockmap, nrcounts_block, nr_p3_bins, foldp3, offset*foldp3/(float)nr_p3_bins, 1, noSmooth, smoothWidth, slope, subpulse_offset,
+0*verbose.debug);
      correl = 0;
      for(i = 0; i < nr_p3_bins; i++) {
        for(b = 0; b < nrx; b++) {
@@ -754,7 +767,8 @@ int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float fo
      }
    }
  }
- foldP3_simple(data, startpulse+dN, startpulse, nrx, blockmap, nrcounts_block, nr_p3_bins, foldp3, bestoffset[blockcounter]*foldp3/(float)nr_p3_bins, 0, noSmooth, smoothWidth, slope, subpulse_offset);
+ foldP3_simple(data, startpulse+dN, startpulse, nrx, blockmap, nrcounts_block, nr_p3_bins, foldp3, bestoffset[blockcounter]*foldp3/(float)nr_p3_bins, 0, noSmooth, smoothWidth, slope, subpulse_offset,
+verbose.debug);
  for(i = 0; i < nr_p3_bins; i++) {
    for(b = 0; b < nrx; b++) {
      nrcounts[i*nrx+b] += nrcounts_block[i*nrx+b];

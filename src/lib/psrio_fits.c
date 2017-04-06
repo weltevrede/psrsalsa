@@ -27,6 +27,13 @@ static int psrfits_noweights = 0;
 static int psrfits_use_weighted_freq = 0;
 static int psrfits_absweights = 0;
 
+void print_fitsio_version_used(FILE *stream)
+{
+  float version;
+  fprintf(stream, "%f (library) %f (header)", fits_get_version(&version), CFITSIO_VERSION);
+}
+
+
 
 void psrfits_set_noweights(int val)
 {
@@ -914,7 +921,21 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
     return 0;
   }
-  if(fits_write_col(datafile->fits_fptr, TDOUBLE, 5, 1, 1, 1, &datafile->freq_ref, &status) != 0) {
+  double freq_ref_use;
+  freq_ref_use = datafile->freq_ref;
+  if((datafile->freq_ref < -0.9 && datafile->freq_ref > -1.1) || (datafile->freq_ref > 0.99e10 && datafile->freq_ref < 1.01e10)) {
+    freq_ref_use = 1e10;
+    fflush(stdout);
+    printwarning(verbose.debug, "WARNING: The reference frequency of dedispersion is infinity. This is encoded in the header as a value of %.1lf MHz.", freq_ref_use);
+ }else if(datafile->freq_ref < 0) {
+    fflush(stdout);
+    if(datafile->freq_ref < -1.9 && datafile->freq_ref > -2.1) {
+      printwarning(verbose.debug, "WARNING: The reference frequency of dedispersion is unknown, and this is encoded in the header as a value of %.1lf MHz.", datafile->freq_ref);
+    }else {
+      printwarning(verbose.debug, "WARNING: The reference frequency of dedispersion appears to negative (%lf MHz), so it is unclear what this means.", freq_ref_use);
+    }
+  }
+  if(fits_write_col(datafile->fits_fptr, TDOUBLE, 5, 1, 1, 1, &freq_ref_use, &status) != 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
     return 0;
@@ -1352,7 +1373,7 @@ void update_freqs_using_DAT_FREQ_column(datafile_definition *datafile, verbose_d
     if(ok) {
       cfreq /= (double)datafile->NrFreqChan;
       if(fabs(cfreq-datafile->uniform_freq_cent) > 1e-6) {
- if(datafile->uniform_freq_cent > 0) {
+ if(datafile->uniform_freq_cent > 0 && (datafile->uniform_freq_cent < 0.99e10 || datafile->uniform_freq_cent > 1.01e10)) {
    double chanbw;
    if(get_channelbw(*datafile, 0, 0, &chanbw, verbose) == 0) {
      printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain channel bandwidth.", datafile->filename);
@@ -1525,7 +1546,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     datafile->freq_ref = datafile->uniform_freq_cent;
   }
   if(verbose.debug)
-    printf("  readPSRFITSHeader (%s): OBSFREQ = %lf (-1 is interpreted as infinity)\n", datafile->filename, datafile->uniform_freq_cent);
+    printf("  readPSRFITSHeader (%s): OBSFREQ = %lf (-1 or 1e10 is interpreted as infinity)\n", datafile->filename, datafile->uniform_freq_cent);
   if(fits_read_card(datafile->fits_fptr,"FD_POLN", card, &status)) {
     fflush(stdout);
     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_POLN keyword does not exist", datafile->filename);
@@ -1857,8 +1878,11 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
  datafile->uniform_freq_cent = 0;
  status = 0;
       }
-      if(verbose.debug)
- printf("  readPSRFITSHeader (%s): Frequency defined in history table = %lf (-1 is interpreted as infinity)\n", datafile->filename, freq_history);
+      if((freq_history > -1.01 && freq_history < -0.99)) {
+ if(verbose.debug)
+   printf("  readPSRFITSHeader (%s): Frequency defined in history table = %lf is interpreted as infinity\n", datafile->filename, freq_history);
+ freq_history = 1e10;
+      }
       if(datafile->uniform_freq_cent < 1) {
  datafile->freqMode = FREQMODE_UNIFORM;
  datafile->uniform_freq_cent = freq_history;

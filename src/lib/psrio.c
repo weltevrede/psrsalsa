@@ -2181,13 +2181,13 @@ void printHeaderPSRData(datafile_definition datafile, int update, verbose_defini
   for(i = 0; i < verbose.indent; i++) printf(" ");
   printf("DM=%f  RM=%f", datafile.dm, datafile.rm);
   printf(" RefFreq=");
-  if(datafile.freq_ref >= 0) {
+  if((datafile.freq_ref < -0.9 && datafile.freq_ref >= -1.1) || (datafile.freq_ref > 0.99e10 && datafile.freq_ref < 1.01e10)){
+    printf("infinity");
+  }else if(datafile.freq_ref >= 0) {
     if(verbose.debug == 0)
       printf("%f MHz", datafile.freq_ref);
     else
       printf("%.9e MHz", datafile.freq_ref);
-  }else if(datafile.freq_ref < -0.9 && datafile.freq_ref >= -1.1){
-    printf("infinity");
   }else {
     printf("Unknown");
   }
@@ -2894,6 +2894,9 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
       datafile->freq_ref = -1;
     }
   }
+  if(datafile->freq_ref < -0.9 && datafile->freq_ref >= -1.1) {
+    datafile->freq_ref = 1e10;
+  }
   readHistoryPSRData(datafile, verbose2);
   if(verbose.verbose) {
     printHeaderPSRData(*datafile, 0, verbose2);
@@ -3288,6 +3291,9 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
  }else if(strcasecmp(identifier, "freqref") == 0 || strcasecmp(identifier, "freq_ref") == 0 || strcasecmp(identifier, "ref_freq") == 0 || strcasecmp(identifier, "reffreq") == 0) {
    psrdata->freq_ref = atof(value);
    if(verbose.verbose) printf("  hdr.freq_ref = %f MHz\n", psrdata->freq_ref);
+   if(psrdata->freq_ref > -1.01 && psrdata->freq_ref < -0.99) {
+     psrdata->freq_ref = 1e10;
+   }
  }else if(strcasecmp(identifier, "p0") == 0 || strcasecmp(identifier, "P0") == 0 || strcasecmp(identifier, "period") == 0) {
    if(psrdata->isFolded != 1 || psrdata->foldMode != FOLDMODE_FIXEDPERIOD) {
      printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Period can only be changed in the header if there is a fixed period throughout the whole dataset.");
@@ -3507,6 +3513,25 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
      psrdata->foldMode = FOLDMODE_UNKNOWN;
      psrdata->isFolded = 0;
    }
+ }else if(strcasecmp(identifier,"yrange") == 0) {
+   int ret;
+   double value1, value2;
+   ret = sscanf(value, "%lf,%lf", &value1, &value2);
+   if(ret == 2) {
+     psrdata->yrangeset = 1;
+     psrdata->yrange[0] = value1;
+     psrdata->yrange[1] = value2;
+     if(verbose.verbose) printf("  hdr.yrange1 = %lf\n", psrdata->yrange[0]);
+     if(verbose.verbose) printf("  hdr.yrange2 = %lf\n", psrdata->yrange[1]);
+   }else {
+     if(strcasecmp(value, "x") == 0 || strcasecmp(value, "undefined") == 0 || strcasecmp(value, "empty") == 0 || strcasecmp(value, "nothing") == 0) {
+       psrdata->yrangeset = 0;
+       if(verbose.verbose) printf("  hdr.yrange = undefined\n");
+     }else {
+       printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: In option %s of -header, '%s' expected to be of the form VALUE1,VALUE2 (without spaces) or the word UNDEFINED.", identifier, value);
+       return 0;
+     }
+   }
  }else {
    fflush(stdout);
    printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline:  '%s' not recognized as a header parameter.", identifier);
@@ -3566,6 +3591,9 @@ void printHeaderCommandlineOptions(FILE *printdevice)
   fprintf(printdevice, "               in seconds.\n");
   fprintf(printdevice, "               If followed by space separated numbers: set individual subint\n");
   fprintf(printdevice, "               durations\n");
+  fprintf(printdevice, "  yrange       Set the yrange to the range provided. Specify this as\n");
+  fprintf(printdevice, "               -header \"yrange VALUE1,VALUE2\". To unset the use of\n");
+  fprintf(printdevice, "               this parameter use -header \"yrange undefined\".\n");
 }
 void printHeaderGentypeOptions(FILE *printdevice)
 {
@@ -3863,10 +3891,10 @@ char *str_replace_header_params(datafile_definition data, char *text, verbose_de
   }
   free(newtext);
   newtext = newtext2;
-  if(data.freq_ref >= 0) {
-    sprintf(headerparam, "%lf", data.freq_ref);
-  }else if(data.freq_ref > -1.1 && data.freq_ref < -0.9) {
+  if((data.freq_ref > -1.1 && data.freq_ref < -0.9) || (data.freq_ref > 0.99e10 && data.freq_ref < 1.01e10)) {
     sprintf(headerparam, "Inf");
+  }else if(data.freq_ref >= 0) {
+    sprintf(headerparam, "%lf", data.freq_ref);
   }else {
     sprintf(headerparam, "Unknown");
   }

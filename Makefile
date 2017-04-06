@@ -28,6 +28,9 @@ LIBDIRS = -L$(PGPLOT_DIR)
 #to find the location of for instance the fitsio include files
 INCDIRS = -Isrc/lib/ -I$(PGPLOT_DIR) -I/usr/include/cfitsio/
 
+#You may want to define the GSL version you're using during compilation. Version 1.15 would be 115 etc (100*major version + minor version).
+GSLFLAGS = -DGSL_VERSION_NUMBER=115
+
 #####################################################################
 # After this point, it should not be necessary to edit the Makefile #
 #####################################################################
@@ -81,7 +84,7 @@ src/slalib/%.o:src/slalib/%.c
 
 #This is the rule of how to make the objects to go into the library
 src/lib/%.o:src/lib/%.c $(SLALIBTARGET)
-	$(CC) $(INCDIRS) -I src/slalib/ $(CFLAGS) -c -o $@ $<
+	$(CC) $(INCDIRS) -I src/slalib/ $(CFLAGS) $(GSLFLAGS) -c -o $@ $<
 
 #This is the rule of how to make the slalib library from the object files
 $(SLALIBTARGET): $(SLALIBOBJ)
@@ -92,7 +95,7 @@ $(LIBTARGET): $(PSRSALSALIBOBJ) $(SLALIBTARGET)
 	ar rcs $(LIBTARGET) $(PSRSALSALIBOBJ)
 
 bin/%: src/prog/%.c $(LIBTARGET) $(SLALIBTARGET)
-	$(CC) $(INCDIRS) -I src/lib/ $(CFLAGS) $(LIBDIRS) -L src/lib/ -L src/slalib $< -lpsrsalsa -lsla_wrap $(LIBS) -o $@
+	$(CC) $(INCDIRS) -I src/lib/ $(CFLAGS) $(GSLFLAGS) $(LIBDIRS) -L src/lib/ -L src/slalib $< -lpsrsalsa -lsla_wrap $(LIBS) -o $@
 
 #This is the rule of how to clean up things, so everything can be compiled from scratch
 clean:

@@ -362,6 +362,10 @@ void kstest(double *data1, long n1, double *data2, long n2, int cdf_type, double
     }else {
       printf("(data set is drawn from the specified distribution) ");
     }
+#if GSL_VERSION_NUMBER >= 104
     printf("can be rejected at the %.2lf sigma level.\n", gsl_cdf_gaussian_Pinv(0.5*(1.0-*prob)+0.5, 1.0));
+#else
+    printf("can be rejected at the XXXX sigma level (need GSL >= 1.4 to get this number).\n");
+#endif
   }
 }

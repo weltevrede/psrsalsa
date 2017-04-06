@@ -20,6 +20,11 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "psrsalsa.h"
 
 
+void print_fftw_version_used(FILE *stream)
+{
+  fprintf(stream, "%s (library)", fftwf_version);
+}
+
 int rotateSinglepulse(float *data, int npts, float epsilon, verbose_definition verbose)
 {
   int i, npts2;

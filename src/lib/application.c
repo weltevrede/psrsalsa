@@ -151,6 +151,7 @@ void initApplication(psrsalsaApplication *application, char *name, char *genusag
   application->doshuffle = 0;
   application->switch_rotateStokes = 0;
   application->nr_rotateStokes = 0;
+  application->switch_libversions = 0;
 
   application->fzapMask = NULL;
   application->doautot = 0;
@@ -162,7 +163,8 @@ void printCitationInfo()
 }
 
 
-int parse_command_string(verbose_definition verbose, int argc, char **argv, int argv_index, char *format, ...)
+
+int parse_command_string(verbose_definition verbose, int argc, char **argv, int argv_index, int check_only, char *format, ...)
 {
   va_list args;
   long i, curargnr, nrarguments;
@@ -172,7 +174,9 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
 
   if(argv_index >= argc) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR parse_command_string: the command line option to be parsed does not appear to be followed by input values/text.", format);
+    if(check_only == 0) {
+      printerror(verbose.debug, "ERROR parse_command_string: the command line option to be parsed does not appear to be followed by input values/text.", format);
+    }
     return 1;
   }
 
@@ -190,24 +194,30 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
     printf("parse_command_string: expected number of arguments = %ld\n", nrarguments);
   }
   if(nrarguments == 0) {
-    fflush(stdout);
-    printerror(verbose.debug, "ERROR parse_command_string: format string '%s' suggest no variables need to be parsed.", format);
+    if(check_only == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR parse_command_string: format string '%s' suggest no variables need to be parsed.", format);
+    }
     return 1;
   }
   for(i = 0; i < nrarguments; i++) {
     ptr = va_arg(args, void *);
 
     if(ptr == NULL) {
-      fflush(stdout);
-      printerror(verbose.debug, "ERROR parse_command_string: %ld pointers are expected to be passed to this function, but at least one of them appears to be the NULL pointer, suggestive of a bug in the programme.", nrarguments);
+      if(check_only == 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR parse_command_string: %ld pointers are expected to be passed to this function, but at least one of them appears to be the NULL pointer, suggestive of a bug in the programme.", nrarguments);
+      }
       return 1;
     }
   }
   ptr = va_arg(args, void *);
 
   if(ptr != NULL) {
-    fflush(stdout);
-    printerror(verbose.debug, "ERROR parse_command_string: %ld pointers are expected to be passed to this function followed by the NULL pointer. However, the NULL pointer is not detected, suggestive of a bug in the programme.", nrarguments);
+    if(check_only == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR parse_command_string: %ld pointers are expected to be passed to this function followed by the NULL pointer. However, the NULL pointer is not detected, suggestive of a bug in the programme.", nrarguments);
+    }
     return 1;
   }
   va_end(args);
@@ -215,8 +225,10 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
   int nrwords;
   ptr = pickWordFromString(argv[argv_index], 1, &nrwords, 1, ' ', verbose);
   if(nrwords != nrarguments) {
-    fflush(stdout);
-    printerror(verbose.debug, "ERROR parse_command_string: string \"%s\" appears to contain %d words, while the program expects %ld options to be provided.", argv[argv_index], nrwords, nrarguments);
+    if(check_only == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR parse_command_string: string \"%s\" appears to contain %d words, while the program expects %ld options to be provided.", argv[argv_index], nrwords, nrarguments);
+    }
     return 1;
   }
 
@@ -230,10 +242,12 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
     if(expecttype) {
       char *word_ptr, *word;
       word_ptr = pickWordFromString(argv[argv_index], curargnr, &nrwords, 1, ' ', verbose);
-      word = malloc(strlen(word_ptr));
+      word = malloc(strlen(word_ptr)+1);
       if(word == NULL) {
- fflush(stdout);
- printerror(verbose.debug, "ERROR parse_command_string: Memory allocation error");
+ if(check_only == 0) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR parse_command_string: Memory allocation error");
+ }
  return 1;
       }
       sscanf(word_ptr, "%s", word);
@@ -242,35 +256,88 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
    printf("parse_command_string: Parsing \"%s\" as a character\n", word);
  }
  if(strlen(word) != 1) {
-   fflush(stdout);
-   printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a character, since it is not 1 character in length", word);
+   if(check_only == 0) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a character, since it is not 1 character in length", word);
+   }
    return 1;
  }
  char *char_ptr;
  char_ptr = va_arg(args, char *);
  char_ptr[0] = word[0];
  if(verbose.debug) {
-   printf("parse_command_string: Parsing \"%s\" as a character '%c'\n", word, char_ptr[0]);
+   printf("parse_command_string: Parsing \"%s\" as character '%c'\n", word, char_ptr[0]);
  }
-      }else if(format[i] == 'f') {
+      }else if((format[i] == 'l' && format[i+1] == 'f') || format[i] == 'f') {
  if(verbose.debug) {
-   printf("parse_command_string: Parsing \"%s\" as a floating point\n", word);
+   if(format[i] == 'l')
+     printf("parse_command_string: Parsing \"%s\" as a double\n", word);
+   else
+     printf("parse_command_string: Parsing \"%s\" as a floating point\n", word);
  }
 
  float *float_ptr;
+ double *double_ptr;
  char *endptr;
- float_ptr = va_arg(args, float *);
- *float_ptr = strtof(word, &endptr);
+ if(format[i] == 'l') {
+   double_ptr = va_arg(args, double *);
+   *double_ptr = strtod(word, &endptr);
+ }else {
+   float_ptr = va_arg(args, float *);
+   *float_ptr = strtod(word, &endptr);
+ }
  if(endptr == word || endptr == NULL || endptr != word+strlen(word)) {
-   fflush(stdout);
-   printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a floating point", word);
+   if(check_only == 0) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a floating point", word);
+   }
+   return 1;
  }
  if(verbose.debug) {
-   printf("parse_command_string: Parsing \"%s\" as a %f\n", word, *float_ptr);
+   if(format[i] == 'l')
+     printf("parse_command_string: Parsing \"%s\" as %lf\n", word, *double_ptr);
+   else
+     printf("parse_command_string: Parsing \"%s\" as %f\n", word, *float_ptr);
  }
+ if(format[i] == 'l')
+   i++;
+      }else if((format[i] == 'l' && format[i+1] == 'd') || format[i] == 'd') {
+ if(verbose.debug) {
+   if(format[i] == 'l')
+     printf("parse_command_string: Parsing \"%s\" as a long int\n", word);
+   else
+     printf("parse_command_string: Parsing \"%s\" as a int\n", word);
+ }
+ long int *long_ptr;
+ int *int_ptr;
+ char *endptr;
+ if(format[i] == 'l') {
+   long_ptr = va_arg(args, long int *);
+   *long_ptr = strtol(word, &endptr, 0);
+ }else {
+   int_ptr = va_arg(args, int *);
+   *int_ptr = strtol(word, &endptr, 0);
+ }
+ if(endptr == word || endptr == NULL || endptr != word+strlen(word)) {
+   if(check_only == 0) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a long int", word);
+   }
+   return 1;
+ }
+ if(verbose.debug) {
+   if(format[i] == 'l')
+     printf("parse_command_string: Parsing \"%s\" as %ld\n", word, *long_ptr);
+   else
+     printf("parse_command_string: Parsing \"%s\" as %d\n", word, *int_ptr);
+ }
+ if(format[i] == 'l')
+   i++;
       }else {
- fflush(stdout);
- printerror(verbose.debug, "ERROR parse_command_string: format string \"%s\" contains a unrecognized data type '%c'.", format, format[i]);
+ if(check_only == 0) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR parse_command_string: format string \"%s\" contains a unrecognized data type '%c', suggestive of a bug in the software.", format, format[i]);
+ }
  free(word);
  return 1;
       }
@@ -282,8 +349,10 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
  expecttype = 1;
       }else if(format[i] == ' ' || format[i] == '\t') {
       }else {
- fflush(stdout);
- printerror(verbose.debug, "ERROR parse_command_string: format string \"%s\" does not appear of the expected format, indicating a bug.", format);
+ if(check_only == 0) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR parse_command_string: format string \"%s\" does not appear of the expected format, indicating a bug.", format);
+ }
  return 1;
       }
     }
@@ -463,7 +532,7 @@ void printApplicationHelp(psrsalsaApplication application)
    if(application.switch_onpulsegr)
       fprintf(stdout, "  -onpulsegr    Graphically select (additional) onpulse regions\n");
   }
-  if(application.switch_verbose || application.switch_debug || application.switch_nocounters || application.switch_macro || application.switch_fixseed
+  if(application.switch_verbose || application.switch_debug || application.switch_nocounters || application.switch_macro || application.switch_fixseed || application.switch_libversions
      ) {
     fprintf(stdout, "\nOther general options:\n");
     if(application.switch_verbose)
@@ -476,6 +545,9 @@ void printApplicationHelp(psrsalsaApplication application)
     }
     if(application.switch_nocounters)
       fprintf(stdout, "  -nocounters   Don't show counters etc (useful when generating log files)\n");
+    if(application.switch_libversions) {
+      fprintf(stdout, "  -libversions  Show version information about libraries used by psrsalsa\n");
+    }
     if(application.switch_macro) {
       fprintf(stdout, "  -macro        Instead of taking commands from keyboard, read them from\n");
       fprintf(stdout, "                this macro file (put a ^ in front of symbol for the ctrl key)\n");
@@ -487,7 +559,6 @@ void printApplicationHelp(psrsalsaApplication application)
 
 int processCommandLine(psrsalsaApplication *application, int argc, char **argv, int *index)
 {
-  int j;
   if(strcmp(argv[*index], "-v") == 0 && application->switch_verbose) {
     application->verbose_state.verbose = 1;
     return 1;
@@ -519,6 +590,9 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
   }else if(strcmp(argv[*index], "-header") == 0 && application->switch_header) {
     (*index)++;
     return 1;
+  }else if((strcmp(argv[*index], "-libversions") == 0 || strcmp(argv[*index], "-libversion") == 0 || strcmp(argv[*index], "-libraryversions") == 0) && application->switch_libversions) {
+    showlibraryversioninformation(stdout);
+    exit(0);
   }else if(strcmp(argv[*index], "-macro") == 0 && application->switch_macro) {
     printf("Opening macro '%s'\n", argv[++(*index)]);
     application->macro_ptr = fopen(argv[*index], "r");
@@ -535,26 +609,23 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     application->filelist = *index;
     return 1;
   }else if(strcmp(argv[*index], "-nread") == 0 && application->switch_nread) {
-    j = sscanf(argv[++(*index)], "%ld", &application->nread);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%ld", &(application->nread), NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
   }else if(strcmp(argv[*index], "-polselect") == 0 && application->switch_polselect) {
-    j = sscanf(argv[++(*index)], "%d", &application->polselectnr);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%d", &(application->polselectnr), NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
   }else if(strcmp(argv[*index], "-nskip") == 0 && application->switch_nskip) {
-    j = sscanf(argv[++(*index)], "%ld", &application->nskip);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%ld", &(application->nskip), NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
@@ -594,10 +665,9 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     }
     return 1;
   }else if(strcmp(argv[*index], "-onpulse") == 0 && application->switch_onpulse) {
-    j = sscanf(argv[++(*index)], "%d %d", &(application->onpulse.left_bin[application->onpulse.nrRegions]), &(application->onpulse.right_bin[application->onpulse.nrRegions]));
-    if(j != 2) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%d %d", &(application->onpulse.left_bin[application->onpulse.nrRegions]), &(application->onpulse.right_bin[application->onpulse.nrRegions]), NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need two integers.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     application->onpulse.bins_defined[application->onpulse.nrRegions] = 1;
@@ -609,10 +679,9 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     }
     return 1;
   }else if(strcmp(argv[*index], "-onpulsef") == 0 && application->switch_onpulsef) {
-    j = sscanf(argv[++(*index)], "%f %f", &(application->onpulse.left_frac[application->onpulse.nrRegions]), &(application->onpulse.right_frac[application->onpulse.nrRegions]));
-    if(j != 2) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%f %f", &(application->onpulse.left_frac[application->onpulse.nrRegions]), &(application->onpulse.right_frac[application->onpulse.nrRegions]), NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need two integers.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     application->onpulse.frac_defined[application->onpulse.nrRegions] = 1;
@@ -628,10 +697,9 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     strcpy(application->pgplotdevice, argv[++(*index)]);
     return 1;
   }else if(strcmp(argv[*index], "-fchan") == 0 && application->switch_fchan) {
-    j = sscanf(argv[++(*index)], "%d", &application->fchan_select);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%d", &application->fchan_select, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
@@ -639,18 +707,16 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     application->tscr_complete = 1;
     return 1;
   }else if(strcmp(argv[*index], "-tscr") == 0 && application->switch_tscr) {
-    j = sscanf(argv[++(*index)], "%ld", &application->dotscr);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%ld", &application->dotscr, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
   }else if(strcmp(argv[*index], "-fscr") == 0 && application->switch_fscr) {
-    j = sscanf(argv[++(*index)], "%ld", &application->dofscr);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%ld", &application->dofscr, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
@@ -659,29 +725,26 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     (*index)++;
     return 1;
   }else if(strcmp(argv[*index], "-rebin") == 0 && application->switch_rebin) {
-    j = sscanf(argv[++(*index)], "%ld", &application->rebin);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%ld", &application->rebin, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     application->dorebin = 1;
     return 1;
   }else if(strcmp(argv[*index], "-rot") == 0 && application->switch_rot) {
-    j = sscanf(argv[++(*index)], "%f", &application->shiftPhase);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%f", &application->shiftPhase, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one float.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     application->shiftPhase_cmdline = application->shiftPhase;
     application->doshiftphase = 1;
     return 1;
   }else if(strcmp(argv[*index], "-rotdeg") == 0 && application->switch_rotdeg) {
-    j = sscanf(argv[++(*index)], "%f", &application->shiftPhase);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%f", &application->shiftPhase, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one float.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     application->doshiftphase = 1;
@@ -689,18 +752,16 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     application->shiftPhase_cmdline = application->shiftPhase;
     return 1;
   }else if(strcmp(argv[*index], "-itf") == 0 && application->switch_itf) {
-    j = sscanf(argv[++(*index)], "%d", &application->itf);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%d", &application->itf, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
   }else if(strcmp(argv[*index], "-size") == 0 && application->switch_size) {
-    j = sscanf(argv[++(*index)], "%d %d", &application->windowwidth, &application->windowheight);
-    if(j != 2) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%d %d", &application->windowwidth, &application->windowheight, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
@@ -726,19 +787,17 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     application->doFSCR = 1;
     return 1;
   }else if(strcmp(argv[*index], "-clip") == 0 && application->switch_clip) {
-    j = sscanf(argv[++(*index)], "%f", &application->clipvalue);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%f", &application->clipvalue, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one floating point value.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     application->do_clip = 1;
     return 1;
   }else if(strcmp(argv[*index], "-reffreq") == 0 && application->switch_changeRefFreq) {
-    j = sscanf(argv[++(*index)], "%lf", &application->newRefFreq);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%lf", &application->newRefFreq, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one floating point value.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
@@ -749,10 +808,9 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     application->do_deFaraday = 1;
     return 1;
   }else if(strcmp(argv[*index], "-blocksize") == 0 && application->switch_blocksize) {
-    j = sscanf(argv[++(*index)], "%d", &application->blocksize);
-    if(j != 1) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%d", &application->blocksize, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one integer.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
@@ -783,10 +841,9 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     return 1;
   }else if(strcmp(argv[*index], "-scale") == 0 && application->switch_scale) {
     application->doscale = 1;
-    j = sscanf(argv[++(*index)], "%f %f", &application->scale_scale, &application->scale_offset);
-    if(j != 2) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%f %f", &application->scale_scale, &application->scale_offset, NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need two floats.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
     return 1;
@@ -796,12 +853,10 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
       printerror(application->verbose_state.debug, "Maximum number of uses of the '%s' option is exceeded.", argv[(*index)-1]);
       exit(0);
     }
-
-
     char s1, s2;
-    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), "%c %c %f", &s1, &s2, &(application->rotateStokesAngle[application->nr_rotateStokes]), NULL)) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, "%c %c %f", &s1, &s2, &(application->rotateStokesAngle[application->nr_rotateStokes]), NULL)) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "Cannot parse '%s' option, need one float.", argv[(*index)-1]);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
       exit(0);
     }
 
@@ -914,7 +969,7 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
   }
   if(application->nr_rotateStokes > 0) {
     for(i = 0; i < application->nr_rotateStokes; i++) {
-      if(preprocess_rotateStokes(psrdata, &clone, 1, -1, application->rotateStokesAngle[i], application->rotateStokes1[i], application->rotateStokes2[i], verbose1) == 0)
+      if(preprocess_rotateStokes(psrdata, &clone, 1, -1, application->rotateStokesAngle[i], NULL, application->rotateStokes1[i], application->rotateStokes2[i], verbose1) == 0)
  return 0;
     }
   }
@@ -1190,7 +1245,7 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     if(original_freq_ref != psrdata->freq_ref) {
       if(psrdata->freq_ref > 0)
  sprintf(txt2, " with reference freq=%lf MHz", psrdata->freq_ref);
-      else if(psrdata->freq_ref > -1.01 && psrdata->freq_ref < -0.99)
+      else if((psrdata->freq_ref > -1.01 && psrdata->freq_ref < -0.99) || (psrdata->freq_ref > 0.99e10 && psrdata->freq_ref < 1.01e10))
  sprintf(txt2, " with reference freq=infinity");
       else
  sprintf(txt2, " with unknown reference freq");
@@ -1327,4 +1382,19 @@ char *getNextFilenameFromList(psrsalsaApplication *application, char **argv, ver
     }
   }
   return NULL;
+}
+void showlibraryversioninformation(FILE *stream)
+{
+  fprintf(stream, "cfitsio version: ");
+  print_fitsio_version_used(stream);
+  fprintf(stream, "\n");
+  fprintf(stream, "fftw version: ");
+  print_fftw_version_used(stream);
+  fprintf(stream, "\n");
+  fprintf(stream, "GSL version: ");
+  print_gsl_version_used(stream);
+  fprintf(stream, "\n");
+  fprintf(stream, "pgplot version: ");
+  print_pgplot_version_used(stream);
+  fprintf(stream, "\n");
 }

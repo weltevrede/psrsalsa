@@ -352,6 +352,7 @@ int main(int argc, char **argv)
   application.switch_formatlist = 1;
   application.switch_fixseed = 1;
   application.switch_nocounters = 1;
+  application.switch_libversions = 1;
   fitter_info.colspecified = 0;
   fitter_info.file_column1 = 1;
   ftol = 1e-3;
@@ -471,9 +472,8 @@ int main(int argc, char **argv)
    polspecified = 1;
  else
    fitter_info.colspecified = 1;
- j = sscanf(argv[i+1], "%d", &fitter_info.file_column1);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse %s option, need one value.\n", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%d", &fitter_info.file_column1, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -486,13 +486,19 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR pdistFit: No more than two fit function can be specified.");
    return 0;
  }
- j = sscanf(argv[i+1], "%lf %lf %d %lf %lf %d", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], &function_param_fixed[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][2], &function_param[fitter_info.nrfunctions][3], &function_param_fixed[fitter_info.nrfunctions][1]);
- if(j != 6) {
-   j = sscanf(argv[i+1], "%lf %lf %lf %lf", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], &function_param[fitter_info.nrfunctions][2], &function_param[fitter_info.nrfunctions][3]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%lf %lf %d %lf %lf %d", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], &function_param_fixed[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][2], &function_param[fitter_info.nrfunctions][3], &function_param_fixed[fitter_info.nrfunctions][1], NULL) == 0) {
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf %d %lf %lf %d", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], &function_param_fixed[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][2], &function_param[fitter_info.nrfunctions][3], &function_param_fixed[fitter_info.nrfunctions][1], NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
+     return 0;
+   }
+ }else if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%lf %lf %lf %lf", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], &function_param[fitter_info.nrfunctions][2], &function_param[fitter_info.nrfunctions][3], NULL) == 0) {
    function_param_fixed[fitter_info.nrfunctions][0] = 0;
    function_param_fixed[fitter_info.nrfunctions][1] = 0;
- }
- if(j != 4 && j != 6) {
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf %lf %lf", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], &function_param[fitter_info.nrfunctions][2], &function_param[fitter_info.nrfunctions][3], NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
+     return 0;
+   }
+ }else {
    printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse the %s option. Needs to have four or six values.\n", argv[i]);
    return 0;
  }
@@ -521,12 +527,18 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR pdistFit: No more than two fit function can be specified.");
    return 0;
  }
- j = sscanf(argv[i+1], "%lf %lf %d", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], &function_param_fixed[fitter_info.nrfunctions][0]);
- if(j != 3) {
-   j = sscanf(argv[i+1], "%lf %lf", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%lf %lf %d", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], &function_param_fixed[fitter_info.nrfunctions][0], NULL) == 0) {
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf %d", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], &function_param_fixed[fitter_info.nrfunctions][0], NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
+     return 0;
+   }
+ }else if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%lf %lf", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], NULL) == 0) {
    function_param_fixed[fitter_info.nrfunctions][0] = 0;
- }
- if(j != 3 && j != 2) {
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf", &function_param[fitter_info.nrfunctions][0], &function_param[fitter_info.nrfunctions][1], NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
+     return 0;
+   }
+ }else {
    printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse the %s option. Needs to have two or three values.\n", argv[i]);
    return 0;
  }
@@ -539,16 +551,14 @@ int main(int argc, char **argv)
  fitter_info.nrfunctions++;
         i++;
       }else if(strcmp(argv[i], "-tol") == 0) {
- j = sscanf(argv[i+1], "%lf", &ftol);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse %s option, need one value.\n", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &ftol, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-N") == 0) {
- j = sscanf(argv[i+1], "%ld", &fitter_info.nr_model_points);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse %s option, need one value.\n", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &fitter_info.nr_model_points, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -556,9 +566,8 @@ int main(int argc, char **argv)
  fitter_info.method = 1;
       }else if(strcmp(argv[i], "-chi2hist") == 0) {
  fitter_info.method = 2;
- j = sscanf(argv[i+1], "%lf", &fitter_info.dx);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse %s option, need one value.\n", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &fitter_info.dx, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -570,32 +579,43 @@ int main(int argc, char **argv)
  plotcdf = 1;
       }else if(strcmp(argv[i], "-2nd") == 0) {
  second_distr_specified = 1;
- j = sscanf(argv[i+1], "%lf %lf %d", &second_distr_frac, &second_distr_dfrac, &function_param_fixed[2][0]);
- if(j != 3) {
-   j = sscanf(argv[i+1], "%lf %lf", &second_distr_frac, &second_distr_dfrac);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%lf %lf %d", &second_distr_frac, &second_distr_dfrac, &function_param_fixed[2][0], NULL) == 0) {
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf %d", &second_distr_frac, &second_distr_dfrac, &function_param_fixed[2][0], NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
+     return 0;
+   }
+ }else if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%lf %lf", &second_distr_frac, &second_distr_dfrac, NULL) == 0) {
    function_param_fixed[2][0] = 0;
- }
- if(j != 2 && j != 3) {
-   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse %s option, need two or three values.\n", argv[i]);
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf", &second_distr_frac, &second_distr_dfrac, NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
+     return 0;
+   }
+ }else {
+   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse the %s option. Needs to have two or three values.\n", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-null") == 0) {
  fitter_info.null_distr_specified = 1;
- j = sscanf(argv[i+1], "%lf %lf %d", &null_distr_av, &null_distr_dav, &function_param_fixed[3][0]);
- if(j != 3) {
-   j = sscanf(argv[i+1], "%lf %lf", &null_distr_av, &null_distr_dav);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%lf %lf %d", &null_distr_av, &null_distr_dav, &function_param_fixed[3][0], NULL) == 0) {
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf %d", &null_distr_av, &null_distr_dav, &function_param_fixed[3][0], NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
+     return 0;
+   }
+ }else if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%lf %lf", &null_distr_av, &null_distr_dav, NULL) == 0) {
    function_param_fixed[3][0] = 0;
- }
- if(j != 2 && j != 3) {
-   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse %s option, need two values.\n", argv[i]);
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf", &null_distr_av, &null_distr_dav, NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
+     return 0;
+   }
+ }else {
+   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse the %s option. Needs to have two or three values.\n", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-sigma") == 0) {
- j = sscanf(argv[i+1], "%lf", &fitter_info.sigma);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse %s option, need one value.\n", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &fitter_info.sigma, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdistFit: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;

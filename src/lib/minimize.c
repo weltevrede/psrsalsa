@@ -194,6 +194,10 @@ int minimize_1D_double(int findroot, double (*funk)(double, void *), void *param
   F.function = funk;
   F.params = params;
   iter = 0;
+#if GSL_VERSION_NUMBER < 102
+  printerror(0, "ERROR minimize_1D_double: Not supported for GSL < 1.2");
+  exit(0);
+#endif
   if(verbose) {
     for(i = 0; i < verbose - 1; i++)
       printf(" ");
@@ -254,7 +258,9 @@ int minimize_1D_double(int findroot, double (*funk)(double, void *), void *param
     iter++;
     if(findroot == 0) {
       status = gsl_min_fminimizer_iterate(s_minimizer);
+#if GSL_VERSION_NUMBER >= 102
       *x_minimum = gsl_min_fminimizer_x_minimum (s_minimizer);
+#endif
       x_lower = gsl_min_fminimizer_x_lower(s_minimizer);
       x_upper = gsl_min_fminimizer_x_upper(s_minimizer);
     }else {

@@ -348,7 +348,7 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
     printwarning(verbose.debug, "WARNING readSigprocHeader: The frequency of the observation does not appear to be defined.");
     if(datafile->freq_ref > 0) {
 
-      printwarning(verbose.debug, "WARNING readSigprocHeader: Set frequency of the observation to the defined reference frequency.");
+      printwarning(verbose.debug, "WARNING readSigprocHeader: It is assumed that the frequency of the observationdefines the reference frequency.");
       datafile->freqMode = FREQMODE_UNIFORM;
       datafile->uniform_freq_cent = datafile->freq_ref;
     }

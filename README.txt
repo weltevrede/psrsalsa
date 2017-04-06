@@ -48,6 +48,15 @@ The entries in the Makefile that might need editing are:
   default. Again, by default it is adding the location which is set by
   the PGPLOT_DIR environment variable.
 
+* GSLFLAGS variable
+
+  The library version of the GSL library you use can be specified with
+  the -DGSL_VERSION_NUMBER=XXX. Changing this number enables/disables
+  different pieces of the code, such that the code is compilable
+  agains a range of versions. The functionality of the code might be
+  restricted depending on the version of GSL you're compiling the code
+  against.
+
 
 DEPENDENCIES
 ----------------------------
@@ -77,7 +86,7 @@ Website = http://www.gnu.org/software/gsl/
 Probably your linux distribution allows you to download this
 package. You need libgsl and libgslcblas.
 
-Version 1.9 is known to work
+Version 1.15 is known to work
 
 * pgplot:
 
@@ -87,7 +96,7 @@ Probably your linux distribution allows you to download this
 package. This library probably depend on other libraries, such as
 libgfortran, libX11 and libpng.
 
-Version 5.2.0 is known to work
+Version 5.2.2 is known to work
 
 see README_pgplot.txt how to compile pgplot.
 

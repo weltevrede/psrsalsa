@@ -40,6 +40,7 @@ int main(int argc, char **argv)
 
   initApplication(&application, "pstat", "[options] inputfile(s)");
 
+  application.switch_libversions = 1;
   application.switch_verbose = 1;
   application.switch_debug = 1;
 
@@ -487,8 +488,13 @@ int main(int argc, char **argv)
       return 0;
     }
 
+#if GSL_VERSION_NUMBER >= 110
     cc = gsl_stats_correlation(input_array[0], 1, input_array[1], 1, number_values[0]);
     fprintf(fout, "Pearson correlation coefficient = %e\n", cc);
+#else
+    printerror(application.verbose_state.debug, "ERROR pstat: Pearson correlation coefficient cannot be calculated if GSL < 1.10");
+    return 0;
+#endif
 
   }else if(typetest == CORREL) {
     if(number_input_arrays != 2) {

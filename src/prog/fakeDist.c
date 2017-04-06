@@ -98,9 +98,8 @@ int main(int argc, char **argv)
  i = index;
       }else if(strcasecmp(argv[i], "-Rayleigh") == 0) {
  float dummy_float;
- j = sscanf(argv[i+1], "%f", &dummy_float);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option. Needs to have one value.\n", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%f", &dummy_float, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  if(NumberPoints2 == 0)
@@ -111,9 +110,8 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-gamma") == 0 || strcmp(argv[i], "-flat") == 0 || strcmp(argv[i], "-norm") == 0 || strcmp(argv[i], "-lognorm") == 0 || strcmp(argv[i], "-pwrlaw") == 0
         ) {
  float dummy_float;
- j = sscanf(argv[i+1], "%f %f", &dummy_float, &dummy_float);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option. Needs to have two values.\n", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%f %f", &dummy_float, &dummy_float, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  if(NumberPoints2 == 0)
@@ -123,9 +121,8 @@ int main(int argc, char **argv)
         i++;
       }else if(strcmp(argv[i], "-sin") == 0) {
  float dummy_float;
- j = sscanf(argv[i+1], "%f %f %f %f", &dummy_float, &dummy_float, &dummy_float, &dummy_float);
- if(j != 4) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option. Needs to have four values.\n", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%f %f %f %f", &dummy_float, &dummy_float, &dummy_float, &dummy_float, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  if(NumberPoints2 == 0)
@@ -134,23 +131,20 @@ int main(int argc, char **argv)
    nrfunctions2++;
         i++;
       }else if(strcmp(argv[i], "-sigma") == 0) {
- j = sscanf(argv[i+1], "%lf", &noisesigma);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option. Needs to have one value.\n",argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &noisesigma, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-N") == 0) {
- j = sscanf(argv[i+1], "%ld", &NumberPoints);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option. Needs to have one value.\n",argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &NumberPoints, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-N2") == 0) {
- j = sscanf(argv[i+1], "%ld", &NumberPoints2);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option. Needs to have one value.\n",argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &NumberPoints2, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  cmd_line_end_first_distr = i;
@@ -160,9 +154,8 @@ int main(int argc, char **argv)
  i++;
       }else if(strcmp(argv[i], "-null") == 0) {
  AddNulls = 1;
- j = sscanf(argv[i+1], "%lf", &average_value);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option. Needs to have one value.\n",argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &average_value, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -170,16 +163,14 @@ int main(int argc, char **argv)
  noisefile_id = i+1;
         i++;
       }else if(strcmp(argv[i], "-loop") == 0) {
- j = sscanf(argv[i+1], "%ld", &nrloops);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option. Needs to have one value.\n",argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &nrloops, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-seed") == 0) {
- j = sscanf(argv[i+1], "%ld", &idnum);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option. Needs to have one value.\n",argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &idnum, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  randomize_seed = 0;

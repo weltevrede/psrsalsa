@@ -96,7 +96,7 @@ int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
   datafile->NrBins = nrpoints;
   return datafile->NrBins;
 }
-int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, verbose_definition verbose)
+int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, float paoffset, verbose_definition verbose)
 {
   int indent;
   long i, j, NrOffpulseBins, pulsenr, freqnr;
@@ -107,7 +107,7 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
     for(indent = 0; indent < verbose.indent; indent++) printf(" ");
     printf("  Reference frequency for PA is ");
     if(datafile->isDeFarad) {
-      if(datafile->freq_ref > -1.1 && datafile->freq_ref < -0.9)
+      if((datafile->freq_ref > -1.1 && datafile->freq_ref < -0.9) || (datafile->freq_ref > 0.99e10 && datafile->freq_ref < 1.01e10))
  printf("infinity\n");
       else if(datafile->freq_ref < 0)
  printf("unknown\n");
@@ -133,6 +133,8 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
       printf(", output is normalised");
     if(loffset != 0)
       printf(", pulse longitude shifted by %f deg\n", loffset);
+    if(paoffset != 0)
+      printf(", PA shifted by %f deg\n", paoffset);
     printf("\n");
   }
   if(datafile->NrPols != 4) {
@@ -312,6 +314,10 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
       }
       for(i = 0; i < (datafile->NrBins); i++) {
  newdata[i+newindex_Pa] = 90.0*atan2(datafile->data[sindex_U+i],datafile->data[sindex_Q+i])/M_PI;
+ if(paoffset) {
+   newdata[i+newindex_Pa] += paoffset;
+   newdata[i+newindex_Pa] = derotate_180_small_double(newdata[i+newindex_Pa]);
+ }
  if(datafile->data[i+sindex_Q] != 0 || datafile->data[i+sindex_U] != 0) {
    newdata[i+newindex_dPa] = sqrt((datafile->data[sindex_Q+i]*RMSU)*(datafile->data[sindex_Q+i]*RMSU) + (datafile->data[sindex_U+i]*RMSQ)*(datafile->data[sindex_U+i]*RMSQ));
    newdata[i+newindex_dPa] /= 2.0*(datafile->data[i+sindex_Q]*datafile->data[i+sindex_Q] + datafile->data[i+sindex_U]*datafile->data[i+sindex_U]);

@@ -149,6 +149,7 @@ int main(int argc, char **argv)
     for(i = 1; i < argc; i++) {
       if(strcmp(argv[i], "-header") == 0) {
  printwarning(application.verbose_state.debug, "WARNING pconv: If using the -header option, be aware it applied BEFORE the preprocessing.");
+ break;
       }
     }
     if(preprocessApplication(&application, &fin) == 0) {

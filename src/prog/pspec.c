@@ -60,6 +60,7 @@ int main(int argc, char **argv)
   application.switch_conshift= 1;
   application.switch_circshift= 1;
   application.switch_shuffle = 1;
+  application.switch_libversions = 1;
   cleanPSRData(&fout, application.verbose_state);
   fft_size = 512;
   powertwo = 0;
@@ -217,7 +218,7 @@ int main(int argc, char **argv)
       index = i;
       if(processCommandLine(&application, argc, argv, &index)) {
  i = index;
-      }else if(strcmp(argv[i], "-nfft") == 0 || strcmp(argv[i], "-fft_size") == 0 || strcmp(argv[i], "-fftsize") == 0) {
+      }else if(strcmp(argv[i], "-nfft") == 0 || strcmp(argv[i], "-fft_size") == 0 || strcmp(argv[i], "-fftsize") == 0 || strcmp(argv[i], "-fft_length") == 0 || strcmp(argv[i], "-fftlength") == 0) {
  j = sscanf(argv[i+1], "%d", &fft_size);
  if(j != 1) {
    printerror(application.verbose_state.debug, "Cannot parse '%s' option.", argv[i]);

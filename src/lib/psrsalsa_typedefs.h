@@ -234,6 +234,7 @@ typedef struct {
   int switch_output; char outputname[MaxOutputNameLength];
   int switch_shuffle, doshuffle;
   int switch_rotateStokes; int nr_rotateStokes, rotateStokes1[maxNrRotateStokes], rotateStokes2[maxNrRotateStokes]; float rotateStokesAngle[maxNrRotateStokes];
+  int switch_libversions;
   int doautot;
   int *fzapMask;
 }psrsalsaApplication;

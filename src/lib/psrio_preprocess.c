@@ -983,7 +983,7 @@ int preprocess_shuffle(datafile_definition original, datafile_definition *clone,
   }
   return 1;
 }
-int preprocess_rotateStokes(datafile_definition *original, datafile_definition *clone, int inplace, int subint, float angle, int stokes1, int stokes2, verbose_definition verbose)
+int preprocess_rotateStokes(datafile_definition *original, datafile_definition *clone, int inplace, int subint, float angle, float *angle_array, int stokes1, int stokes2, verbose_definition verbose)
 {
   int i;
   long f, n, b, p;
@@ -1013,7 +1013,10 @@ int preprocess_rotateStokes(datafile_definition *original, datafile_definition *
       printerror(verbose.debug, "ERROR preprocess_rotateStokes: Non-existing stokes parameter was defined.");
       return 0;
     }
-    printf(" by %f degrees\n", angle);
+    if(angle_array == NULL)
+      printf(" by %f degrees\n", angle);
+    else
+      printf(" in a pulse longitude dependent way\n");
   }
   if(original->format != MEMORY_format) {
     fflush(stdout);
@@ -1059,11 +1062,16 @@ int preprocess_rotateStokes(datafile_definition *original, datafile_definition *
       return 0;
     }
   }
-  angle *= M_PI/180.0;
+  if(angle_array == NULL) {
+    angle *= M_PI/180.0;
+  }
   for(f = 0; f < original->NrFreqChan; f++) {
     for(n = 0; n < original->NrSubints; n++) {
       if(n == subint || subint < 0 || inplace == 0) {
  for(b = 0; b < original->NrBins; b++) {
+   if(angle_array != NULL) {
+     angle = angle_array[b];
+   }
    for(p = 0; p < 4; p++) {
      if((p != stokes1 && p != stokes2 && inplace == 0) || (inplace == 0 && subint != n)) {
        clone->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b] = original->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b];
@@ -1478,13 +1486,13 @@ int preprocess_dedisperse(datafile_definition *original, int update, double freq
   double freq;
   if(original->freq_ref < -1.1) {
     printwarning(verbose.debug, "WARNING preprocess_dedisperse (%s): Reference frequency is unknown. The reference frequency is set to infinite frequency.", original->filename);
-    original->freq_ref = -1;
+    original->freq_ref = 1e10;
   }
-  if(original->freq_ref < 0)
+  if((original->freq_ref > -1.1 && original->freq_ref < -0.9) || (original->freq_ref > 0.99e10 && original->freq_ref < 1.01e10))
     inffreq = 1;
   else
     inffreq = 0;
-  if(freq_ref > -1.1 && freq_ref < -0.9)
+  if((freq_ref > -1.1 && freq_ref < -0.9) || (freq_ref > 0.99e10 && freq_ref < 1.01e10))
     inffreq_old = 1;
   else if(freq_ref < 0) {
     printerror(verbose.debug, "ERROR preprocess_dedisperse (%s): Requested frequency is invalid (%f).", freq_ref);
@@ -1601,13 +1609,13 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
   verbose_definition verbose2;
   if(original->freq_ref < -1.1) {
     printwarning(verbose.debug, "WARNING preprocess_deFaraday (%s): Reference frequency is unknown. The reference frequency is set to infinite frequency.", original->filename);
-    original->freq_ref = -1;
+    original->freq_ref = 1e10;
   }
-  if(original->freq_ref < 0)
+  if((original->freq_ref > -1.1 && original->freq_ref < -0.9) || (original->freq_ref > 0.99e10 && original->freq_ref < 1.01e10))
     inffreq = 1;
   else
     inffreq = 0;
-  if(freq_ref > -1.1 && freq_ref < -0.9)
+  if((freq_ref > -1.1 && freq_ref < -0.9) || (freq_ref > 0.99e10 && freq_ref < 1.01e10))
     inffreq_old = 1;
   else if(freq_ref < 0) {
     printerror(verbose.debug, "ERROR preprocess_deFaraday (%s): Requested original reference frequency is invalid (%f).", original->filename, freq_ref);
@@ -1919,13 +1927,13 @@ int preprocess_corrParAng(datafile_definition *original, datafile_definition *cl
       verbose2.nocounters = 0;
     }
     if(clone != NULL) {
-      if(preprocess_rotateStokes(clone, NULL, 1, n, 2.0*parang, 1, 2, verbose2) != 1) {
+      if(preprocess_rotateStokes(clone, NULL, 1, n, 2.0*parang, NULL, 1, 2, verbose2) != 1) {
  fflush(stdout);
  printerror(verbose.debug, "ERROR preprocess_corrParAng (%s): Cannot rotate Stokes Q and U.", original->filename);
  return 0;
       }
     }else {
-      if(preprocess_rotateStokes(original, NULL, 1, n, 2.0*parang, 1, 2, verbose2) != 1) {
+      if(preprocess_rotateStokes(original, NULL, 1, n, 2.0*parang, NULL, 1, 2, verbose2) != 1) {
  fflush(stdout);
  printerror(verbose.debug, "ERROR preprocess_corrParAng (%s): Cannot rotate Stokes Q and U.", original->filename);
  return 0;
@@ -2020,16 +2028,16 @@ int preprocess_changeRefFreq(datafile_definition *original, double freq_ref_new,
   verbose2.indent = verbose.indent + 4;
   freq_ref_cur = original->freq_ref;
   inffreq_cur = 0;
-  if(original->freq_ref > -1.1 && original->freq_ref < -0.9) {
+  if((original->freq_ref > -1.1 && original->freq_ref < -0.9) || (original->freq_ref > 0.99e10 && original->freq_ref < 1.01e10)) {
     inffreq_cur = 1;
   }else if(original->freq_ref < 0) {
     if(original->isDeDisp || original->isDeFarad) {
       printwarning(verbose.debug, "WARNING preprocess_changeRefFreq: Current reference frequency is unknown, it is assumed it was infinite frequency");
     }
     inffreq_cur = 1;
-    freq_ref_cur = -1;
+    freq_ref_cur = 1e10;
   }
-  if(freq_ref_new > -1.1 && freq_ref_new < -0.9) {
+  if((freq_ref_new > -1.1 && freq_ref_new < -0.9) || (freq_ref_new > 0.99e10 && freq_ref_new < 1.01e10)) {
     inffreq_new = 1;
   }else {
     inffreq_new = 0;

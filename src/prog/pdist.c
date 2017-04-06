@@ -173,15 +173,25 @@ int main(int argc, char **argv)
    polspecified = 1;
  else
    colspecified = 1;
- j = sscanf(argv[i+1], "%d %d", &file_column1, &file_column2);
- if(j == 1) {
-   file_column2_defined = 0;
- }else {
+
+
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%d %d", &file_column1, &file_column2, NULL) == 0) {
    file_column2_defined = 1;
-   if(j != 2) {
-     printerror(application.verbose_state.debug, "Cannot parse %s option, need 1 or 2 values.\n", argv[i]);
+
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%d %d", &file_column1, &file_column2, NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
      return 0;
    }
+ }else if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%d", &file_column1, NULL) == 0) {
+   file_column2_defined = 0;
+
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%d", &file_column1, NULL)) {
+     printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
+     return 0;
+   }
+ }else {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse %s option, need 1 or 2 integer values.\n", argv[i]);
+   return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-n") == 0 || strcmp(argv[i], "-nx") == 0) {
@@ -190,9 +200,8 @@ int main(int argc, char **argv)
    return 0;
  }
  nrbins_specified = 1;
- j = sscanf(argv[i+1], "%ld", &nrbins);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse -n option, need 1 value.\n");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &nrbins, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -202,9 +211,8 @@ int main(int argc, char **argv)
    return 0;
  }
  nrbins_specifiedy = 1;
- j = sscanf(argv[i+1], "%ld", &nrbinsy);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse -ny option, need 1 value.\n");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &nrbinsy, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -214,9 +222,8 @@ int main(int argc, char **argv)
    return 0;
  }
  dx_specified = 1;
- j = sscanf(argv[i+1], "%lf", &dx);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse -dx option, need 1 value.\n");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &dx, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -226,33 +233,29 @@ int main(int argc, char **argv)
    return 0;
  }
  dy_specified = 1;
- j = sscanf(argv[i+1], "%lf", &dy);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse -dy option, need 1 value.\n");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &dy, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-rangex") == 0) {
  rangex_set = 1;
- j = sscanf(argv[i+1], "%lf %lf", &rangex_min, &rangex_max);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "Cannot parse -rangex option, need 2 values.\n");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf", &rangex_min, &rangex_max, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-rangey") == 0) {
  rangey_set = 1;
- j = sscanf(argv[i+1], "%lf %lf", &rangey_min, &rangey_max);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "Cannot parse -rangey option, need 2 values.\n");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf", &rangey_min, &rangey_max, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-select") == 0) {
  select = 1;
- j = sscanf(argv[i+1], "%lf %lf", &select1, &select2);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "Cannot parse the %s option, need 2 values.\n", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf", &select1, &select2, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -265,9 +268,8 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-zero") == 0) {
  centered_at_zero = 0;
       }else if(strcmp(argv[i], "-zeroshift") == 0) {
- j = sscanf(argv[i+1], "%lf", &extra_phase);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse -zeroshift option, need 1 value.\n");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &extra_phase, NULL)) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
