@@ -215,6 +215,10 @@ void write_epn_shortheader(datafile_definition datafile, int version, char *idfi
 {
   char txt[100];
 
+  if(datafile.freqMode != FREQMODE_UNIFORM) {
+    printerror(verbose.debug, "ERROR write_epn_shortheader (%s): Frequency channels do not appear to be uniformly distributed.", datafile.filename);
+    exit(0);
+  }
 
   fillspaces(txt, 8);
   strncpy(txt, idfield, 8);
@@ -225,13 +229,13 @@ void write_epn_shortheader(datafile_definition datafile, int version, char *idfi
   fprintf(datafile.fptr, "%s", txt);
   sprintf(txt, "%04d", 1);
   fprintf(datafile.fptr, "%s", txt);
-  sprintf(txt, "%12.8f", get_centre_freq(datafile, verbose)*0.001);
+  sprintf(txt, "%12.8f", get_centre_frequency(datafile, verbose)*0.001);
   fprintf(datafile.fptr, "%s", txt);
   if(version >= 610) {
     sprintf(txt, "%8s", "GHz");
     fprintf(datafile.fptr, "%s", txt);
   }
-  sprintf(txt, "%12.6f", get_bw(datafile, verbose));
+  sprintf(txt, "%12.6f", get_bandwidth(datafile, verbose));
   fprintf(datafile.fptr, "%s", txt);
   if(version >= 610) {
     sprintf(txt, "%8s", "MHz");
@@ -705,6 +709,7 @@ int readEPNsubHeader(datafile_definition *datafile, float *scale, float *offset,
   int ret, version;
   double dbl_version;
   char txt[1000];
+  double freq, bw;
   version = datafile->version;
   version = 63;
   if((version < 60) || (version > 63)) {
@@ -737,7 +742,7 @@ int readEPNsubHeader(datafile_definition *datafile, float *scale, float *offset,
       return 0;
     }
     if(datafile->freqMode == FREQMODE_UNKNOWN) {
-      ret = sscanf(txt, "%lf", &(datafile->uniform_freq_cent));
+      ret = sscanf(txt, "%lf", &freq);
       if(ret != 1) {
  printerror(verbose.debug, "ERROR readEPNsubHeader: This file is not an EPN file.");
  return 0;
@@ -755,7 +760,7 @@ int readEPNsubHeader(datafile_definition *datafile, float *scale, float *offset,
       txt[0] = 0;
     }
     if(datafile->freqMode == FREQMODE_UNKNOWN) {
-      datafile->uniform_freq_cent *= parse_unit_freq(txt, verbose);
+      freq *= parse_unit_freq(txt, verbose);
     }
     ret = fread(txt, 1, 12, datafile->fptr);
     txt[12] = 0;
@@ -764,7 +769,7 @@ int readEPNsubHeader(datafile_definition *datafile, float *scale, float *offset,
       return 0;
     }
     if(datafile->freqMode == FREQMODE_UNKNOWN) {
-      ret = sscanf(txt, "%lf", &(datafile->uniform_bw));
+      ret = sscanf(txt, "%lf", &bw);
       if(ret != 1) {
  printerror(verbose.debug, "ERROR readEPNsubHeader: This file is not an EPN file.");
  if(verbose.debug) {
@@ -784,8 +789,17 @@ int readEPNsubHeader(datafile_definition *datafile, float *scale, float *offset,
       txt[0] = 0;
     }
     if(datafile->freqMode == FREQMODE_UNKNOWN) {
-      datafile->uniform_bw *= parse_unit_freq(txt, verbose);
+      bw *= parse_unit_freq(txt, verbose);
       datafile->freqMode = FREQMODE_UNIFORM;
+      if(datafile->freqlabel_list != NULL) {
+       free(datafile->freqlabel_list);
+ datafile->freqlabel_list = NULL;
+      }
+      set_centre_frequency(datafile, freq, verbose);
+      if(set_bandwidth(datafile, bw, verbose) == 0) {
+ printerror(verbose.debug, "ERROR readEPNsubHeader: Bandwidth changing failed.");
+ return 0;
+      }
     }
     ret = fread(txt, 1, 17, datafile->fptr);
     txt[17] = 0;

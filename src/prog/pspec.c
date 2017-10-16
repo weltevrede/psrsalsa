@@ -37,8 +37,7 @@ int main(int argc, char **argv)
   FILE *fout_ascii;
   psrsalsaApplication application;
   datafile_definition fin[MaxNrPolarizations], clone, fout;
-  pgplot_viewport_def viewport;
-  pgplot_box_def pgplotbox;
+  pgplot_options_definition pgplot_options;
   verbose_definition noverbose;
   initApplication(&application, "pspec", "[options] inputfile");
   application.switch_verbose = 1;
@@ -61,7 +60,6 @@ int main(int argc, char **argv)
   application.switch_circshift= 1;
   application.switch_shuffle = 1;
   application.switch_libversions = 1;
-  cleanPSRData(&fout, application.verbose_state);
   fft_size = 512;
   powertwo = 0;
   lrfs_flag = 0;
@@ -87,8 +85,7 @@ int main(int argc, char **argv)
   twodfs_flag = 0;
   p2range_set = 0;
   selectMoreOnpulseRegions = 0;
-  pgplot_clear_viewport_def(&viewport);
-  clear_pgplot_box(&pgplotbox);
+  pgplot_clear_options(&pgplot_options);
   sprintf(lrfsdevice, "?");
   sprintf(onpulseselectdevice, "?");
   sprintf(profiledevice, "?");
@@ -114,12 +111,13 @@ int main(int argc, char **argv)
   application.oformat = FITS_format;
   if(argv[argc-1][0] == '-' && strcmp(argv[argc-1], "-formatlist") != 0 && strcmp(argv[argc-1], "-headerlist") != 0) {
     printerror(application.verbose_state.debug, "pspec: Last command line option is expected to be a file name.\nRun pspec without command line arguments to show help");
+    terminateApplication(&application);
     return 0;
   }
 
   if(argc < 2) {
     printf("Program to analyse (folded) single pulse data using mostly Fourier techniques.\nIt is assumed the data contains a single pulse in each subint and that the\nbaseline is subtracted (use pmod -debase).\n\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("General options:\n");
     printf("  -nfft               Set size of fft's [default=%d].\n", fft_size);
     printf("  -powertwo           When manually selecting onpulse regions, they are forced\n");
@@ -208,6 +206,7 @@ int main(int argc, char **argv)
     printf("More information about the sliding 2dfs can be found in:\n");
     printf(" - Serylak et al. 2009, A&A, 506, 865\n\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }else if(argc > 2 || strcmp(argv[argc-1], "-formatlist") == 0 || strcmp(argv[argc-1], "-headerlist") == 0) {
     int lastindex;
@@ -219,16 +218,14 @@ int main(int argc, char **argv)
       if(processCommandLine(&application, argc, argv, &index)) {
  i = index;
       }else if(strcmp(argv[i], "-nfft") == 0 || strcmp(argv[i], "-fft_size") == 0 || strcmp(argv[i], "-fftsize") == 0 || strcmp(argv[i], "-fft_length") == 0 || strcmp(argv[i], "-fftlength") == 0) {
- j = sscanf(argv[i+1], "%d", &fft_size);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse '%s' option.", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &fft_size, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-bootstrap") == 0) {
- j = sscanf(argv[i+1], "%d", &bootstrap);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Cannot parse '%s' option.", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &bootstrap, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
@@ -292,31 +289,27 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-onpulsegr") == 0) {
  selectMoreOnpulseRegions = 1;
       }else if(strcmp(argv[i], "-p3fold") == 0) {
- j = sscanf(argv[i+1], "%f %d", &p3_fold, &p3_fold_nbin);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "Error parsing -p3_fold option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %d", &p3_fold, &p3_fold_nbin, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  p3_fold_flag = 1;
  i++;
       }else if(strcmp(argv[i], "-p3fold_nritt") == 0) {
- j = sscanf(argv[i+1], "%d", &p3_fold_refine);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Error parsing -p3fold_nritt option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &p3_fold_refine, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-p3fold_cpb") == 0) {
- j = sscanf(argv[i+1], "%d", &p3_fold_cpb);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Error parsing -p3fold_cpb option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &p3_fold_cpb, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-p3fold_smooth") == 0) {
- j = sscanf(argv[i+1], "%f", &p3_fold_smoothWidth);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Error parsing -p3fold_smooth option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &p3_fold_smoothWidth, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -325,49 +318,44 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-p3fold_noonpulse") == 0) {
  p3_fold_onpulse_flag = 0;
       }else if(strcmp(argv[i], "-track_dphase") == 0) {
- j = sscanf(argv[i+1], "%f", &track_dphase);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Error parsing -track_dphase option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &track_dphase, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-p3fold_dphase") == 0) {
- j = sscanf(argv[i+1], "%f", &p3fold_dphase);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Error parsing %s option", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &p3fold_dphase, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-slope") == 0) {
- j = sscanf(argv[i+1], "%f", &slope);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Error parsing -slope option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &slope, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-freq") == 0) {
- j = sscanf(argv[i+1], "%f %f", &freq_min, &freq_max);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "Error parsing -freq option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &freq_min, &freq_max, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-mod_sigma") == 0) {
- j = sscanf(argv[i+1], "%f", &mod_sigma);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Error parsing -mod_sigma option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &mod_sigma, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-stddev_sigma") == 0) {
- j = sscanf(argv[i+1], "%f", &stddev_sigma);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "Error parsing -stddev_sigma option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &stddev_sigma, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else {
         printerror(application.verbose_state.debug, "Unknown option: %s", argv[i]);
+ terminateApplication(&application);
  return 0;
       }
     }
@@ -382,8 +370,15 @@ int main(int argc, char **argv)
 
 
 
+
   for(i = 0; i < MaxNrPolarizations; i++)
     cleanPSRData(&fin[i], application.verbose_state);
+
+
+
+
+
+
   if(application.iformat <= 0)
     application.iformat = guessPSRData_format(argv[argc-1], 0, application.verbose_state);
   if(application.iformat < 1) {
@@ -391,8 +386,13 @@ int main(int argc, char **argv)
     return 0;
   }
 
+
+  closePSRData(&fin[0], 0, application.verbose_state);
+
+
   if(!openPSRData(&fin[0], argv[argc-1], application.iformat, 0, 1, 0, application.verbose_state))
     return 0;
+
 
 
   if(PSRDataHeader_parse_commandline(&fin[0], argc, argv, application.verbose_state) == 0)
@@ -405,6 +405,7 @@ int main(int argc, char **argv)
   if(preprocessApplication(&application, &fin[0]) == 0) {
     return 0;
   }
+
   double period;
   int ret;
   ret = get_period(fin[0], 0, &period, application.verbose_state);
@@ -440,6 +441,7 @@ int main(int argc, char **argv)
 
 
   originalNrPols = fin[0].NrPols;
+
   if(fin[0].NrPols > 0) {
     for(i = fin[0].NrPols-1; i >= 0; i--) {
       if(preprocess_polselect(fin[0], &clone, i, application.verbose_state) == 0) {
@@ -451,6 +453,8 @@ int main(int argc, char **argv)
   }
 
 
+
+  cleanPSRData(&fout, application.verbose_state);
   copy_params_PSRData(fin[0], &fout, application.verbose_state);
   profileI = (float *)malloc(fin[0].NrBins*sizeof(float));
   if(profileI == NULL) {
@@ -459,7 +463,9 @@ int main(int argc, char **argv)
   }
   fft_blocks = fin[0].NrSubints/fft_size;
   junk_int = fft_blocks*fft_size;
-  if(application.verbose_state.verbose) printf("Only using %ld of the %ld pulses for the spectra being generated (%ld blocks with fft size %d).\n", junk_int, fin[0].NrSubints, fft_blocks, fft_size);
+  if(application.verbose_state.verbose && (lrfs_flag || stddev_flag || mod_flag || track_flag || amplitude_flag || modSimple_flag || profile_flag || twodfs_flag || s2dfs_p3_flag || s2dfs_p2_flag
+))
+    printf("Only using %ld of the %ld pulses for the spectra being generated (%ld blocks with fft size %d).\n", junk_int, fin[0].NrSubints, fft_blocks, fft_size);
   if(junk_int == 0) {
     printerror(application.verbose_state.debug, "ERROR pspec: Not enough pulses, try a shorter fft length.");
     return 0;
@@ -473,23 +479,19 @@ int main(int argc, char **argv)
   }
   xmax = 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period;
   if(application.onpulse.nrRegions == 0 || selectMoreOnpulseRegions) {
-    pgplot_clear_viewport_def(&viewport);
-    strcpy(viewport.plotDevice, onpulseselectdevice);
-    pgplot_box_def pgplotbox;
-    clear_pgplot_box(&pgplotbox);
-    strcpy(pgplotbox.xlabel, "Bin");
-    strcpy(pgplotbox.ylabel, "Intensity");
-    strcpy(pgplotbox.title, "Select on-pulse region");
-    selectRegions(profileI, fin[0].NrBins, viewport, pgplotbox, 0, powertwo, 1, &application.onpulse, application.verbose_state);
+    strcpy(pgplot_options.viewport.plotDevice, onpulseselectdevice);
+    strcpy(pgplot_options.box.xlabel, "Bin");
+    strcpy(pgplot_options.box.ylabel, "Intensity");
+    strcpy(pgplot_options.box.title, "Select on-pulse region");
+    selectRegions(profileI, fin[0].NrBins, &pgplot_options, 0, powertwo, 1, &application.onpulse, application.verbose_state);
   }else {
     if(strcmp(profiledevice, "?") == 0)
       printf("Specify plotting device to show the profile showing the selected regions: \n  ");
-    pgplot_clear_viewport_def(&viewport);
-    strcpy(viewport.plotDevice, profiledevice);
-    strcpy(pgplotbox.xlabel, "Phase[deg]");
-    strcpy(pgplotbox.ylabel, "Intensity");
-    strcpy(pgplotbox.title, fin[0].psrname);
-    if(pgplotGraph1(viewport, profileI, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin, xmax, 0, 0, 0, pgplotbox, 1, 0, 0, 1, 1, &application.onpulse, application.verbose_state) == 0) {
+    strcpy(pgplot_options.viewport.plotDevice, profiledevice);
+    strcpy(pgplot_options.box.xlabel, "Phase[deg]");
+    strcpy(pgplot_options.box.ylabel, "Intensity");
+    strcpy(pgplot_options.box.title, fin[0].psrname);
+    if(pgplotGraph1(&pgplot_options, profileI, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin, xmax, 0, 0, 0, 1, 0, 0, 1, 1, &application.onpulse, application.verbose_state) == 0) {
       printerror(application.verbose_state.debug, "ERROR pspec: Unable to open plotdevice.\n");
       return 0;
     }
@@ -598,7 +600,6 @@ int main(int argc, char **argv)
    printf("\r  bootstrap step %ld/%d         ", i+1, bootstrap);
    fflush(stdout);
  }
- cleanPSRData(&clone, application.verbose_state);
  if(preprocess_addNoise(fin[0], &clone, rms, noverbose) != 1) {
    printerror(application.verbose_state.debug, "ERROR pspec: Adding noise failed");
    return 0;
@@ -622,7 +623,7 @@ int main(int argc, char **argv)
    stddev_square[j] += stddev[j]*stddev[j];
  }
  clone.opened_flag = 1;
- closePSRData(&clone, application.verbose_state);
+ closePSRData(&clone, 0, application.verbose_state);
       }
       printf("Bootstrap finished\n");
     }
@@ -695,17 +696,16 @@ int main(int argc, char **argv)
     if(lrfs_flag) {
       if(strcmp(lrfsdevice, "?") == 0)
  printf("Specify plotting device to show the LRFS: \n  ");
-      pgplot_clear_viewport_def(&viewport);
-      strcpy(viewport.plotDevice, lrfsdevice);
-      strcpy(pgplotbox.xlabel, "Pulse phase [degrees]");
-      strcpy(pgplotbox.ylabel, "P3 [cpp]");
-      strcpy(pgplotbox.title, "LRFS");
+      strcpy(pgplot_options.viewport.plotDevice, lrfsdevice);
+      strcpy(pgplot_options.box.xlabel, "Pulse phase [degrees]");
+      strcpy(pgplot_options.box.ylabel, "P3 [cpp]");
+      strcpy(pgplot_options.box.title, "LRFS");
       ret = get_period(fin[0], 0, &period, application.verbose_state);
       if(ret == 2) {
  printerror(application.verbose_state.debug, "ERROR pspec (%s): Cannot obtain period", fin[0].filename);
  return 0;
       }
-      pgplotMap(viewport, lrfs, fin[0].NrBins, 1+fft_size/2, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, xmin_zoom, xmax_zoom, 0, 0.5, 0, 0.5, pgplotbox, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, application.verbose_state);
+      pgplotMap(&pgplot_options, lrfs, fin[0].NrBins, 1+fft_size/2, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, xmin_zoom, xmax_zoom, 0, 0.5, 0, 0.5, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, application.verbose_state);
       if(write_flag) {
  fout.NrSubints = 1+fft_size/2;
  fout.NrBins = fin[0].NrBins;
@@ -715,6 +715,9 @@ int main(int argc, char **argv)
  fout.yrange[0] = 0;
  fout.yrange[1] = 0.5;
  fout.tsubMode = TSUBMODE_FIXEDTSUB;
+ if(fout.tsub_list != NULL) {
+   free(fout.tsub_list);
+ }
  fout.tsub_list = (double *)malloc(sizeof(double));
  if(fout.tsub_list == NULL) {
    fflush(stdout);
@@ -746,7 +749,7 @@ int main(int argc, char **argv)
    return 0;
  }
  free(lrfs2);
- closePSRData(&fout, application.verbose_state);
+ closePSRData(&fout, 1, application.verbose_state);
  fout.gentype = GENTYPE_UNDEFINED;
  fout.yrangeset = 0;
  fout.xrangeset = 0;
@@ -824,15 +827,14 @@ int main(int argc, char **argv)
       }
       if(strcmp(trackdevice, "?") == 0)
  printf("Specify plotting device to show the subpulse phase track: \n  ");
-      pgplot_clear_viewport_def(&viewport);
-      strcpy(viewport.plotDevice, trackdevice);
-      strcpy(pgplotbox.xlabel, "Pulse phase [degrees]");
-      strcpy(pgplotbox.ylabel, "Subpulse phase");
-      strcpy(pgplotbox.title, "Subpulse phase track");
+      strcpy(pgplot_options.viewport.plotDevice, trackdevice);
+      strcpy(pgplot_options.box.xlabel, "Pulse phase [degrees]");
+      strcpy(pgplot_options.box.ylabel, "Subpulse phase");
+      strcpy(pgplot_options.box.title, "Subpulse phase track");
       if(bootstrap > 0) {
- pgplotGraph1(viewport, phase_track, NULL, &phase_track[fin[0].NrBins], fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, pgplotbox, 0, 0, 0, 1, 1, NULL, application.verbose_state);
+ pgplotGraph1(&pgplot_options, phase_track, NULL, &phase_track[fin[0].NrBins], fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 0, 1, 1, NULL, application.verbose_state);
       }else {
- pgplotGraph1(viewport, phase_track, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, pgplotbox, 0, 0, 0, 1, 1, NULL, application.verbose_state);
+ pgplotGraph1(&pgplot_options, phase_track, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 0, 1, 1, NULL, application.verbose_state);
       }
       if(write_flag) {
   if(change_filename_extension(argv[argc-1], outputname, "track", 1000, application.verbose_state) == 0)
@@ -851,12 +853,11 @@ int main(int argc, char **argv)
     if(amplitude_flag) {
       if(strcmp(amplitudedevice, "?") == 0)
  printf("Specify plotting device to show the subpulse amplitude profile: \n  ");
-      pgplot_clear_viewport_def(&viewport);
-      strcpy(viewport.plotDevice, amplitudedevice);
-      viewport.dontclose = 1;
-      strcpy(pgplotbox.xlabel, "Pulse phase [degrees]");
-      strcpy(pgplotbox.ylabel, "Subpulse amplitude");
-      strcpy(pgplotbox.title, "Subpulse amplitude profile");
+      strcpy(pgplot_options.viewport.plotDevice, amplitudedevice);
+      pgplot_options.viewport.dontclose = 1;
+      strcpy(pgplot_options.box.xlabel, "Pulse phase [degrees]");
+      strcpy(pgplot_options.box.ylabel, "Subpulse amplitude");
+      strcpy(pgplot_options.box.title, "Subpulse amplitude profile");
       if(!(profile_flag || stddev_flag || mod_flag || modSimple_flag)) {
  float imax;
  imax = 1;
@@ -868,7 +869,7 @@ int main(int argc, char **argv)
    profileI[i] /= imax;
  }
       }
-      pgplotGraph1(viewport, profileI, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, pgplotbox, 0, 0, 0, 1, 1, NULL, application.verbose_state);
+      pgplotGraph1(&pgplot_options, profileI, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 0, 1, 1, NULL, application.verbose_state);
       ppgsci(2);
       for(i = 0; i < fin[0].NrBins; i++) {
  float x;
@@ -898,7 +899,10 @@ int main(int argc, char **argv)
     free(lrfs);
     free(stddev);
     free(modindex);
+    free(rms_sigma);
+    free(rms_modindex);
     free(phase_track);
+    free(phase_track_phases);
     free(amplitude_profile);
   }
   if(twodfs_flag) {
@@ -918,9 +922,8 @@ int main(int argc, char **argv)
       }
       for(i = 1; i < argc-1; i++) {
  if(strcmp(argv[i], "-p3zap") == 0) {
-   j = sscanf(argv[i+1], "%f %f", &zapmin, &zapmax);
-   if(j != 2) {
-     printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse -p3zap option, specify two values.");
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &zapmin, &zapmax, NULL) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
      return 0;
    }
    for(j = 0; j < (1+fft_size/2); j++) {
@@ -937,9 +940,8 @@ int main(int argc, char **argv)
    }
  }
  if(strcmp(argv[i], "-p2zap") == 0) {
-   j = sscanf(argv[i+1], "%f %f", &zapmin, &zapmax);
-   if(j != 2) {
-     printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse -p2zap option, specify two values.");
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &zapmin, &zapmax, NULL) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
      return 0;
    }
    for(j = 0; j < (application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1); j++) {
@@ -958,20 +960,18 @@ int main(int argc, char **argv)
       }
       if(strcmp(twodfsdevice, "?") == 0)
  printf("Specify plotting device to show the 2DFS: \n  ");
-      pgplot_viewport_def viewport;
-      pgplot_box_def pgplotbox;
-      clear_pgplot_box(&pgplotbox);
-      pgplot_clear_viewport_def(&viewport);
-      strcpy(viewport.plotDevice, twodfsdevice);
-      strcpy(pgplotbox.xlabel, "P2 [cpp]");
-      strcpy(pgplotbox.ylabel, "P3 [cpp]");
-      strcpy(pgplotbox.title, "2DFS");
-      pgplotMap(viewport, twodfs, application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1, fft_size/2+1, -fin[0].NrBins/2.0 -0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1), fin[0].NrBins/2.0 -0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1), p2min, p2max, 0, 0.5, 0, 0.5, pgplotbox, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, application.verbose_state);
+      strcpy(pgplot_options.viewport.plotDevice, twodfsdevice);
+      strcpy(pgplot_options.box.xlabel, "P2 [cpp]");
+      strcpy(pgplot_options.box.ylabel, "P3 [cpp]");
+      strcpy(pgplot_options.box.title, "2DFS");
+      pgplotMap(&pgplot_options, twodfs, application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1, fft_size/2+1, -fin[0].NrBins/2.0 -0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1), fin[0].NrBins/2.0 -0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1), p2min, p2max, 0, 0.5, 0, 0.5, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, application.verbose_state);
       if(write_flag) {
  fout.NrSubints = fft_size/2+1;
  fout.NrBins = application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1;
  fout.gentype = GENTYPE_2DFS;
  fout.tsubMode = TSUBMODE_FIXEDTSUB;
+ if(fout.tsub_list != NULL)
+   free(fout.tsub_list);
  fout.tsub_list = (double *)malloc(sizeof(double));
  if(fout.tsub_list == NULL) {
    fflush(stdout);
@@ -999,7 +999,7 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR pspec: Unable to write data.\n");
    return 0;
  }
- closePSRData(&fout, application.verbose_state);
+ closePSRData(&fout, 1, application.verbose_state);
  fout.gentype = GENTYPE_UNDEFINED;
  fout.yrangeset = 0;
  fout.xrangeset = 0;
@@ -1036,9 +1036,8 @@ int main(int argc, char **argv)
       }
       for(l = 1; l < argc-1; l++) {
  if(strcmp(argv[l], "-p3zap") == 0) {
-   j = sscanf(argv[l+1], "%f %f", &zapmin, &zapmax);
-   if(j != 2) {
-     printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse -p3zap option.");
+   if(parse_command_string(application.verbose_state, argc, argv, l+1, 0, -1, "%f %f", &zapmin, &zapmax, NULL) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
      return 0;
    }
    for(j = 0; j < (1+fft_size/2); j++) {
@@ -1074,20 +1073,18 @@ int main(int argc, char **argv)
     if(s2dfs_p3_flag) {
       if(strcmp(s2dfs_p3_device, "?") == 0)
  printf("Specify plotting device to show the S2DFS P3 map: \n  ");
-      pgplot_viewport_def viewport;
-      pgplot_box_def pgplotbox;
-      clear_pgplot_box(&pgplotbox);
-      pgplot_clear_viewport_def(&viewport);
-      strcpy(viewport.plotDevice, s2dfs_p3_device);
-      strcpy(pgplotbox.xlabel, "Block number");
-      strcpy(pgplotbox.ylabel, "P3 [cpp]");
-      strcpy(pgplotbox.title, "S2DFS");
-      pgplotMap(viewport, s2dfs_p3, fin[0].NrSubints-fft_size+1, fft_size/2+1, 0, fin[0].NrSubints-fft_size+1, 0, fin[0].NrSubints-fft_size+1, 0, 0.5, 0, 0.5, pgplotbox, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, application.verbose_state);
+      strcpy(pgplot_options.viewport.plotDevice, s2dfs_p3_device);
+      strcpy(pgplot_options.box.xlabel, "Block number");
+      strcpy(pgplot_options.box.ylabel, "P3 [cpp]");
+      strcpy(pgplot_options.box.title, "S2DFS");
+      pgplotMap(&pgplot_options, s2dfs_p3, fin[0].NrSubints-fft_size+1, fft_size/2+1, 0, fin[0].NrSubints-fft_size+1, 0, fin[0].NrSubints-fft_size+1, 0, 0.5, 0, 0.5, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, application.verbose_state);
       if(write_flag) {
  fout.NrSubints = fft_size/2+1;
  fout.NrBins = fin[0].NrSubints-fft_size+1;
  fout.gentype = GENTYPE_S2DFSP3;
  fout.tsubMode = TSUBMODE_FIXEDTSUB;
+ if(fout.tsub_list != NULL)
+   free(fout.tsub_list);
  fout.tsub_list = (double *)malloc(sizeof(double));
  if(fout.tsub_list == NULL) {
    fflush(stdout);
@@ -1111,30 +1108,28 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR pspec: Unable to write data.\n");
    return 0;
  }
- closePSRData(&fout, application.verbose_state);
+ closePSRData(&fout, 1, application.verbose_state);
       }
     }
     if(s2dfs_p2_flag) {
       if(strcmp(s2dfs_p2_device, "?") == 0)
  printf("Specify plotting device to show the S2DFS P2 map: \n  ");
-      pgplot_viewport_def viewport;
-      pgplot_box_def pgplotbox;
-      clear_pgplot_box(&pgplotbox);
-      pgplot_clear_viewport_def(&viewport);
-      strcpy(viewport.plotDevice, s2dfs_p2_device);
-      strcpy(pgplotbox.xlabel, "Block number");
-      strcpy(pgplotbox.ylabel, "P2 [cpp]");
-      strcpy(pgplotbox.title, "S2DFS");
+      strcpy(pgplot_options.viewport.plotDevice, s2dfs_p2_device);
+      strcpy(pgplot_options.box.xlabel, "Block number");
+      strcpy(pgplot_options.box.ylabel, "P2 [cpp]");
+      strcpy(pgplot_options.box.title, "S2DFS");
       if(p2range_set == 0) {
  p2min = -fin[0].NrBins/2-0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[0]-application.onpulse.left_bin[0]+1);
  p2max = +fin[0].NrBins/2-0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[0]-application.onpulse.left_bin[0]+1);
       }
-      pgplotMap(viewport, s2dfs_p2, fin[0].NrSubints-fft_size+1, (application.onpulse.right_bin[0]-application.onpulse.left_bin[0]+1), 0, fin[0].NrSubints-fft_size+1, 0, fin[0].NrSubints-fft_size+1, -fin[0].NrBins/2.0 -0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[0]-application.onpulse.left_bin[0]+1), fin[0].NrBins/2.0 -0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[0]-application.onpulse.left_bin[0]+1), p2min, p2max, pgplotbox, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, application.verbose_state);
+      pgplotMap(&pgplot_options, s2dfs_p2, fin[0].NrSubints-fft_size+1, (application.onpulse.right_bin[0]-application.onpulse.left_bin[0]+1), 0, fin[0].NrSubints-fft_size+1, 0, fin[0].NrSubints-fft_size+1, -fin[0].NrBins/2.0 -0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[0]-application.onpulse.left_bin[0]+1), fin[0].NrBins/2.0 -0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[0]-application.onpulse.left_bin[0]+1), p2min, p2max, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, application.verbose_state);
       if(write_flag) {
  fout.NrSubints = (application.onpulse.right_bin[0]-application.onpulse.left_bin[0]+1);
  fout.NrBins = fin[0].NrSubints-fft_size+1;
  fout.gentype = GENTYPE_S2DFSP2;
  fout.tsubMode = TSUBMODE_FIXEDTSUB;
+ if(fout.tsub_list != NULL)
+   free(fout.tsub_list);
  fout.tsub_list = (double *)malloc(sizeof(double));
  if(fout.tsub_list == NULL) {
    fflush(stdout);
@@ -1158,7 +1153,7 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR pspec: Unable to write data.\n");
    return 0;
  }
- closePSRData(&fout, application.verbose_state);
+ closePSRData(&fout, 1, application.verbose_state);
       }
     }
     free(twodfs);
@@ -1191,26 +1186,24 @@ int main(int argc, char **argv)
     }
     if(strcmp(p3fold_device, "?") == 0)
       printf("Specify plotting device to show the P3 fold map: \n  ");
-      pgplot_viewport_def viewport;
-      pgplot_box_def pgplotbox;
-      clear_pgplot_box(&pgplotbox);
-      pgplot_clear_viewport_def(&viewport);
-      strcpy(viewport.plotDevice, p3fold_device);
-      strcpy(pgplotbox.xlabel, "Pulse phase [degrees]");
-      strcpy(pgplotbox.ylabel, "P3 [pulse periods]");
-      strcpy(pgplotbox.title, "P3 fold");
+      strcpy(pgplot_options.viewport.plotDevice, p3fold_device);
+      strcpy(pgplot_options.box.xlabel, "Pulse phase [degrees]");
+      strcpy(pgplot_options.box.ylabel, "P3 [pulse periods]");
+      strcpy(pgplot_options.box.title, "P3 fold");
       ret = get_period(fin[0], 0, &period, application.verbose_state);
       if(ret == 2) {
  printerror(application.verbose_state.debug, "ERROR pspec (%s): Cannot obtain period", fin[0].filename);
  return 0;
       }
-      pgplotMap(viewport, p3foldmap, fin[0].NrBins, p3_fold_nbin, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, xmin_zoom, xmax_zoom, 0.5*p3_fold/(float)p3_fold_nbin, 0.5*p3_fold/(float)p3_fold_nbin + p3_fold*(p3_fold_nbin-1)/(float)p3_fold_nbin, 0, p3_fold, pgplotbox, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, application.verbose_state);
+      pgplotMap(&pgplot_options, p3foldmap, fin[0].NrBins, p3_fold_nbin, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, xmin_zoom, xmax_zoom, 0.5*p3_fold/(float)p3_fold_nbin, 0.5*p3_fold/(float)p3_fold_nbin + p3_fold*(p3_fold_nbin-1)/(float)p3_fold_nbin, 0, p3_fold, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, application.verbose_state);
     if(write_flag) {
       fout.NrSubints = p3_fold_nbin;
       fout.NrBins = fin[0].NrBins;
       fout.NrPols = originalNrPolsP3;
       fout.gentype = GENTYPE_P3FOLD;
       fout.tsubMode = TSUBMODE_FIXEDTSUB;
+      if(fout.tsub_list != NULL)
+ free(fout.tsub_list);
       fout.tsub_list = (double *)malloc(sizeof(double));
       if(fout.tsub_list == NULL) {
  fflush(stdout);
@@ -1247,7 +1240,7 @@ int main(int argc, char **argv)
  return 0;
       }
       free(p3foldmap2);
-      closePSRData(&fout, application.verbose_state);
+      closePSRData(&fout, 1, application.verbose_state);
       fout.gentype = GENTYPE_UNDEFINED;
       fout.yrangeset = 0;
       fout.xrangeset = 0;
@@ -1255,9 +1248,19 @@ int main(int argc, char **argv)
     }
     free(p3foldmap);
   }
-  closePSRData(&fin[0], application.verbose_state);
+  closePSRData(&fout, 0, application.verbose_state);
+  for(i = 0; i < MaxNrPolarizations; i++)
+    closePSRData(&fin[i], 0, application.verbose_state);
   free(profileI);
   ppgend();
+  if(bootstrap > 0) {
+    free(stddev_av);
+    free(modindex_av);
+    free(stddev_square);
+    free(modindex_square);
+    free(clone_profileI);
+  }
+  terminateApplication(&application);
   return 0;
 }
 int pgplotProfile(char *plotDevice, int windowwidth, int windowheight, float *profile, float *stddev, float *rms_stddev, float *modindex, float *rms_modindex, int nrx, float xmin, float xmax, char *xlabel, char *ylabel, char *title, int stddev_flag, int mod_flag, int zoom_flag, float xmin_zoom, float xmax_zoom, verbose_definition verbose)

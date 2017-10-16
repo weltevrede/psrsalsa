@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     printf("distribution convolved with a normal distribution:\n");
     printf("  fakeDist -N 100 -lognorm \"1.0 0.2\" -norm \"0 0.5\" -N2 1000 -pwrlaw \"-2 0.5\" -norm \"0 0.5\"\n");
     printf("\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("Distribution functions:\n\n");
     printf("-flat      \"min max\", specify a flat/uniform distribution between min and max.\n");
     printf("-gamma     \"k theta\", specify gamma function\n");
@@ -89,6 +89,7 @@ int main(int argc, char **argv)
     printf("More information about fitting distributions (in the context of pulse energies) can be found in:\n");
     printf(" - Weltevrede et al. 2006, A&A, 458, 269\n\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }else {
     for(i = 1; i < argc; i++) {
@@ -98,7 +99,7 @@ int main(int argc, char **argv)
  i = index;
       }else if(strcasecmp(argv[i], "-Rayleigh") == 0) {
  float dummy_float;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%f", &dummy_float, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &dummy_float, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -110,7 +111,7 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-gamma") == 0 || strcmp(argv[i], "-flat") == 0 || strcmp(argv[i], "-norm") == 0 || strcmp(argv[i], "-lognorm") == 0 || strcmp(argv[i], "-pwrlaw") == 0
         ) {
  float dummy_float;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%f %f", &dummy_float, &dummy_float, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &dummy_float, &dummy_float, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -121,7 +122,7 @@ int main(int argc, char **argv)
         i++;
       }else if(strcmp(argv[i], "-sin") == 0) {
  float dummy_float;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%f %f %f %f", &dummy_float, &dummy_float, &dummy_float, &dummy_float, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f %f %f", &dummy_float, &dummy_float, &dummy_float, &dummy_float, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -131,19 +132,19 @@ int main(int argc, char **argv)
    nrfunctions2++;
         i++;
       }else if(strcmp(argv[i], "-sigma") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &noisesigma, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &noisesigma, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-N") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &NumberPoints, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &NumberPoints, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-N2") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &NumberPoints2, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &NumberPoints2, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -154,7 +155,7 @@ int main(int argc, char **argv)
  i++;
       }else if(strcmp(argv[i], "-null") == 0) {
  AddNulls = 1;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &average_value, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &average_value, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -163,13 +164,13 @@ int main(int argc, char **argv)
  noisefile_id = i+1;
         i++;
       }else if(strcmp(argv[i], "-loop") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &nrloops, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &nrloops, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-seed") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &idnum, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &idnum, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -179,6 +180,7 @@ int main(int argc, char **argv)
  quiet = 1;
       }else {
  printerror(application.verbose_state.debug, "fakeDist: Unknown option: %s\n\nRun fakeDist without command line arguments to show help", argv[i]);
+ terminateApplication(&application);
  return 0;
       }
     }
@@ -234,6 +236,7 @@ int main(int argc, char **argv)
       if(application.verbose_state.verbose) {
  fprintf(stderr, "file %s opened for output.\n", tmpstr);
       }
+      free(tmpstr);
     }
     total = 0;
     for(distr_number = 0; distr_number < 2; distr_number++) {
@@ -385,5 +388,10 @@ int main(int argc, char **argv)
     if(outputfile)
       fclose(fout);
   }
+  gsl_rng_free(rand_num_gen);
+  if(noisefile_id != 0) {
+    free(data_noise);
+  }
+  terminateApplication(&application);
   return 0;
 }

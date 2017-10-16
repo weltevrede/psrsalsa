@@ -60,6 +60,35 @@ double derotate_180_double(double a)
 }
 
 
+float derotate_90(float a)
+{
+  int i;
+  i = fabs(a)/90.0;
+  if(a > 0)
+    a -= 90*i;
+  else
+    a += 90*i;
+  if(a < 0)
+    a += 90;
+  return a;
+}
+
+
+
+double derotate_90_double(double a)
+{
+  int i;
+  i = fabs(a)/90.0;
+  if(a > 0)
+    a -= 90*i;
+  else
+    a += 90*i;
+  if(a < 0)
+    a += 90;
+  return a;
+}
+
+
 
 
 double derotate_180_small_double(double a)

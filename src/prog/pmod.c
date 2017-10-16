@@ -43,15 +43,14 @@ int main(int argc, char **argv)
   long nrOutputBlocks, nrZapped, baseline_length, blockSize, firstPulseToKeep, lastPulseToKeep, nrPulses;
   long dataout2_pulse, pulse_nr_in_output, idnum;
   float *profileI, debase_offset_value, *baseline, *runningBaseline, *runningRMS, *rms, noiseRMS;
-  char *filename_ptr, zaplistname[MaxOutputNameLength], fzaplistname[MaxOutputNameLength];
-  char output_suffix[MaxOutputNameLength], output_suffix2[MaxOutputNameLength], output_name[MaxOutputNameLength], output_name2[MaxOutputNameLength];
+  char *filename_ptr, zaplistname[MaxFilenameLength], fzaplistname[MaxFilenameLength];
+  char output_suffix[MaxFilenameLength], output_suffix2[MaxFilenameLength], output_name[MaxFilenameLength], output_name2[MaxFilenameLength];
   char txt[1000];
-  pgplot_viewport_def viewport;
-  pgplot_box_def pgplotbox;
   datafile_definition datain, dataout, dataout2;
   psrsalsaApplication application;
   gsl_rng *rand_num_gen;
   const gsl_rng_type *rand_num_gen_type;
+  pgplot_options_definition pgplot_options;
   initApplication(&application, "pmod", "[options] inputfile(s)");
   application.switch_headerlist = 1;
   application.switch_header = 1;
@@ -120,11 +119,12 @@ int main(int argc, char **argv)
   removeOnPulse_flag = 0;
   strcpy(output_suffix, "debase.gg");
   strcpy(output_suffix2, "zapped.gg");
-  pgplot_clear_viewport_def(&viewport);
-  clear_pgplot_box(&pgplotbox);
+  filename = 0;
+  pgplot_clear_options(&pgplot_options);
+
   if(argc < 2) {
     printf("Program to modify pulsar data in various ways. Usage:\n\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("Action options:\n\n");
     printf("-debase              Subtract baseline from observation\n");
     printf("-debase_length       Specify number of pulses before and after the pulse to\n");
@@ -166,6 +166,7 @@ int main(int argc, char **argv)
     printf("-memsave          Don't read the file in as a whole at the start of the program\n");
     printf("\n");
     printCitationInfo();
+   terminateApplication(&application);
     return 0;
   }else {
     for(i = 1; i < argc; i++) {
@@ -180,9 +181,8 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-list") == 0) {
  outputlist = 1;
       }else if(strcmp(argv[i], "-debase_value") == 0) {
- j = sscanf(argv[i+1], "%f", &debase_offset_value);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "pmod: Error parsing option '%s'", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &debase_offset_value, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  debase_offset_flag = 1;
@@ -191,9 +191,8 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-onpulse_subst_noise") == 0) {
  removeOnPulse_flag = 1;
       }else if(strcmp(argv[i], "-debase_length") == 0) {
- j = sscanf(argv[i+1], "%ld", &baseline_length);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "pmod: Error parsing option '%s'", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &baseline_length, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
 
@@ -247,16 +246,14 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-blocksize") == 0) {
  blockMode = 1;
  remove_pulses_flag = 1;
- j = sscanf(argv[i+1], "%ld", &blockSize);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "pmod: Error parsing option '%s'", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &blockSize, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-format") == 0) {
- j = sscanf(argv[i+1], "%d %d %d", &zapColumn, &nrZapCols, &zapSkipLines);
- if(j != 3) {
-   printerror(application.verbose_state.debug, "pmod: Error parsing option '%s'", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d %d %d", &zapColumn, &nrZapCols, &zapSkipLines, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
@@ -284,9 +281,8 @@ int main(int argc, char **argv)
  i++;
       }else if(strcmp(argv[i], "-addnoise") == 0) {
  addnoise_flag = 1;
- j = sscanf(argv[i+1], "%f", &noiseRMS);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "pmod: Error parsing option '%s'", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &noiseRMS, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
@@ -303,6 +299,7 @@ int main(int argc, char **argv)
 
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "pmod: Unknown option: %s\n\nRun pmod without command line arguments to show help", argv[i]);
+   terminateApplication(&application);
    return 0;
  }else {
    if(applicationAddFilename(i, application.verbose_state) == 0)
@@ -321,13 +318,13 @@ int main(int argc, char **argv)
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-  if(numberInApplicationFilenameList(application, argv, application.verbose_state) == 0) {
+  if(numberInApplicationFilenameList(&application, argv, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR pmod: No files specified");
     return 0;
   }
 
-  strcpy(viewport.plotDevice, application.pgplotdevice);
-  viewport.dontclose = 1;
+  strcpy(pgplot_options.viewport.plotDevice, application.pgplotdevice);
+  pgplot_options.viewport.dontclose = 1;
 
   gsl_rng_env_setup();
   rand_num_gen_type = gsl_rng_default;
@@ -342,19 +339,19 @@ int main(int argc, char **argv)
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
     deviceOpened = 0;
     if(filename == 0) {
-      if(change_filename_extension(filename_ptr, output_name, output_suffix, MaxOutputNameLength, application.verbose_state) == 0) {
+      if(change_filename_extension(filename_ptr, output_name, output_suffix, MaxFilenameLength, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "ERROR pmod: Cannot change extension in output name.");
  return 0;
       }
     }else {
       strcpy(output_name, argv[filename]);
     }
-    if(change_filename_extension(filename_ptr, output_name2, output_suffix2, MaxOutputNameLength, application.verbose_state) == 0) {
+    if(change_filename_extension(filename_ptr, output_name2, output_suffix2, MaxFilenameLength, application.verbose_state) == 0) {
       printerror(application.verbose_state.debug, "ERROR pmod: Cannot change extension in output name.");
       return 0;
     }
 
-    cleanPSRData(&datain, application.verbose_state);
+
     cleanPSRData(&dataout, application.verbose_state);
     cleanPSRData(&dataout2, application.verbose_state);
 
@@ -362,6 +359,10 @@ int main(int argc, char **argv)
       application.iformat = guessPSRData_format(filename_ptr, 0, application.verbose_state);
     if(isValidPSRDATA_format(application.iformat) == 0) {
       printerror(application.verbose_state.debug, "ERROR pmod: Please specify a valid input format with the -iformat option.");
+      closePSRData(&dataout, 0, application.verbose_state);
+      closePSRData(&dataout2, 0, application.verbose_state);
+      gsl_rng_free(rand_num_gen);
+      terminateApplication(&application);
       return 0;
     }
     i = openPSRData(&datain, filename_ptr, application.iformat, 0, read_whole_file, 0, application.verbose_state);
@@ -415,9 +416,8 @@ int main(int argc, char **argv)
     if(argc > 2) {
       for(i = 1; i < argc-1; i++) {
  if(strcmp(argv[i], "-zap") == 0) {
-   j = sscanf(argv[i+1], "%ld %ld", &k, &l);
-   if(j != 2) {
-     printerror(application.verbose_state.debug, "pmod: Error parsing option '%s'", argv[i]);
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld %ld", &k, &l, NULL) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
      return 0;
    }
    for(j = k; j <= l; j++) {
@@ -429,9 +429,8 @@ int main(int argc, char **argv)
       }
       for(i = 1; i < argc-1; i++) {
  if(strcmp(argv[i], "-fzap") == 0) {
-   j = sscanf(argv[i+1], "%ld %ld", &k, &l);
-   if(j != 2) {
-     printerror(application.verbose_state.debug, "pmod: Error parsing option '%s'", argv[i]);
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld %ld", &k, &l, NULL) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
      return 0;
    }
    for(j = k; j <= l; j++) {
@@ -475,9 +474,8 @@ int main(int argc, char **argv)
     if(prange_set) {
       for(i = 1; i < argc-1; i++) {
  if(strcmp(argv[i], "-prange") == 0) {
-   j = sscanf(argv[i+1], "%ld %ld", &firstPulseToKeep, &lastPulseToKeep);
-   if(j != 2) {
-     printerror(application.verbose_state.debug, "ERROR pmod: Error parsing option '%s'", argv[i]);
+   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld %ld", &firstPulseToKeep, &lastPulseToKeep, NULL) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
      return 0;
    }
    if(lastPulseToKeep >= datain.NrSubints) {
@@ -529,22 +527,20 @@ int main(int argc, char **argv)
       if((debase_flag && debase_offset_flag == 0) || removeOnPulse_flag
   ) {
  if(selectMoreOnpulseRegions || application.onpulse.nrRegions == 0) {
-   viewport.dontopen = deviceOpened;
-   pgplot_box_def pgplotbox;
-   clear_pgplot_box(&pgplotbox);
-   strcpy(pgplotbox.xlabel, "Bin");
-   strcpy(pgplotbox.ylabel, "Intensity");
-   strcpy(pgplotbox.title, "Select onpulse region(s) (which will be ignored from baseline calculation) ");
-   strcat(pgplotbox.title, datain.psrname);
-   selectRegions(profileI, nrBins, viewport, pgplotbox, 0, 0, 0, &(application.onpulse), application.verbose_state);
+   pgplot_options.viewport.dontopen = deviceOpened;
+   strcpy(pgplot_options.box.xlabel, "Bin");
+   strcpy(pgplot_options.box.ylabel, "Intensity");
+   strcpy(pgplot_options.box.title, "Select onpulse region(s) (which will be ignored from baseline calculation) ");
+   strcat(pgplot_options.box.title, datain.psrname);
+   selectRegions(profileI, nrBins, &pgplot_options, 0, 0, 0, &(application.onpulse), application.verbose_state);
    deviceOpened = 1;
  }else {
    if(application.verbose_state.debug) {
-     viewport.dontopen = deviceOpened;
-     strcpy(pgplotbox.xlabel, "Bin");
-     strcpy(pgplotbox.ylabel, "I");
-     strcpy(pgplotbox.title, "Profile");
-     pgplotGraph1(viewport, profileI, NULL, NULL, nrBins, 0, nrBins, 0, 0, nrBins, 0, 0, 0, pgplotbox, 1, 0, 0, 1, 1, &(application.onpulse), application.verbose_state);
+     pgplot_options.viewport.dontopen = deviceOpened;
+     strcpy(pgplot_options.box.xlabel, "Bin");
+     strcpy(pgplot_options.box.ylabel, "I");
+     strcpy(pgplot_options.box.title, "Profile");
+     pgplotGraph1(&pgplot_options, profileI, NULL, NULL, nrBins, 0, nrBins, 0, 0, nrBins, 0, 0, 0, 1, 0, 0, 1, 1, &(application.onpulse), application.verbose_state);
      deviceOpened = 1;
      printf("Press return to continue\n");
      scanf("%c", txt);
@@ -772,7 +768,10 @@ int main(int argc, char **argv)
      if(zapoption
         ) {
        if(zapMask[i] != 0) {
-  writePulsePSRData(&dataout2, dataout2_pulse, k, l, 0, nrBins, profileI, application.verbose_state);
+  if(writePulsePSRData(&dataout2, dataout2_pulse, k, l, 0, nrBins, profileI, application.verbose_state) != 1) {
+    printerror(application.verbose_state.debug, "pmod: Writing data failed.");
+    return 0;
+  }
   dataout2_pulse += 1;
        }
      }
@@ -795,7 +794,10 @@ int main(int argc, char **argv)
   if(remove_pulses_flag == 0) {
     pulse_nr_in_output = i;
   }
-    writePulsePSRData(&dataout, pulse_nr_in_output, k, l, 0, nrBins, profileI, application.verbose_state);
+    if(writePulsePSRData(&dataout, pulse_nr_in_output, k, l, 0, nrBins, profileI, application.verbose_state) != 1) {
+      printerror(application.verbose_state.debug, "pmod: Writing data failed.");
+      return 0;
+    }
   pulse_nr_in_output++;
        }
      }
@@ -814,17 +816,24 @@ int main(int argc, char **argv)
  if(k == 0 && (debase_flag && debase_offset_flag==0) && nrPulses-2*baseline_length > 1) {
    strcpy(txt, "Baseline ");
    strcat(txt, datain.psrname);
-   viewport.dontopen = deviceOpened;
-   strcpy(pgplotbox.xlabel, "Pulse number");
-   strcpy(pgplotbox.ylabel, "Baseline");
-   strcpy(pgplotbox.title, txt);
-   pgplotGraph1(viewport, baseline+baseline_length, NULL, NULL, nrPulses-2*baseline_length, baseline_length, nrPulses-baseline_length, 0, baseline_length, nrPulses-baseline_length, 0, 0, 0, pgplotbox, 0, 0, 0, 1, 1, NULL, application.verbose_state);
+   pgplot_options.viewport.dontopen = deviceOpened;
+   strcpy(pgplot_options.box.xlabel, "Pulse number");
+   strcpy(pgplot_options.box.ylabel, "Baseline");
+   strcpy(pgplot_options.box.title, txt);
+   pgplotGraph1(&pgplot_options, baseline+baseline_length, NULL, NULL, nrPulses-2*baseline_length, baseline_length, nrPulses-baseline_length, 0, baseline_length, nrPulses-baseline_length, 0, 0, 0, 0, 0, 0, 1, 1, NULL, application.verbose_state);
    deviceOpened = 1;
  }
       }
-    closePSRData(&datain, application.verbose_state);
-    closePSRData(&dataout, application.verbose_state);
-    closePSRData(&dataout2, application.verbose_state);
+    free(profileI);
+    free(baseline);
+    free(rms);
+    free(runningBaseline);
+    free(runningRMS);
+    free(zapMask);
+    free(fzapMask);
+    closePSRData(&datain, 0, application.verbose_state);
+    closePSRData(&dataout, 0, application.verbose_state);
+    closePSRData(&dataout2, 0, application.verbose_state);
     if(deviceOpened) {
       ppgclos();
       ppgend();
@@ -832,6 +841,8 @@ int main(int argc, char **argv)
     printf("Writing of %s done\n", output_name);
   }
 
+  gsl_rng_free(rand_num_gen);
+  terminateApplication(&application);
   return 0;
 }
 

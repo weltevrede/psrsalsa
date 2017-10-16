@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 
   if(argc < 2) {
     printf("Program to add data files together. Usage:\n\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("Optional options:\n");
     printf("-w                      Output name. Default is \"%s\"\n", output_fname);
     printf("-I                      Only process the first polarization channel\n");
@@ -99,6 +99,7 @@ int main(int argc, char **argv)
     printf("                        but every input file will be opened twice.\n");
     printf("\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }else {
     for(i = 1; i < argc; i++) {
@@ -122,13 +123,13 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-n") == 0) {
  circularShift = 1;
  noinput = 1;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%d", &shift, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &shift, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR padd: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-nsub") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &sumNsub, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &sumNsub, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR padd: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -142,6 +143,7 @@ int main(int argc, char **argv)
 
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "ERROR padd: Unknown option %s. Run padd without command-line options to get help.", argv[i]);
+   terminateApplication(&application);
    return 0;
  }else {
    if(applicationAddFilename(i, application.verbose_state) == 0)
@@ -154,7 +156,7 @@ int main(int argc, char **argv)
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-  nrinputfiles = numberInApplicationFilenameList(application, argv, application.verbose_state);
+  nrinputfiles = numberInApplicationFilenameList(&application, argv, application.verbose_state);
   if(nrinputfiles < 2) {
     printerror(application.verbose_state.debug, "ERROR padd: Need at least two input files");
     return 0;
@@ -187,7 +189,7 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR padd: Memory allocation error");
       return 0;
     }
-    cleanPSRData(fin[i], application.verbose_state);
+
   }
 
 
@@ -248,7 +250,7 @@ int main(int argc, char **argv)
 
 
     if(memsave) {
-      if(closePSRData(fin[currentfilenumber], application.verbose_state) != 0) {
+      if(closePSRData(fin[currentfilenumber], 1, application.verbose_state) != 0) {
  printerror(application.verbose_state.debug, "ERROR padd: Closing file %s failed\n", inputname);
  return 0;
       }
@@ -314,6 +316,8 @@ int main(int argc, char **argv)
   if(subintslost > 0)
     printf(" (consider using -c option)");
   fout.tsubMode = TSUBMODE_TSUBLIST;
+  if(fout.tsub_list != NULL)
+    free(fout.tsub_list);
   fout.tsub_list = (double *)malloc(fout.NrSubints*sizeof(double));
   if(fout.tsub_list == NULL) {
     printerror(application.verbose_state.debug, "ERROR padd: Memory allocation error");
@@ -405,13 +409,14 @@ int main(int argc, char **argv)
   currentOutputSubint = 0;
   curNrInsubint = 0;
   subintWritten = 0;
-  rewindFilenameList(application);
+  rewindFilenameList(&application);
   while((inputname = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
 
 
 
 
     if(memsave) {
+      closePSRData(fin[currentfilenumber], 0, application.verbose_state);
       if(openPSRData(fin[currentfilenumber], inputname, application.iformat, 0, 1, 0, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "ERROR padd: Cannot open %s\n", inputname);
  return 0;
@@ -558,11 +563,11 @@ int main(int argc, char **argv)
       printf("Processing file %d is done.                                \n", currentfilenumber+1);
     }
 
-    closePSRData(fin[currentfilenumber], application.verbose_state);
+    closePSRData(fin[currentfilenumber], 0, application.verbose_state);
     currentfilenumber++;
   }
 
-  closePSRData(&fout, application.verbose_state);
+  closePSRData(&fout, 0, application.verbose_state);
   if(noinput == 0)
     ppgend();
 
@@ -574,6 +579,11 @@ int main(int argc, char **argv)
   if(sumNsub > 1)
     free(subint);
 
+  for(i = 0; i < nrinputfiles; i++) {
+    free(fin[i]);
+  }
+  free(fin);
+  terminateApplication(&application);
   return 0;
 }
 

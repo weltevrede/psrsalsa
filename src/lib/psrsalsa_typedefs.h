@@ -17,12 +17,12 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 typedef struct {
   int nrRegions;
 
-  int bins_defined[maxNrRegions];
-  int left_bin[maxNrRegions], right_bin[maxNrRegions];
+  int *bins_defined;
+  int *left_bin, *right_bin;
 
-  int frac_defined[maxNrRegions];
-  float left_frac[maxNrRegions], right_frac[maxNrRegions];
-}regions_definition;
+  int *frac_defined;
+  float *left_frac, *right_frac;
+}pulselongitude_regions_definition;
 
 typedef struct {
   int verbose;
@@ -32,11 +32,13 @@ typedef struct {
 }verbose_definition;
 
 
+
 typedef struct {
 
   double centre[maxNrVonMisesComponents], concentration[maxNrVonMisesComponents], height[maxNrVonMisesComponents];
   int nrcomponents;
-}vonMises_def;
+}vonMises_collection_definition;
+
 
 
 typedef struct {
@@ -50,7 +52,7 @@ typedef struct {
   int noclear;
   int dontopen;
   int dontclose;
-}pgplot_viewport_def;
+}pgplot_viewport_definition;
 
 typedef struct {
   int svp;
@@ -61,9 +63,10 @@ typedef struct {
   float TR[6];
 }pgplot_frame_def_internal;
 
+
 typedef struct {
   int drawbox;
-  int box_lw;
+  int box_lw, box_f;
   float box_labelsize;
   float box_xtick, box_ytick;
   int box_nxsub, box_nysub;
@@ -72,16 +75,22 @@ typedef struct {
   int drawtitle;
   float title_ch;
   int title_lw, title_f;
-  char title[1000];
+  char title[MaxStringLength];
 
   int drawlabels;
   float label_ch;
+  int label_lw, label_f;
   float dxlabel, dylabel;
-  char xlabel[1000];
-  char ylabel[1000];
-  char wedgelabel[1000];
-}pgplot_box_def;
+  char xlabel[MaxStringLength];
+  char ylabel[MaxStringLength];
+  char wedgelabel[MaxStringLength];
+}pgplot_box_definition;
 
+
+typedef struct {
+  pgplot_viewport_definition viewport;
+  pgplot_box_definition box;
+}pgplot_options_definition;
 
 
 typedef struct {
@@ -148,9 +157,11 @@ typedef struct
   double ra, dec;
 
 
+  double bandwidth, centrefreq;
 
   char freqMode;
-  double uniform_freq_cent, uniform_bw;
+
+  double *freqlabel_list;
 
 
 
@@ -179,7 +190,7 @@ typedef struct
   long long datastart;
 }datafile_definition;
 typedef struct {
-  char progname[100], *genusage;
+  char progname[MaxFilenameLength], *genusage;
   int switch_verbose, switch_debug, switch_nocounters;
   verbose_definition verbose_state;
   int switch_formatlist;
@@ -197,7 +208,7 @@ typedef struct {
   int switch_circshift, docircshift;
   int switch_rot, switch_rotdeg, doshiftphase; float shiftPhase_cmdline, shiftPhase;
   int switch_filelist, filelist;
-  int switch_device; char pgplotdevice[MaxOutputNameLength];
+  int switch_device; char pgplotdevice[MaxPgplotDeviceLength];
   int switch_tscr; long dotscr;
   int switch_tscr_complete; int tscr_complete;
   int switch_TSCR, doTSCR;
@@ -228,10 +239,10 @@ typedef struct {
   int switch_template, template_specified;
   int switch_align, doalign;
   int switch_blocksize, blocksize;
-  regions_definition onpulse;
-  vonMises_def vonMises_components;
+  pulselongitude_regions_definition onpulse;
+  vonMises_collection_definition vonMises_components;
   int switch_ext; char *extension;
-  int switch_output; char outputname[MaxOutputNameLength];
+  int switch_output; char outputname[MaxFilenameLength];
   int switch_shuffle, doshuffle;
   int switch_rotateStokes; int nr_rotateStokes, rotateStokes1[maxNrRotateStokes], rotateStokes2[maxNrRotateStokes]; float rotateStokesAngle[maxNrRotateStokes];
   int switch_libversions;

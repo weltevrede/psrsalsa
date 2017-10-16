@@ -124,7 +124,7 @@ int main(int argc, char **argv)
   int ignorelastpulses, scalerange;
   float xmax_oscil, xmin_oscil, scalerange_min, scalerange_max;
   psrsalsaApplication application;
-  datafile_definition fin, clone;
+  datafile_definition fin;
 
   initApplication(&application, "pplot", "[options] inputfile(s)");
   application.switch_verbose = 1;
@@ -247,7 +247,7 @@ int main(int argc, char **argv)
 
   if(argc < 2) {
     printf("Program to plot pulsar data in various ways.\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("Other options:\n");
     printf("-interactive    Turn interactive mode on.\n");
     printf("-ia             short for -interactive.\n");
@@ -268,7 +268,8 @@ int main(int argc, char **argv)
     printf("              bin nr. If plotting versus pulse longitude/time/phase, you can\n");
     printf("              use the -dl option.\n");
     printf("-lw           set line width of line plot (not used in map mode).\n");
-    printf("-lp           Show graphics as a line plot (default if single row in data).\n");
+    printf("-lp           Show graphics as a \"joy division\" line plot rather than a colour\n");
+    printf("              map (-map). For a single row of data -lp is the default.\n");
     printf("-map          Show graphics as a colour map (default if multiple rows in data).\n");
     printf("              The bin centre is plotted at an integer bin nr. If plotting versus\n");
     printf("              pulse longitude/time/phase, you can use the -dl option.\n");
@@ -320,6 +321,7 @@ int main(int argc, char **argv)
     printf("\".\n");
     printf("\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }else {
     for(i = 1; i < argc; i++) {
@@ -330,9 +332,8 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-nokeypress") == 0) {
  nokeypresses_flag = 1;
       }else if(strcmp(argv[i], "-prange") == 0) {
- j = sscanf(argv[i+1], "%ld %ld", &subint_start, &subint_end);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "pplot: Error parsing -prange option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld %ld", &subint_start, &subint_end, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  subint_range_defined = 1;
@@ -340,26 +341,26 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-appendframes") == 0) {
  appendframes_flag = 1;
       }else if(strcmp(argv[i], "-lw") == 0) {
- j = sscanf(argv[i+1], "%d", &plotlw);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "pplot: Error parsing -lw option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &plotlw, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-N") == 0) {
- j = sscanf(argv[i+1], "%d %d", &nrpanelsx, &nrpanelsy);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "pplot: Error parsing %s option", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d %d", &nrpanelsx, &nrpanelsy, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-dl") == 0) {
- dxshift_start = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &dxshift_start, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  i++;
       }else if(strcmp(argv[i], "-vecRange") == 0) {
- j = sscanf(argv[i+1], "%f %f", &vectorMin, &vectorMax);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "pplot: Error parsing -vecRange option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &vectorMin, &vectorMax, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  vectorMinMaxSpecified = 1;
@@ -370,19 +371,18 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-MHz") == 0) {
  yUnitsMHz = 1;
       }else if(strcmp(argv[i], "-b") == 0) {
- j = sscanf(argv[i+1], "%d %d", &bin1_start, &bin2_start);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "pplot: Error parsing -b option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d %d", &bin1_start, &bin2_start, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-textkeywords") == 0) {
  str_list_replace_keys(0);
+ terminateApplication(&application);
  return 0;
       }else if(strcmp(argv[i], "-yunit") == 0) {
- j = sscanf(argv[i+1], "%f", &yUnitCmdLine);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "pplot: Error parsing %s option", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &yUnitCmdLine, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -407,27 +407,31 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-showtwice") == 0) {
  showTwice_flag = 1;
       }else if(strcmp(argv[i], "-labels") == 0) {
- j = sscanf(argv[i+1], "%f %d %d %f %d %d %f %d %d %f %d %d %f %d %d", &heading_font.characterheight, &heading_font.linewidth, &heading_font.font, &title_font.characterheight, &title_font.linewidth, &title_font.font, &label_font.characterheight, &label_font.linewidth, &label_font.font, &box_font.characterheight, &box_font.linewidth, &box_font.font, &copy_font.characterheight, &copy_font.linewidth, &copy_font.font);
- if(j != 12
-    ) {
-   printerror(application.verbose_state.debug, "pplot: Error parsing option %s", argv[i]);
+
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %d %d %f %d %d %f %d %d %f %d %d", &heading_font.characterheight, &heading_font.linewidth, &heading_font.font, &title_font.characterheight, &title_font.linewidth, &title_font.font, &label_font.characterheight, &label_font.linewidth, &label_font.font, &box_font.characterheight, &box_font.linewidth, &box_font.font, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-scale") == 0) {
- scale_start = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &scale_start, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  i++;
       }else if(strcmp(argv[i], "-scale2") == 0) {
- scale2_start = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &scale2_start, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  i++;
       }else if(strcmp(argv[i], "-scalerange") == 0) {
- j = sscanf(argv[i+1], "%f %f", &scalerange_min, &scalerange_max);
- i++;
- if(j != 2) {
-   printerror(application.verbose_state.debug, "pplot: Error parsing option %s", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &scalerange_min, &scalerange_max, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  scalerange = 1;
+ i++;
       }else if(strcmp(argv[i], "-title") == 0) {
  strcpy(title, argv[i+1]);
  notitleset = 0;
@@ -436,25 +440,36 @@ int main(int argc, char **argv)
  heading_string_index = i+1;
  i++;
       }else if(strcmp(argv[i], "-x") == 0) {
- viewport_endx = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &viewport_endx, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  viewportOptionsSet = 1;
  i++;
       }else if(strcmp(argv[i], "-dx") == 0) {
- viewport_startx = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &viewport_startx, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  viewportOptionsSet = 1;
  i++;
       }else if(strcmp(argv[i], "-ys") == 0) {
- viewport_starty = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &viewport_starty, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  viewportOptionsSet = 1;
  i++;
       }else if(strcmp(argv[i], "-y") == 0) {
- viewport_endy = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &viewport_endy, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  viewportOptionsSet = 1;
  i++;
       }else if(strcmp(argv[i], "-long") == 0 || strcmp(argv[i], "-time") == 0 || strcmp(argv[i], "-phase") == 0) {
- j = sscanf(argv[i+1], "%f %f", &longitude_start, &longitude_end);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "pplot: Error parsing %s option", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &longitude_start, &longitude_end, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  xUnitsSwitch = XUNIT_DEG;
@@ -476,7 +491,6 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-hist") == 0) {
  histswitch = 1;
  grayscalemode_start = 0;
-
       }else if(strcmp(argv[i], "-noboxx") == 0) {
  noboxx = 1;
       }else if(strcmp(argv[i], "-noboxy") == 0) {
@@ -496,9 +510,9 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-nopoly") == 0) {
  polymode_flag = 0;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "pplot: Unknown option: %s\n\nRun pplot without command line arguments to show help", argv[i]);
+   terminateApplication(&application);
    return 0;
  }else {
    if(applicationAddFilename(i, application.verbose_state) == 0)
@@ -507,30 +521,24 @@ int main(int argc, char **argv)
       }
     }
   }
-
   if(histswitch && grayscalemode_start) {
     printerror(application.verbose_state.debug, "ERROR pplot: Cannot use the -hist and -map options simultaneously.");
     return 0;
   }
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-
-  if(numberInApplicationFilenameList(application, argv, application.verbose_state) == 0) {
+  if(numberInApplicationFilenameList(&application, argv, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR pplot: No files specified");
     return 0;
   }
-
-  if(numberInApplicationFilenameList(application, argv, application.verbose_state) > 1 && interactive_flag) {
+  if(numberInApplicationFilenameList(&application, argv, application.verbose_state) > 1 && interactive_flag) {
     printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot multiple files in interactive mode.");
     return 0;
   }
-
   if(application.macro_ptr != NULL) {
     interactive_flag = 1;
   }
-
   if(viewportOptionsSet == 0) {
     if(nrpanelsx > 1 || nrpanelsy > 1) {
       viewport_endx = 0.95;
@@ -539,23 +547,17 @@ int main(int argc, char **argv)
       viewport_endy = 0.95;
     }
   }
-
   ppgopen(application.pgplotdevice);
   pgplot_setWindowsize(application.windowwidth, application.windowheight, -1);
-
   ppgask(0);
   ppgslw(1);
-
-
   zappedVectors = malloc(max_nr_zap*sizeof(int));
   zappedSubints = malloc(max_nr_zap*sizeof(int));
-
   stack_state = malloc(max_nr_stack*sizeof(plot_state_def));
   if(zappedVectors == NULL || zappedSubints == NULL || stack_state == NULL) {
     printerror(application.verbose_state.debug, "ERROR pplot: Memory allocation error.");
     return 0;
   }
-
   int curpanelnrx, curpanelnry;
   curpanelnrx = 0;
   curpanelnry = 0;
@@ -567,8 +569,6 @@ int main(int argc, char **argv)
   stack_poly_allocated = 0;
   int maxy_allocated;
   maxy_allocated = 0;
-
-
   while((inputfilename = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
     int data_read;
     data_read = 0;
@@ -587,20 +587,16 @@ int main(int argc, char **argv)
     int nx_last_clicked_zap, ny_last_clicked_zap;
     nx_last_clicked_zap = 0;
     ny_last_clicked_zap = 0;
-
     float *dataSubset;
     float *xstack_poly, *ystack_poly;
     float dummyf1, dummyf2, dummyf3, dummyf4;
     int dummyi;
     char txt1[1000], txt2[1000], txt3[1000];
-
     maxy = NULL;
     dataSubset = NULL;
     xstack_poly = ystack_poly = NULL;
     dxshift = dxshift_start;
     zapmode = 0;
-
-
     if(subint_range_defined == 0) {
       subint_start = -1;
     }
@@ -614,39 +610,29 @@ int main(int argc, char **argv)
       }
     }
     goingToPlotFirstPanel = 0;
-
-
     current_stack_pos = 0;
-
     printf("Plotting: %s\n", inputfilename);
-
-
-
     stack_state[0].nrZappedVectors = 0;
     stack_state[0].nrZappedSubints = 0;
-
-
     cleanPSRData(&fin, application.verbose_state);
-
     bin1 = bin1_start;
     bin2 = bin2_start;
     scale = scale_start;
     scale2 = scale2_start;
     stack_state[0].grayscalemode = grayscalemode_start;
-
-
+    stack_state[1].grayscalemode = grayscalemode_start;
     if(notitleset) {
       strcpy(title, inputfilename);
     }
-
     int firstPulsedataSubset;
-    int ytitle_set_to_intensity, ytitle_set_to_pulsenumber, ytitle_set_to_subint, ytitle_set_to_freqchannel, ytitle_set_to_fluctuationFreq, ytitle_set_to_padist, ytitle_set_to_pulselongitude, ytitle_set_to_p3fold, ytitle_set_to_spectral_power, ytitle_set_to_harmonic_number, ytitle_set_to_lag_number;
+    int ytitle_set_to_intensity, ytitle_set_to_pulsenumber, ytitle_set_to_subint, ytitle_set_to_freqchannel, ytitle_set_to_fluctuationFreq, ytitle_set_to_padist, ytitle_set_to_elldist, ytitle_set_to_pulselongitude, ytitle_set_to_p3fold, ytitle_set_to_spectral_power, ytitle_set_to_harmonic_number, ytitle_set_to_lag_number;
     ytitle_set_to_intensity = 0;
     ytitle_set_to_pulsenumber = 0;
     ytitle_set_to_subint = 0;
     ytitle_set_to_freqchannel = 0;
     ytitle_set_to_fluctuationFreq = 0;
     ytitle_set_to_padist = 0;
+    ytitle_set_to_elldist = 0;
     ytitle_set_to_pulselongitude = 0;
     ytitle_set_to_p3fold = 0;
     ytitle_set_to_spectral_power = 0;
@@ -661,10 +647,7 @@ int main(int argc, char **argv)
       int redraw;
       char *newtext, ch;
       x = x2 = y = y2 = ch = 0;
-
-
       currentPanelScaling = 1;
-
       viewport_startxCurrentPanel = viewport_startx;
       if(nrpanelsx > 1) {
  if(appendframes_flag == 0)
@@ -672,75 +655,62 @@ int main(int argc, char **argv)
  else
    currentPanelScalingx = 1.0/nrpanelsx;
  currentPanelScaling = currentPanelScalingx;
-
-
  if(appendframes_flag == 0 || curpanelnrx == 0)
    viewport_startxCurrentPanel += curpanelnrx*currentPanelScalingx*(viewport_startx);
-
  viewport_startxCurrentPanel += curpanelnrx*currentPanelScalingx*(viewport_endx-viewport_startx);
-
  if(appendframes_flag == 0)
    viewport_startxCurrentPanel += curpanelnrx*currentPanelScalingx*(1-viewport_endx);
       }
-
       viewport_endxCurrentPanel = viewport_endx;
       if(nrpanelsx > 1) {
-
  viewport_endxCurrentPanel = viewport_startxCurrentPanel;
-
  viewport_endxCurrentPanel += currentPanelScalingx*(viewport_endx-viewport_startx);
       }
-
-
-
-
       viewport_startyCurrentPanel = viewport_starty;
       if(nrpanelsy > 1) {
  currentPanelScalingy = (viewport_endy-viewport_starty)/(viewport_endy-viewport_starty + nrpanelsy -1);
  if(currentPanelScalingy < currentPanelScaling)
    currentPanelScaling = currentPanelScalingy;
-
-
  viewport_startyCurrentPanel += (nrpanelsy-curpanelnry-1)*currentPanelScalingy*(viewport_starty);
-
  viewport_startyCurrentPanel += (nrpanelsy-curpanelnry-1)*currentPanelScalingy*(viewport_endy-viewport_starty);
-
  viewport_startyCurrentPanel += (nrpanelsy-curpanelnry-1)*currentPanelScalingy*(1-viewport_endy);
       }
-
       viewport_endyCurrentPanel = viewport_endy;
       if(nrpanelsy > 1) {
-
  viewport_endyCurrentPanel = viewport_startyCurrentPanel;
-
  viewport_endyCurrentPanel += currentPanelScalingy*(viewport_endy-viewport_starty);
       }
-
-
-
       if(curpanelnrx == 0 && curpanelnry == 0)
  ppgpage();
-
       if(data_read == 0 || data_read == 2) {
  int iformat;
  iformat = application.iformat;
  if(access(inputfilename, F_OK) != 0) {
    fflush(stdout);
    printerror(application.verbose_state.debug, "ERROR pplot: Cannot open file %s for reading.", inputfilename);
+   free(zappedVectors);
+   free(zappedSubints);
+   free(stack_state);
+   closePSRData(&fin, 0, application.verbose_state);
+   terminateApplication(&application);
    return 0;
  }
  if(iformat <= 0)
    iformat = guessPSRData_format(inputfilename, 0, application.verbose_state);
  if(isValidPSRDATA_format(iformat) == 0) {
    printerror(application.verbose_state.debug, "ERROR pplot: Please specify a valid input format with the -iformat option.\n");
+   free(zappedVectors);
+   free(zappedSubints);
+   free(stack_state);
+   closePSRData(&fin, 0, application.verbose_state);
+   terminateApplication(&application);
    return 0;
  }
+ closePSRData(&fin, 0, application.verbose_state);
  if(!openPSRData(&fin, inputfilename, iformat, 0, 1, 0, application.verbose_state)) {
    printerror(application.verbose_state.debug, "ERROR pplot: Error opening file.\n");
    return 0;
  }
-
-
  if(PSRDataHeader_parse_commandline(&fin, argc, argv, application.verbose_state) == 0)
    return 0;
  for(i = 1; i < argc; i++) {
@@ -752,18 +722,16 @@ int main(int argc, char **argv)
  if(preprocessApplication(&application, &fin) == 0) {
    return 0;
  }
-
  if(fin.gentype == GENTYPE_PENERGY) {
    if(application.verbose_state.verbose) {
      printwarning(application.verbose_state.debug, "The file appears to be penergy output. The \"polarization channels\" correspond to peak intensity (on & off-pulse), integrated energy (on & off-pulse), rms (on & off-pulse) and the S/N of the on-pulse region. The \"subintegrations\" correspond to the different polarizations in the original file.\n");
    }
  }
- if(fin.poltype == POLTYPE_ILVPAdPA && fin.NrSubints == 1 && fin.NrFreqChan == 1) {
+ if((fin.poltype == POLTYPE_ILVPAdPA || fin.poltype == POLTYPE_ILVPAdPATEldEl) && fin.NrSubints == 1 && fin.NrFreqChan == 1) {
    if(application.verbose_state.verbose) {
      printwarning(application.verbose_state.debug, "The file appears to be ppol output. Plotting this data with ppol allows the profile and PA-swing to be shown in a single figure.\n");
    }
  }
-
  if(fin.isFolded && fin.foldMode == FOLDMODE_FIXEDPERIOD) {
    if(fin.fixedPeriod <= 0.0) {
      printwarning(application.verbose_state.debug, "WARNING pplot: Period does not appear to be set, assuming it is 1 sec.");
@@ -789,10 +757,6 @@ int main(int argc, char **argv)
      fin.fixedtsamp = period/(double)fin.NrBins;
    }
  }
-
-
-
-
  region_frac_to_int(&(application.onpulse), fin.NrBins, 0);
  if(data_read == 0) {
    if(setBaselineParams(fin, &baseline, &dxshift, &xUnitsSwitch, application.verbose_state) == 0)
@@ -805,14 +769,9 @@ int main(int argc, char **argv)
      longitude_end = baseline + dxshift;
    }
  }
-
  nrpolarizations = fin.NrPols;
-
-
-
-
-
  if(fin.NrPols > 1) {
+   datafile_definition clone;
    if(current_polnr >= fin.NrPols)
      current_polnr = 0;
    if(preprocess_polselect(fin, &clone, current_polnr, application.verbose_state) == 0) {
@@ -821,28 +780,26 @@ int main(int argc, char **argv)
    }
    swap_orig_clone(&fin, &clone, application.verbose_state);
  }
-
  didtranspose_orig_nrbin = 0;
-
  ytitle_set_to_intensity = 0;
  ytitle_set_to_pulsenumber = 0;
  ytitle_set_to_subint = 0;
  ytitle_set_to_freqchannel = 0;
  ytitle_set_to_fluctuationFreq = 0;
  ytitle_set_to_padist = 0;
+ ytitle_set_to_elldist = 0;
  ytitle_set_to_pulselongitude = 0;
  ytitle_set_to_p3fold = 0;
  ytitle_set_to_spectral_power = 0;
  ytitle_set_to_harmonic_number = 0;
  ytitle_set_to_lag_number = 0;
-
  if(fin.NrFreqChan > 1) {
+   datafile_definition clone;
    didtranspose_orig_nrbin = fin.NrBins;
    if(preprocess_transposeRawFBdata(fin, &clone, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR pplot: Error transposing data.");
      return 0;
    }
-
    if(longitudeRangeSet_flag == 0) {
      longitude_start = 0;
      longitude_end = clone.NrSubints;
@@ -851,7 +808,6 @@ int main(int argc, char **argv)
      else
        xUnitsSwitch = XUNIT_BINS;
    }
-
    clone.NrSubints = fin.NrFreqChan;
    clone.NrBins = fin.NrSubints * fin.NrBins;
    clone.NrFreqChan = 1;
@@ -883,8 +839,10 @@ int main(int argc, char **argv)
        ytitle_set_to_lag_number = 1;
      }else if((fin.gentype == GENTYPE_LRCC) && (vectorMinMaxSpecified == 0 && fin.yrangeset == 1)) {
        ytitle_set_to_pulselongitude = 1;
-     }else if((fin.gentype == GENTYPE_PADIST) && (vectorMinMaxSpecified == 0 && fin.yrangeset == 1)) {
+     }else if(fin.gentype == GENTYPE_PADIST&& (vectorMinMaxSpecified == 0 && fin.yrangeset == 1)) {
        ytitle_set_to_padist = 1;
+     }else if(fin.gentype == GENTYPE_ELLDIST&& (vectorMinMaxSpecified == 0 && fin.yrangeset == 1)) {
+       ytitle_set_to_elldist = 1;
      }else if((fin.gentype == GENTYPE_RMMAP) && (vectorMinMaxSpecified == 0 && fin.yrangeset == 1)) {
        strcpy(ytitle, "RM (rad/m\\u2\\d)");
      }else if((fin.gentype == GENTYPE_PULSESTACK || fin.gentype == GENTYPE_PROFILE) && fin.NrSubints == 1) {
@@ -1105,37 +1063,37 @@ int main(int argc, char **argv)
    if(showright)
      dummyi += 2;
  }
- pgplot_viewport_def viewport;
- pgplot_box_def pgplotbox;
- pgplot_clear_viewport_def(&viewport);
- clear_pgplot_box(&pgplotbox);
- viewport.windowwidth = application.windowwidth;
- viewport.windowheight = application.windowheight;
- viewport.dxplot = viewport_startxCurrentPanel-0.15;
- viewport.xsize = (viewport_endxCurrentPanel-viewport_startxCurrentPanel)/(0.9-0.15);
- viewport.dyplot = viewport_startyCurrentPanel-0.15;
- viewport.ysize = (viewport_endyCurrentPanel-viewport_startyCurrentPanel)/(0.9-0.15);
- viewport.noclear = 1;
- strcpy(viewport.plotDevice, application.pgplotdevice);
- viewport.dontopen = 1;
- viewport.dontclose = 1;
+ pgplot_options_definition pgplot_options;
+ pgplot_clear_options(&pgplot_options);
+ pgplot_options.viewport.windowwidth = application.windowwidth;
+ pgplot_options.viewport.windowheight = application.windowheight;
+ pgplot_options.viewport.dxplot = viewport_startxCurrentPanel-0.15;
+ pgplot_options.viewport.xsize = (viewport_endxCurrentPanel-viewport_startxCurrentPanel)/(0.9-0.15);
+ pgplot_options.viewport.dyplot = viewport_startyCurrentPanel-0.15;
+ pgplot_options.viewport.ysize = (viewport_endyCurrentPanel-viewport_startyCurrentPanel)/(0.9-0.15);
+ pgplot_options.viewport.noclear = 1;
+ strcpy(pgplot_options.viewport.plotDevice, application.pgplotdevice);
+ pgplot_options.viewport.dontopen = 1;
+ pgplot_options.viewport.dontclose = 1;
  newtext = str_replace_header_params(fin, title, application.verbose_state);
  if(newtext == NULL) {
    fflush(stdout);
    printwarning(application.verbose_state.debug, "WARNING pplot: Cannot substitute keyword in title");
-   pgplotbox.title[0] = 0;
+   pgplot_options.box.title[0] = 0;
  }else {
-   strcpy(pgplotbox.title, newtext);
+   strcpy(pgplot_options.box.title, newtext);
    free(newtext);
  }
- pgplotbox.title_ch = title_font.characterheight*currentPanelScaling;
- pgplotbox.title_lw = title_font.linewidth;
- pgplotbox.title_f = title_font.font;
- pgplotbox.label_ch = label_font.characterheight*currentPanelScaling;
- pgplotbox.box_labelsize = box_font.characterheight*currentPanelScaling;
- pgplotbox.box_lw = box_font.linewidth;
+ pgplot_options.box.title_ch = title_font.characterheight*currentPanelScaling;
+ pgplot_options.box.title_lw = title_font.linewidth;
+ pgplot_options.box.title_f = title_font.font;
+ pgplot_options.box.label_f = title_font.font;
+ pgplot_options.box.label_ch = label_font.characterheight*currentPanelScaling;
+ pgplot_options.box.box_labelsize = box_font.characterheight*currentPanelScaling;
+ pgplot_options.box.box_lw = box_font.linewidth;
+ pgplot_options.box.label_lw = box_font.linewidth;
  if(wedgelabel_set)
-   strcpy(pgplotbox.wedgelabel, wedgelabel);
+   strcpy(pgplot_options.box.wedgelabel, wedgelabel);
  int levelset = 1;
  if(didtranspose_orig_nrbin)
    levelset = 0;
@@ -1144,7 +1102,7 @@ int main(int argc, char **argv)
    min = scalerange_min;
    max = scalerange_max;
  }
- if(pgplotMap(viewport, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, pgplotbox, application.cmap, application.itf, 0, 0, NULL, 1, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
+ if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 0, 0, NULL, 1, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
    printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot data.");
    return 0;
  }
@@ -1352,7 +1310,6 @@ int main(int argc, char **argv)
       ppgsci(1);
       ppgsch(box_font.characterheight);
       ppgslw(box_font.linewidth);
-      ppgscf(box_font.font);
       sprintf(txt1, "bc");
       sprintf(txt2, "bc");
       if(noboxx) {
@@ -1363,17 +1320,20 @@ int main(int argc, char **argv)
  sprintf(txt1, "b");
  txt2[0] = 0;
       }
-      pgplot_box_def pgplotbox;
-      clear_pgplot_box(&pgplotbox);
-      pgplotbox.drawbox = 0;
-      pgplotbox.drawtitle = 0;
-      pgplotbox.drawlabels = 0;
-      pgplotbox.title_ch = title_font.characterheight*currentPanelScaling;
-      pgplotbox.title_lw = title_font.linewidth;
-      pgplotbox.title_f = title_font.font;
-      pgplotbox.label_ch = label_font.characterheight*currentPanelScaling;
-      pgplotbox.box_labelsize = box_font.characterheight*currentPanelScaling;
-      pgplotbox.box_lw = box_font.linewidth;
+      pgplot_options_definition pgplot_options;
+      pgplot_clear_options(&pgplot_options);
+      pgplot_options.box.drawbox = 0;
+      pgplot_options.box.drawtitle = 0;
+      pgplot_options.box.drawlabels = 0;
+      pgplot_options.box.title_ch = title_font.characterheight*currentPanelScaling;
+      pgplot_options.box.title_lw = title_font.linewidth;
+      pgplot_options.box.title_f = title_font.font;
+      pgplot_options.box.label_f = title_font.font;
+      pgplot_options.box.label_ch = label_font.characterheight*currentPanelScaling;
+      pgplot_options.box.box_labelsize = box_font.characterheight*currentPanelScaling;
+      pgplot_options.box.box_lw = box_font.linewidth;
+      pgplot_options.box.box_f = box_font.font;
+      pgplot_options.box.label_lw = box_font.linewidth;
       if(noboxx == 0 || noboxy == 0) {
  if(curpanelnrx == 0 || appendframes_flag == 0) {
    if(disable_x_numbers && disable_y_numbers ) {
@@ -1398,7 +1358,7 @@ int main(int argc, char **argv)
      strcat(txt2, "t");
    }
  }
- pgplotbox.drawbox = 1;
+ pgplot_options.box.drawbox = 1;
  if((fin.yrangeset && yUnitsSwitch)
     || (vectorMinMaxSpecified && yUnitsSwitch)
     || (((fin.gentype == GENTYPE_SUBINTEGRATIONS || fin.gentype == GENTYPE_PULSESTACK) && fin.NrFreqChan == 1 && fin.NrSubints > 1) && yUnitsSwitch)
@@ -1409,8 +1369,8 @@ int main(int argc, char **argv)
    pgplot_frame.swin_x2 = xmaxshow;
    pgplot_frame.swin_y1 = ymin;
    pgplot_frame.swin_y2 = ymax;
-   strcpy(pgplotbox.box_xopt, txt1);
-   strcpy(pgplotbox.box_yopt, txt2);
+   strcpy(pgplot_options.box.box_xopt, txt1);
+   strcpy(pgplot_options.box.box_yopt, txt2);
    float vectorMin2, vectorMax2;
    yvec2unit(fin, yUnitsSwitch, vectorMinMaxSpecified, vectorMin, vectorMax, didtranspose_orig_nrbin, 1, ymin, &vectorMin2, stack_state[current_stack_pos-1].grayscalemode, 0, application.verbose_state);
    yvec2unit(fin, yUnitsSwitch, vectorMinMaxSpecified, vectorMin, vectorMax, didtranspose_orig_nrbin, 2, ymax, &vectorMax2, stack_state[current_stack_pos-1].grayscalemode, 0, application.verbose_state);
@@ -1418,23 +1378,22 @@ int main(int argc, char **argv)
      ppgswin(xminshow, xmaxshow, yUnitCmdLine*vectorMin2, yUnitCmdLine*vectorMax2);
    else
      ppgswin(xminshow, xmaxshow, yUnitCmdLine*vectorMin2, yUnitCmdLine*(vectorMax2+(vectorMax2-vectorMin2)));
-   pgplot_drawbox(pgplotbox);
+   pgplot_drawbox(&pgplot_options.box);
    if(stack_state[current_stack_pos-1].grayscalemode == 0)
      ppgswin(xminshow, xmaxshow, ymin, ymax);
    else {
      ppgswin(xminshow, xmaxshow, ymin-0.5, ymax+0.5);
    }
  }else {
-   pgplotbox.drawbox = 1;
-   strcpy(pgplotbox.box_xopt, txt1);
-   strcpy(pgplotbox.box_yopt, txt2);
-   pgplot_drawbox(pgplotbox);
+   pgplot_options.box.drawbox = 1;
+   strcpy(pgplot_options.box.box_xopt, txt1);
+   strcpy(pgplot_options.box.box_yopt, txt2);
+   pgplot_drawbox(&pgplot_options.box);
  }
       }
-      pgplotbox.drawbox = 0;
+      pgplot_options.box.drawbox = 0;
       ppgsch(label_font.characterheight);
-      ppgslw(label_font.linewidth);
-      ppgscf(label_font.font);
+      pgplot_options.box.label_f = label_font.font;
       if(curpanelnrx == 0 || appendframes_flag == 0) {
  if(xtitle_set == 0) {
    if(xUnitsSwitch != XUNIT_BINS) {
@@ -1454,7 +1413,7 @@ int main(int argc, char **argv)
        strcpy(xtitle, "fluctuation frequency (cycles/period)");
      }
    }else {
-     if(fin.gentype == GENTYPE_PROFILE || fin.gentype == GENTYPE_PULSESTACK || fin.gentype == GENTYPE_SUBINTEGRATIONS || fin.gentype == GENTYPE_DYNAMICSPECTRUM || fin.gentype == GENTYPE_LRFS || fin.gentype == GENTYPE_P3FOLD || fin.gentype == GENTYPE_LRCC || fin.gentype == GENTYPE_PADIST) {
+     if(fin.gentype == GENTYPE_PROFILE || fin.gentype == GENTYPE_PULSESTACK || fin.gentype == GENTYPE_SUBINTEGRATIONS || fin.gentype == GENTYPE_DYNAMICSPECTRUM || fin.gentype == GENTYPE_LRFS || fin.gentype == GENTYPE_P3FOLD || fin.gentype == GENTYPE_LRCC || fin.gentype == GENTYPE_PADIST || fin.gentype == GENTYPE_ELLDIST) {
        sprintf(xtitle, "Pulse longitude (bins)");
      }else if(fin.gentype == GENTYPE_S2DFSP3 || fin.gentype == GENTYPE_S2DFSP2) {
        sprintf(xtitle, "Block number (pulses)");
@@ -1499,6 +1458,10 @@ int main(int argc, char **argv)
      strcpy(ytitle, "PA (deg)");
    }else if(ytitle_set_to_padist && yUnitsSwitch == 0) {
      strcpy(ytitle, "PA (bin)");
+   }else if(ytitle_set_to_elldist && yUnitsSwitch) {
+     strcpy(ytitle, "\\gx (deg)");
+   }else if(ytitle_set_to_elldist && yUnitsSwitch == 0) {
+     strcpy(ytitle, "\\gx (bin)");
    }else if(ytitle_set_to_pulselongitude && yUnitsSwitch) {
      strcpy(ytitle, "Pulse longitude (deg)");
    }else if(ytitle_set_to_pulselongitude && yUnitsSwitch == 0) {
@@ -1507,29 +1470,29 @@ int main(int argc, char **argv)
      strcpy(ytitle, "Frequency (MHz)");
    }
  }
- pgplotbox.drawlabels = 1;
- strcpy(pgplotbox.xlabel, xtitle);
- strcpy(pgplotbox.ylabel, ytitle);
- pgplot_drawbox(pgplotbox);
+ pgplot_options.box.drawlabels = 1;
+ strcpy(pgplot_options.box.xlabel, xtitle);
+ strcpy(pgplot_options.box.ylabel, ytitle);
+ pgplot_drawbox(&pgplot_options.box);
       }else {
- pgplotbox.drawlabels = 1;
- strcpy(pgplotbox.xlabel, xtitle);
- strcpy(pgplotbox.ylabel, "");
- pgplot_drawbox(pgplotbox);
+ pgplot_options.box.drawlabels = 1;
+ strcpy(pgplot_options.box.xlabel, xtitle);
+ strcpy(pgplot_options.box.ylabel, "");
+ pgplot_drawbox(&pgplot_options.box);
       }
       if(!stack_state[current_stack_pos-1].grayscalemode) {
- pgplotbox.drawlabels = 0;
- pgplotbox.drawtitle = 1;
+ pgplot_options.box.drawlabels = 0;
+ pgplot_options.box.drawtitle = 1;
  newtext = str_replace_header_params(fin, title, application.verbose_state);
  if(newtext == NULL) {
    printwarning(application.verbose_state.debug, "WARNING pplot: Cannot substitute keyword in title");
-   pgplotbox.title[0] = 0;
+   pgplot_options.box.title[0] = 0;
  }else {
-   strcpy(pgplotbox.title, newtext);
+   strcpy(pgplot_options.box.title, newtext);
    free(newtext);
  }
- pgplot_drawbox(pgplotbox);
- pgplotbox.drawtitle = 0;
+ pgplot_drawbox(&pgplot_options.box);
+ pgplot_options.box.drawtitle = 0;
       }
       redraw = 0;
       if(interactive_flag) {
@@ -2190,13 +2153,14 @@ int main(int argc, char **argv)
       free(maxy);
       maxy_allocated = 0;
     }
-    closePSRData(&fin, application.verbose_state);
+    closePSRData(&fin, 0, application.verbose_state);
     printf("Finished plotting of: %s\n", inputfilename);
   }
   ppgend();
   free(zappedVectors);
   free(zappedSubints);
   free(stack_state);
+  terminateApplication(&application);
   return 0;
 }
 float ypos(float *stackI, int bin, long PulseNr, float scale, int NrBins, long pulse_bottom, long pulse_top, long subint_start, float yUnitCmdLine, float dyshift)
@@ -2328,8 +2292,12 @@ void yvec2unit(datafile_definition fin, int yUnitsSwitch, int vectorMinMaxSpecif
       vectorMax = get_tobs(fin, verbose);
       vectorMinMaxSpecified = 1;
     }else if(yUnitsSwitch && didtranspose_orig_nrbin) {
-      vectorMin = get_channel_freq(fin, 0, verbose);
-      vectorMax = get_channel_freq(fin, fin.NrSubints-1, verbose);
+      if(fin.freqMode != FREQMODE_UNIFORM) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING pplot: Frequency range is for first subint.");
+      }
+      vectorMin = get_nonweighted_channel_freq(fin, 0, verbose);
+      vectorMax = get_nonweighted_channel_freq(fin, fin.NrSubints-1, verbose);
       vectorMinMaxSpecified = 1;
     }
   }

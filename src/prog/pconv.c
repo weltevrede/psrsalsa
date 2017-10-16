@@ -34,7 +34,7 @@ int main(int argc, char **argv)
   int read_wholefile, indx;
   long i, n, p, f, n1, n2;
   float *pulseData, sample;
-  char outputname[MaxOutputNameLength], *dummy_ptr;
+  char outputname[MaxFilenameLength], *dummy_ptr;
   psrsalsaApplication application;
 
 
@@ -77,13 +77,11 @@ int main(int argc, char **argv)
   read_wholefile = 1;
 
 
-  cleanPSRData(&fin, application.verbose_state);
-  cleanPSRData(&fout, application.verbose_state);
-
 
   if(argc <= 1) {
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     print_help();
+    terminateApplication(&application);
     return 0;
   }
   for(indx = 1; indx < argc; indx++) {
@@ -94,6 +92,7 @@ int main(int argc, char **argv)
 
       if(argv[indx][0] == '-') {
  printerror(application.verbose_state.debug, "ERROR pconv: Unknown option (%s).\n\nRun pconv without command line arguments to show help", argv[indx]);
+ terminateApplication(&application);
  return 0;
       }else {
  if(applicationAddFilename(indx, application.verbose_state) == 0)
@@ -110,16 +109,20 @@ int main(int argc, char **argv)
     return 0;
   }
 
-  if(numberInApplicationFilenameList(application, argv, application.verbose_state) == 0) {
+  if(numberInApplicationFilenameList(&application, argv, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR pconv: No files specified");
     return 0;
   }
 
   if(isValidPSRDATA_format(application.oformat) == 0) {
-    printerror(application.verbose_state.debug, "ERROR pconv: Please specify a valid output format with the -oformat option.\n");
+    printerror(application.verbose_state.debug, "ERROR pconv: Please specify a valid output format with the -oformat option.");
+    terminateApplication(&application);
     return 0;
   }
 
+
+
+  cleanPSRData(&fout, application.verbose_state);
 
 
 
@@ -129,7 +132,9 @@ int main(int argc, char **argv)
   if(application.iformat <= 0)
     application.iformat = guessPSRData_format(dummy_ptr, 0, application.verbose_state);
   if(isValidPSRDATA_format(application.iformat) == 0) {
-    printerror(application.verbose_state.debug, "ERROR pconv: Please specify a valid input format with the -iformat option.\n");
+    printerror(application.verbose_state.debug, "ERROR pconv: Please specify a valid input format with the -iformat option.");
+    terminateApplication(&application);
+    closePSRData(&fout, 0, application.verbose_state);
     return 0;
   }
   if(!openPSRData(&fin, dummy_ptr, application.iformat, 0, read_wholefile, 0, application.verbose_state))
@@ -173,7 +178,7 @@ int main(int argc, char **argv)
     fout.fixedPeriod = 1;
     fout.foldMode = FOLDMODE_FIXEDPERIOD;
   }
-  if(getOutputName(application, dummy_ptr, outputname, application.verbose_state) == 0) {
+  if(getOutputName(&application, dummy_ptr, outputname, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR pconv: Changing filename failed");
     return 0;
   }
@@ -241,6 +246,7 @@ int main(int argc, char **argv)
    filepos += fin.NrSubints*fin.NrBins*sizeof(float);
  }
       }
+      free(data_ptr);
     }else if(application.iformat == PSRCHIVE_ASCII_format && application.oformat == PUMA_format) {
       char txt[100];
       for(n = 0; n < fin.NrSubints; n++) {
@@ -307,9 +313,10 @@ int main(int argc, char **argv)
       free(pulseData);
     }
   }
-  closePSRData(&fin, application.verbose_state);
-  closePSRData(&fout, application.verbose_state);
+  closePSRData(&fin, 0, application.verbose_state);
+  closePSRData(&fout, 0, application.verbose_state);
   }
+  terminateApplication(&application);
   return 0;
 }
 void print_help()

@@ -24,22 +24,21 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 int main(int argc, char **argv)
 {
-  int index, firstfiletoopen, curpanelnrx, curpanelnry, nokeypresses, compute_PA, showtotPol, writeout, writeoutFilename;
-  int manualOnpulseSelection, deviceID, normalize, correctLbias, nrpanelsx, nrpanelsy, nxsub, boxlinewidth;
+  int index, firstfiletoopen, nokeypresses, compute_PA, extendedPol, writeout, writeoutFilename;
+  int manualOnpulseSelection, deviceID, normalize, correctLbias, nxsub, boxlinewidth;
   int titleset, titlelw, dashed, datalinewidth, noylabel, overlayPA, overlayFine, nrJumps;
   int outline, outline_color, extended, onlysignificantPA, twoprofiles;
   long i, j, f;
-  float *profileI, *Ppulse, loffset, correctQV, correctV, sigma_limit;
+  float *profileI, loffset, correctQV, correctV, sigma_limit;
   float xsize, ysize, ysizepa, xtick, plotI1, plotI2, titlech;
-  float plotl1, plotl2, plotp1, plotp2, PAoffset, PAoffset_data;
+  float plotl1, plotl2, plotp1, plotp2, PAoffset_data;
   float overlayalpha, overlaybeta, overlaypa0, overlayl0;
   float jump_longitude[MaxNrJumps], jump_offset[MaxNrJumps];
   char *filename_ptr, title[1000], txt[100], PlotDevice[100], PlotDevice2[100], *extension;
-  char ofilename[MaxOutputNameLength];
-  pgplot_viewport_def viewport;
-  pgplot_box_def pgplotbox;
+  char ofilename[1000];
   datafile_definition datain, dataout;
   psrsalsaApplication application;
+  pgplot_options_definition pgplot_options;
   initApplication(&application, "ppol", "[options] inputfile(s)");
   application.switch_verbose = 1;
   application.switch_debug = 1;
@@ -70,10 +69,8 @@ int main(int argc, char **argv)
   application.switch_nskip = 1;
   application.switch_nread = 1;
   application.oformat = PPOL_format;
-  curpanelnrx = 0;
-  curpanelnry = 0;
   nokeypresses = 0;
-  showtotPol = 0;
+  extendedPol = 0;
   writeout = 0;
   writeoutFilename = -1;
   strcpy(PlotDevice, "?");
@@ -85,8 +82,6 @@ int main(int argc, char **argv)
   correctQV = 1;
   correctV = 1;
   loffset = 0;
-  nrpanelsx = 1;
-  nrpanelsy = 1;
   xsize = 0.8;
   ysize = 1.0;
   ysizepa = 1.0;
@@ -103,7 +98,6 @@ int main(int argc, char **argv)
   plotp1 = -180;
   plotp2 = 180;
   plotI1 = plotI2 = 0;
-  PAoffset = 0;
   PAoffset_data = 0;
   datalinewidth = 1;
   dashed = 0;
@@ -113,10 +107,16 @@ int main(int argc, char **argv)
   outline = -1;
   nrJumps = 0;
   twoprofiles = 0;
+  outline_color = 0;
+  overlayalpha = 0;
+  overlaybeta = 0;
+  overlaypa0 = 0;
+  overlayl0 = 0;
   if(argc < 2) {
-    printf("Program to convert Stokes parameters in postition angle and linear intensity.\n");
-    printf("The result can be plotted and/or written out.\n\n");
-    printApplicationHelp(application);
+    printf("Program to convert Stokes parameters in other polarization products such as.\n");
+    printf("postition angle and linear intensity. The results can be written out and plotted\n");
+    printf("using ppolFig or fitted using ppolFit.\n\n");
+    printApplicationHelp(&application);
     fprintf(stdout, "Other options affecting the output file:\n");
 
     fprintf(stdout, "-ext               Write out polarised profile to file with this extension.\n");
@@ -127,54 +127,26 @@ int main(int argc, char **argv)
     fprintf(stdout, "                   applying the better de-bias method of Wardle & Kronberg.\n");
     fprintf(stdout, "-noLdebias         Simply use L^2=Q^2+U^2, which is biased.\n");
     fprintf(stdout, "-nonorm            Do not normalize the output profile.\n");
-    fprintf(stdout, "-paoffset          Add this angle to PA (in degrees). Only affects plots.\n");
-    fprintf(stdout, "-paoffsetoutput    Add this angle to PA (in degrees). Affects output data (and\n");
-    fprintf(stdout, "                   the plots).\n");
+    fprintf(stdout, "-paoffset          Add this angle to PA (in degrees).\n");
     fprintf(stdout, "-selectonpulse     Enables manual graphical selection of more on-pulse regions\n");
     fprintf(stdout, "                   in addition to any provided on the command line.\n");
     fprintf(stdout, "-sigma             Set sigma limit on L required for PA calculation [def=%.1f].\n", sigma_limit);
     fprintf(stdout, "-2                 Write out two pulse periods (so there is duplicated data).\n");
+    fprintf(stdout, "-extendedpol       Also generate the total amount of polarization\n");
     fprintf(stdout, "\nOther options affecting the plotting:\n");
     fprintf(stdout, "-1             Only plot PA-swing once (equivalent to -yrange \"0 180\").\n");
-    fprintf(stdout, "-boxlw         Set linewidth of the box [def=%d].\n", boxlinewidth);
-    fprintf(stdout, "-dash          Make L and V profiles dashed/dotted.\n");
     fprintf(stdout, "-device        Specify plotting device for onpulse region selection.\n");
     fprintf(stdout, "-device2       Specify plotting device final plot.\n");
-    fprintf(stdout, "-herrorbar     \"xleft xcentre xright y SizeOfMarkers lineWidth colourIndex\"\n");
-    fprintf(stdout, "               Draw a horizontal errorbar. The position y is normalised\n");
-    fprintf(stdout, "               between 0 and 1.\n");
-    fprintf(stdout, "-herrorbar2    Identical to to -herrorbar option, but now for the PA panel,\n");
-    fprintf(stdout, "               except that y is in degrees rather than being normalized.\n");
-    fprintf(stdout, "-lw            Set linewidth used to plot data [def=%d].\n", datalinewidth);
-    fprintf(stdout, "-N             \"nrx nry\" Create nrx by nry panels, rather than a single plot\n");
-    fprintf(stdout, "               per page\n");
-    fprintf(stdout, "-nokeypress    Do not wait for key presses to go to next page in output plot\n");
-    fprintf(stdout, "               (by default this shouldn't happen if plotting to a file)\n");
-    fprintf(stdout, "-noylabel      Disable labeling and numbers along y-axis.\n");
-    fprintf(stdout, "-opm           Put OPM at this longitude and with this amount of degrees when\n");
-    fprintf(stdout, "               using -paswing. You can use this option multiple times.\n");
-    fprintf(stdout, "-outline       \"lw color\" Makes text of -text option appear in outline\n");
-    fprintf(stdout, "-paswing       \"alpha beta pa0 l0\" Overlay PA-swing with these parameters.\n");
-    fprintf(stdout, "-text          \"x y ch lw font color\" \"text\" plots text at this position in\n");
-    fprintf(stdout, "               the top panel. See -textkeywords for possible keywords to use.\n");
-    fprintf(stdout, "-textkeywords  Lists to keywords you can use in the -text and -title options.\n");
-    fprintf(stdout, "-title \"...\"   Set title (default is file name). The title supports keywords\n");
-    fprintf(stdout, "               listed by the -textkeywords option.\n");
-    fprintf(stdout, "-title_fmt     \"characterheight line_width\" (default being \"%.1f %d\").\n", titlech, titlelw);
-    fprintf(stdout, "-totpol        Also shows the total amount of polarization.\n");
     fprintf(stdout, "-xrange        Specify longitude range covered in the plot in degrees.\n");
     fprintf(stdout, "-xrange_phase  Specify longitude range covered in the plot in phase.\n");
     fprintf(stdout, "-yrange        Specify PA-range covered in the plot.\n");
-    fprintf(stdout, "-xsize         Set xsize of the plot [def=%.1f].\n", xsize);
-    fprintf(stdout, "-ysize         Set ysize of the plot [def=%.1f].\n", ysize);
-    fprintf(stdout, "-ysizepa       Set relative ysize of PA plot [def=%.1f].\n", ysizepa);
-    fprintf(stdout, "-xticks        \"XTICK NXSUB\"  Adjust PGPLOT tickmarks [def=\"%.0f %d\"].\n", xtick, nxsub);
 
     printf("\n");
     printf("Please use the appropriate citation when using results of this software in your publications:\n\n");
     printf("More information about fitting position-angle swings and using the beam-width information can be found in:\n");
     printf(" - 	Rookyard et al. 2015, MNRAS, 446, 3367\n\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }else if(argc >= 2) {
     for(i = 1; i < argc; i++) {
@@ -200,94 +172,28 @@ int main(int argc, char **argv)
  extension = argv[i+1];
         i++;
       }else if(strcmp(argv[i], "-paoffset") == 0) {
- PAoffset = atof(argv[i+1]);
- i++;
-      }else if(strcmp(argv[i], "-paoffsetoutput") == 0) {
- PAoffset_data = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &PAoffset_data, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR ppol: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  i++;
       }else if(strcmp(argv[i], "-loffset") == 0) {
- loffset = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &loffset, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR ppol: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  i++;
-      }else if(strcmp(argv[i], "-nokeypress") == 0) {
- nokeypresses = 1;
-      }else if(strcmp(argv[i], "-totPol") == 0 || strcmp(argv[i], "-totpol") == 0) {
- showtotPol = 1;
-      }else if(strcmp(argv[i], "-dash") == 0) {
- dashed = 1;
-      }else if(strcmp(argv[i], "-noylabel") == 0) {
- noylabel = 1;
-      }else if(strcmp(argv[i], "-N") == 0) {
- j = sscanf(argv[i+1], "%d %d", &nrpanelsx, &nrpanelsy);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing %s option", argv[i]);
-   return 0;
- }
-        i++;
-      }else if(strcmp(argv[i], "-xsize") == 0) {
- j = sscanf(argv[i+1], "%f", &xsize);
- if(j != 1) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -xsize option");
-   return 0;
- }
-        i++;
-      }else if(strcmp(argv[i], "-ysize") == 0) {
- j = sscanf(argv[i+1], "%f", &ysize);
- if(j != 1) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -ysize option");
-   return 0;
- }
-        i++;
+      }else if(strcmp(argv[i], "-extendedpol") == 0) {
+ extendedPol = 1;
       }else if(strcmp(argv[i], "-sigma") == 0) {
- j = sscanf(argv[i+1], "%f", &sigma_limit);
- if(j != 1) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -sigma option");
-   return 0;
- }
-        i++;
-      }else if(strcmp(argv[i], "-ysizepa") == 0) {
- j = sscanf(argv[i+1], "%f", &ysizepa);
- if(j != 1) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -ysizepa option");
-   return 0;
- }
-        i++;
-      }else if(strcmp(argv[i], "-title") == 0) {
- strcpy(title, argv[i+1]);
- titleset = 1;
-        i++;
-      }else if(strcmp(argv[i], "-title_fmt") == 0) {
- j = sscanf(argv[i+1], "%f %d", &titlech, &titlelw);
- if(j != 2) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing %s option", argv[i]);
-   return 0;
- }
-        i++;
-      }else if(strcmp(argv[i], "-boxlw") == 0) {
- j = sscanf(argv[i+1], "%d", &boxlinewidth);
- if(j != 1) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -boxlw option");
-   return 0;
- }
-        i++;
-      }else if(strcmp(argv[i], "-lw") == 0) {
- j = sscanf(argv[i+1], "%d", &datalinewidth);
- if(j != 1) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -lw option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &sigma_limit, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR ppol: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-xrange") == 0 || strcmp(argv[i], "-xrange_phase") == 0) {
- j = sscanf(argv[i+1], "%f %f", &plotl1, &plotl2);
- if(j != 2) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing %s option", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &plotl1, &plotl2, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR ppol: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  if(strcmp(argv[i], "-xrange_phase") == 0) {
@@ -295,75 +201,23 @@ int main(int argc, char **argv)
    plotl2 *= 360.0;
  }
         i++;
-      }else if(strcmp(argv[i], "-xticks") == 0) {
- j = sscanf(argv[i+1], "%f %d", &xtick, &nxsub);
- if(j != 2) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -xticks option");
-   return 0;
- }
-        i++;
       }else if(strcmp(argv[i], "-yrange") == 0) {
- j = sscanf(argv[i+1], "%f %f", &plotp1, &plotp2);
- if(j != 2) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -yrange option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &plotp1, &plotp2, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR ppol: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
         i++;
       }else if(strcmp(argv[i], "-yrange2") == 0) {
- j = sscanf(argv[i+1], "%f %f", &plotI1, &plotI2);
- if(j != 2) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -yrange2 option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &plotI1, &plotI2, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR ppol: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
-        i++;
-      }else if(strcmp(argv[i], "-paswing") == 0) {
- j = sscanf(argv[i+1], "%f %f %f %f", &overlayalpha, &overlaybeta, &overlaypa0, &overlayl0);
- if(j != 4) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -paswing option");
-   return 0;
- }
- overlayPA = 1;
         i++;
       }else if(strcmp(argv[i], "-1") == 0) {
  plotp1 = 0.0;
  plotp2 = 180.0;
-      }else if(strcmp(argv[i], "-text") == 0) {
- i += 2;
-      }else if(strcmp(argv[i], "-herrorbar") == 0) {
- i += 1;
-      }else if(strcmp(argv[i], "-herrorbar2") == 0) {
- i += 1;
-      }else if(strcmp(argv[i], "-outline") == 0) {
- j = sscanf(argv[i+1], "%d %d", &outline, &outline_color);
- if(j != 2) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Error parsing -outline option");
-   return 0;
- }
- i++;
       }else if(strcmp(argv[i], "-selectonpulse") == 0) {
  manualOnpulseSelection = 1;
-      }else if(strcmp(argv[i], "-opm") == 0) {
- j = sscanf(argv[i+1], "%f %f", &jump_longitude[nrJumps], &jump_offset[nrJumps]);
- if(j != 2) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Cannot parse -opm option, need two values.");
-   return 0;
- }
- nrJumps++;
- if(nrJumps == MaxNrJumps) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Maximum number of -opm options exceeded.");
-   return 0;
- }
- i++;
-      }else if(strcmp(argv[i], "-textkeywords") == 0) {
- str_list_replace_keys(0);
- return 0;
       }else if(strcmp(argv[i], "-2") == 0) {
  twoprofiles = 1;
       }else if(strcmp(argv[i], "-medianLdebias") == 0) {
@@ -375,6 +229,7 @@ int main(int argc, char **argv)
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "ppol: Unknown option: %s", argv[i]);
    printerror(application.verbose_state.debug, "\nRun ppol without command line arguments to show help");
+   terminateApplication(&application);
    return 0;
  }else {
    if(applicationAddFilename(i, application.verbose_state) == 0)
@@ -389,7 +244,7 @@ int main(int argc, char **argv)
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-  if(numberInApplicationFilenameList(application, argv, application.verbose_state) == 0) {
+  if(numberInApplicationFilenameList(&application, argv, application.verbose_state) == 0) {
     fflush(stdout);
     printerror(application.verbose_state.debug, "ERROR ppol: No files specified");
     return 0;
@@ -400,23 +255,20 @@ int main(int argc, char **argv)
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
 
     if(firstfiletoopen == 0) {
-      if(curpanelnrx == 0 && curpanelnry == 0) {
- if(nokeypresses == 0) {
-   i = pgplot_device_type(PlotDevice2, application.verbose_state);
-   if(i < 3 || i > 10) {
-     printf("Press a key in the terminal to continue\n");
-     fflush(stdout);
-     pgetch();
-   }
+      if(nokeypresses == 0) {
+ i = pgplot_device_type(PlotDevice2, application.verbose_state);
+ if(i < 3 || i > 10) {
+   printf("Press a key in the terminal to continue\n");
+   fflush(stdout);
+   pgetch();
  }
       }
     }
 
-    cleanPSRData(&datain, application.verbose_state);
+
     cleanPSRData(&dataout, application.verbose_state);
     if(!openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.verbose_state))
       return 0;
-
     if(application.verbose_state.verbose) {
       fflush(stdout);
       printwarning(application.verbose_state.debug, "Input data contains %ld bins, %ld pulses, %ld polarizations and %ld frequencies.", (datain.NrBins), datain.NrSubints, (datain.NrPols), datain.NrFreqChan);
@@ -427,37 +279,37 @@ int main(int argc, char **argv)
     if(PSRDataHeader_parse_commandline(&datain, argc, argv, application.verbose_state) == 0)
       return 0;
 
-    if(datain.poltype == POLTYPE_ILVPAdPA || datain.poltype == POLTYPE_PAdPA) {
-      compute_PA = 0;
-      fflush(stdout);
-      printwarning(application.verbose_state.debug, "WARNING ppol: File already contains PA data. ppol will show data, but not regenerate the PA points.");
-    }else {
-      compute_PA = 1;
-      if(datain.isFolded && datain.foldMode == FOLDMODE_FIXEDPERIOD) {
- if(datain.fixedPeriod <= 0.0) {
-   printwarning(application.verbose_state.debug, "WARNING ppol: Period does not appear to be set, assuming it is 1 sec.");
-   datain.fixedPeriod = 1.0;
- }
-      }
-      if(datain.isFolded && datain.tsampMode == TSAMPMODE_FIXEDTSAMP) {
- if(get_tsamp(datain, 0, application.verbose_state) <= 0.0) {
-   printwarning(application.verbose_state.debug, "WARNING ppol: Assuming full period is stored.");
-   double period;
-   int ret;
-   ret = get_period(datain, 0, &period, application.verbose_state);
-   if(ret == 2) {
-     printerror(application.verbose_state.debug, "ERROR ppol (%s): Cannot obtain period", datain.filename);
-     return 0;
-   }
-   datain.fixedtsamp = period/(double)datain.NrBins;
- }
-      }
-      if(get_tsamp(datain, 0, application.verbose_state) < 0.0000001 || get_tsamp(datain, 0, application.verbose_state) >= 10) {
- fflush(stdout);
- printerror(application.verbose_state.debug, "ERROR ppol: The sampling time does not appear to be set correctly in the header. Consider using the -header option.");
- return 0;
+    if(datain.poltype == POLTYPE_ILVPAdPA || datain.poltype == POLTYPE_PAdPA || datain.poltype == POLTYPE_ILVPAdPATEldEl) {
+      printerror(application.verbose_state.debug, "ERROR ppol: File already contains PA data. You can use ppolFig to plot this data.");
+      return 0;
+    }
+
+    compute_PA = 1;
+    if(datain.isFolded && datain.foldMode == FOLDMODE_FIXEDPERIOD) {
+      if(datain.fixedPeriod <= 0.0) {
+ printwarning(application.verbose_state.debug, "WARNING ppol: Period does not appear to be set, assuming it is 1 sec.");
+ datain.fixedPeriod = 1.0;
       }
     }
+    if(datain.isFolded && datain.tsampMode == TSAMPMODE_FIXEDTSAMP) {
+      if(get_tsamp(datain, 0, application.verbose_state) <= 0.0) {
+ printwarning(application.verbose_state.debug, "WARNING ppol: Assuming full period is stored.");
+ double period;
+ int ret;
+ ret = get_period(datain, 0, &period, application.verbose_state);
+ if(ret == 2) {
+   printerror(application.verbose_state.debug, "ERROR ppol (%s): Cannot obtain period", datain.filename);
+   return 0;
+ }
+ datain.fixedtsamp = period/(double)datain.NrBins;
+      }
+    }
+    if(get_tsamp(datain, 0, application.verbose_state) < 0.0000001 || get_tsamp(datain, 0, application.verbose_state) >= 10) {
+      fflush(stdout);
+      printerror(application.verbose_state.debug, "ERROR ppol: The sampling time does not appear to be set correctly in the header. Consider using the -header option.");
+      return 0;
+    }
+
 
     for(i = 1; i < argc; i++) {
       if(strcmp(argv[i], "-header") == 0) {
@@ -472,25 +324,41 @@ int main(int argc, char **argv)
       return 0;
     }
 
-    if(compute_PA) {
 
-      if(datain.poltype == POLTYPE_COHERENCY) {
- if(application.verbose_state.verbose) {
-   printf("Data is written as coherency parameters. Going to convert them into Stokes parameters first.\n");
- }
- if(preprocess_stokes(&datain, application.verbose_state) == 0) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Conversion into Stokes parameters failed.");
-   return 0;
- }
-      }else if(datain.poltype == POLTYPE_UNKNOWN) {
+    if(datain.poltype == POLTYPE_COHERENCY) {
+      if(application.verbose_state.verbose) {
+ printf("Data is written as coherency parameters. Going to convert them into Stokes parameters first.\n");
+      }
+      if(preprocess_stokes(&datain, application.verbose_state) == 0) {
  fflush(stdout);
- printwarning(application.verbose_state.debug, "WARNING ppol: It is assumed that the data are Stokes parameters.");
-      }else if(datain.poltype != POLTYPE_STOKES) {
- fflush(stdout);
- printerror(application.verbose_state.debug, "ERROR ppol: The polarization type of the data cannot be handled by ppol.");
+ printerror(application.verbose_state.debug, "ERROR ppol: Conversion into Stokes parameters failed.");
  return 0;
       }
+    }else if(datain.poltype == POLTYPE_UNKNOWN) {
+      fflush(stdout);
+      printwarning(application.verbose_state.debug, "WARNING ppol: It is assumed that the data are Stokes parameters.");
+    }else if(datain.poltype != POLTYPE_STOKES) {
+      fflush(stdout);
+      printerror(application.verbose_state.debug, "ERROR ppol: The polarization type of the data cannot be handled by ppol.");
+      return 0;
+    }
+
+    if(datain.NrSubints > 1) {
+      if(application.oformat == PPOL_format) {
+ printf("Data contains multiple subints. Data will be written out in FITS format.\n");
+ application.oformat = FITS_format;
+      }
+    }
+    if(datain.NrFreqChan > 1) {
+      if(application.oformat == PPOL_format) {
+ printf("Data contains multiple frequency channels. Data will be written out in FITS format.\n");
+ application.oformat = FITS_format;
+      }
+    }
+    if(datain.NrPols != 4) {
+      fflush(stdout);
+      printerror(application.verbose_state.debug, "ERROR ppol: Need Stokes IQUV data, but the number of polarization channels != 4!");
+      return 0;
     }
 
 
@@ -498,71 +366,6 @@ int main(int argc, char **argv)
 
     region_frac_to_int(&(application.onpulse), datain.NrBins, 0);
 
-    if(compute_PA) {
-      if(datain.NrSubints > 1) {
- if(application.oformat == PPOL_format) {
-   printf("Data contains multiple subints. Data will be written out in FITS format.\n");
-   application.oformat = FITS_format;
- }
- if(showtotPol) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: The -totpol option is not supported when multiple subints are present");
-   return 0;
- }
-      }
-      if(datain.NrFreqChan > 1) {
- if(application.oformat == PPOL_format) {
-   printf("Data contains multiple frequency channels. Data will be written out in FITS format.\n");
-   application.oformat = FITS_format;
- }
- if(showtotPol) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: The -totpol option is not supported when multiple frequency channels are present");
-   return 0;
- }
-      }
-      if(datain.NrPols != 4) {
- fflush(stdout);
- printerror(application.verbose_state.debug, "ERROR ppol: Need Stokes IQUV data, but the number of polarization channels != 4!");
- return 0;
-      }
-    }else {
-      if(datain.NrPols != 5) {
- fflush(stdout);
- printerror(application.verbose_state.debug, "ERROR ppol: When plotting previously calculated PA data, the number of polarization channels is expected to be 5, but it is %d", datain.NrPols);
- if(datain.NrPols == 2) {
-   printerror(application.verbose_state.debug, "Note that the PPOLSHORT format can not be displayed with ppol.");
- }
- return 0;
-      }
-    }
-
-    if(compute_PA
-) {
-
-
-
-
-
-      if(showtotPol) {
- Ppulse = (float *)malloc((datain.NrBins)*sizeof(float));
- if(Ppulse == NULL) {
-   fflush(stdout);
-   printerror(application.verbose_state.debug, "ERROR ppol: Memory allocation error.");
-   return 0;
- }
-      }else {
- Ppulse = NULL;
-      }
-    }else {
-      showtotPol = 0;
-      writeout = 0;
-      Ppulse = NULL;
-    }
-
-    if((compute_PA
- )
-       ) {
       strcpy(txt, "Select on-pulse region ");
       strcat(txt, datain.psrname);
       profileI = (float *)malloc(datain.NrBins*sizeof(float));
@@ -577,25 +380,22 @@ int main(int argc, char **argv)
  return 0;
       }
       if(manualOnpulseSelection == 1 || (application.onpulse.nrRegions == 0 && manualOnpulseSelection != -1)) {
- pgplot_clear_viewport_def(&viewport);
- strcpy(viewport.plotDevice, PlotDevice);
- pgplot_box_def pgplotbox;
- clear_pgplot_box(&pgplotbox);
- strcpy(pgplotbox.xlabel, "Bin");
- strcpy(pgplotbox.ylabel, "Intensity");
- strcpy(pgplotbox.title, txt);
- selectRegions(profileI, datain.NrBins, viewport, pgplotbox, 0, 0, 0, &(application.onpulse), application.verbose_state);
+ pgplot_clear_options(&pgplot_options);
+ strcpy(pgplot_options.viewport.plotDevice, PlotDevice);
+ strcpy(pgplot_options.box.xlabel, "Bin");
+ strcpy(pgplot_options.box.ylabel, "Intensity");
+ strcpy(pgplot_options.box.title, txt);
+ selectRegions(profileI, datain.NrBins, &pgplot_options, 0, 0, 0, &(application.onpulse), application.verbose_state);
  if(firstfiletoopen == 0) {
    ppgslct(deviceID);
  }
       }else {
- pgplot_clear_viewport_def(&viewport);
- clear_pgplot_box(&pgplotbox);
- strcpy(pgplotbox.xlabel, "Bin");
- strcpy(pgplotbox.ylabel, "Intensity");
- strcpy(pgplotbox.title, txt);
- strcpy(viewport.plotDevice, PlotDevice);
- pgplotGraph1(viewport, profileI, NULL, NULL, datain.NrBins, 0, datain.NrBins, 0, 0, datain.NrBins, 0, 0, 0, pgplotbox, 1, 0, 0, 1, 1, &(application.onpulse), application.verbose_state);
+ pgplot_clear_options(&pgplot_options);
+ strcpy(pgplot_options.box.xlabel, "Bin");
+ strcpy(pgplot_options.box.ylabel, "Intensity");
+ strcpy(pgplot_options.box.title, txt);
+ strcpy(pgplot_options.viewport.plotDevice, PlotDevice);
+ pgplotGraph1(&pgplot_options, profileI, NULL, NULL, datain.NrBins, 0, datain.NrBins, 0, 0, datain.NrBins, 0, 0, 0, 1, 0, 0, 1, 1, &(application.onpulse), application.verbose_state);
  if(firstfiletoopen == 0) {
    ppgslct(deviceID);
  }
@@ -603,67 +403,41 @@ int main(int argc, char **argv)
       region_int_to_frac(&(application.onpulse), 1.0/(float)datain.NrBins, 0);
       regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
 
- verbose_definition verbose2;
- copyVerboseState(application.verbose_state, &verbose2);
- if(application.verbose_state.verbose && datain.NrSubints == 1 && datain.NrFreqChan == 1)
-   verbose2.verbose = 1;
- else
-   verbose2.verbose = 0;
 
- int nolongitudes;
- if(datain.NrFreqChan > 1 || datain.NrSubints > 1) {
-   nolongitudes = 1;
- }else {
-   nolongitudes = 0;
- }
- if(make_paswing_fromIQUV(&datain, Ppulse, application.onpulse, normalize, correctLbias, correctQV, correctV, nolongitudes, loffset, PAoffset_data, verbose2) == 0)
+
+
+      verbose_definition verbose2;
+      copyVerboseState(application.verbose_state, &verbose2);
+      if(application.verbose_state.verbose && datain.NrSubints == 1 && datain.NrFreqChan == 1)
+ verbose2.verbose = 1;
+      else
+ verbose2.verbose = 0;
+
+      int nolongitudes;
+      if(datain.NrFreqChan > 1 || datain.NrSubints > 1) {
+ nolongitudes = 1;
+      }else {
+ nolongitudes = 0;
+      }
+      if(make_paswing_fromIQUV(&datain, extendedPol, application.onpulse, normalize, correctLbias, correctQV, correctV, nolongitudes, loffset, PAoffset_data, verbose2) == 0)
  return 0;
-    }
 
 
-    float currentPanelScaling, currentPanelScalingx, currentPanelScalingy, viewport_left, viewport_right, viewport_top, viewport_bottom;
-    currentPanelScaling = 1;
-    viewport_left = 0.1;
-    if(nrpanelsx > 1) {
-      currentPanelScalingx = xsize/((nrpanelsx-1)*0.2 + nrpanelsx*xsize);
-      currentPanelScaling = currentPanelScalingx;
-      viewport_left += curpanelnrx*currentPanelScalingx*0.1;
-      viewport_left += curpanelnrx*currentPanelScalingx*xsize;
-      viewport_left += curpanelnrx*currentPanelScalingx*0.1;
-    }
-    viewport_right = viewport_left+xsize;
-    if(nrpanelsx > 1) {
-      viewport_right = viewport_left;
-      viewport_right += currentPanelScalingx*xsize;
-    }
-    viewport_bottom = 0.35-0.25*ysize*ysizepa;
-    if(nrpanelsy > 1) {
-      currentPanelScalingy = (0.55*ysize + 0.25*ysize*ysizepa)/((nrpanelsy-1)*(0.35-0.25*ysize*ysizepa) + nrpanelsy*(0.55*ysize + 0.25*ysize*ysizepa) + (nrpanelsy-1)*(1-0.35-0.55*ysize));
-      if(currentPanelScalingy < currentPanelScaling)
- currentPanelScaling = currentPanelScalingy;
-      viewport_bottom += (nrpanelsy-curpanelnry-1)*currentPanelScalingy*(0.35-0.25*ysize*ysizepa);
-      viewport_bottom += (nrpanelsy-curpanelnry-1)*currentPanelScalingy*(0.55*ysize + 0.25*ysize*ysizepa);
-      viewport_bottom += (nrpanelsy-curpanelnry-1)*currentPanelScalingy*(1-0.35-0.55*ysize);
-    }
-    viewport_top = viewport_bottom + (0.55*ysize + 0.25*ysize*ysizepa);
-    if(nrpanelsy > 1) {
-      viewport_top = viewport_bottom;
-      viewport_top += currentPanelScalingy*(0.55*ysize + 0.25*ysize*ysizepa);
-    }
-    if(curpanelnrx == 0 && curpanelnry == 0)
-      ppgpage();
-    curpanelnrx++;
-    if(curpanelnrx == nrpanelsx) {
-      curpanelnrx = 0;
-      curpanelnry++;
-    }
-    if(curpanelnry == nrpanelsy)
-      curpanelnry = 0;
       if(sigma_limit > 0
-) {
+  ) {
+
+ int pachannel;
+ if(datain.poltype == POLTYPE_ILVPAdPATEldEl) {
+   pachannel = 3;
+ }else {
+   pachannel = datain.NrPols-2;
+ }
  for(i = 0; i < datain.NrSubints; i++) {
    for(f = 0; f < datain.NrFreqChan; f++) {
      for(j = 0; j < datain.NrBins; j++) {
+
+
+
        if(sigma_limit > 0) {
   if(datain.offpulse_rms == NULL) {
     if(i == 0 && f == 0 && j == 0) {
@@ -672,41 +446,41 @@ int main(int argc, char **argv)
     }
   }else {
     if(datain.data[j+datain.NrBins*(1+datain.NrPols*(f+i*datain.NrFreqChan))] < sigma_limit*datain.offpulse_rms[1+datain.NrPols*(f + datain.NrFreqChan*i)]) {
-      datain.data[j+datain.NrBins*(datain.NrPols-2 + datain.NrPols*(f+datain.NrFreqChan*i))] = 0;
-      datain.data[j+datain.NrBins*(datain.NrPols-1 + datain.NrPols*(f+datain.NrFreqChan*i))] = -1;
+      datain.data[j+datain.NrBins*(pachannel + datain.NrPols*(f+datain.NrFreqChan*i))] = 0;
+      datain.data[j+datain.NrBins*(pachannel+1 + datain.NrPols*(f+datain.NrFreqChan*i))] = -1;
     }
   }
        }
      }
    }
  }
-      }
+ }
       if(datain.NrSubints > 1 || datain.NrFreqChan > 1) {
  fflush(stdout);
  printwarning(application.verbose_state.debug, "WARNING ppol: Only showing polarization of the first subint/frequency channel");
       }
-      clear_pgplot_box(&pgplotbox);
-      pgplot_clear_viewport_def(&viewport);
-      viewport.dxplot = viewport_left - 0.1;
-      viewport.xsize = (viewport_right - 0.1 - viewport.dxplot)/0.8;
-      viewport.ysize = (viewport_top - viewport_bottom)/(0.55 + 0.25*ysizepa);
-      viewport.dyplot = viewport_top - 0.35 - 0.55*(viewport_top - viewport_bottom)/(0.55 + 0.25*ysizepa);
-      strcpy(viewport.plotDevice, PlotDevice2);
-      viewport.noclear = 1;
-      viewport.dontclose = 1;
-      viewport.dontopen = !firstfiletoopen;
-      pgplotbox.box_lw = boxlinewidth;
-      pgplotbox.box_xtick = xtick;
-      pgplotbox.box_nxsub = nxsub;
+      pgplot_clear_options(&pgplot_options);
+      pgplot_options.viewport.dxplot = 0;
+      pgplot_options.viewport.dyplot = 0;
+      pgplot_options.viewport.xsize = xsize/0.8;
+      pgplot_options.viewport.ysize = ysize;
+      ppgpage();
+      strcpy(pgplot_options.viewport.plotDevice, PlotDevice2);
+      pgplot_options.viewport.noclear = 1;
+      pgplot_options.viewport.dontclose = 1;
+      pgplot_options.viewport.dontopen = !firstfiletoopen;
+      pgplot_options.box.box_lw = boxlinewidth;
+      pgplot_options.box.label_lw = boxlinewidth;
+      pgplot_options.box.box_xtick = xtick;
+      pgplot_options.box.box_nxsub = nxsub;
       if(titleset)
- strcpy(pgplotbox.title, title);
+ strcpy(pgplot_options.box.title, title);
       else
- strcpy(pgplotbox.title, datain.filename);
-      pgplotbox.title_ch = titlech*currentPanelScaling;
-      pgplotbox.title_lw = titlelw;
-      pgplotbox.label_ch *= currentPanelScaling;
-      pgplotbox.box_labelsize *= currentPanelScaling;
-      pgplotPAplot(datain, Ppulse, viewport, pgplotbox, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", plotl1, plotl2, plotI1, plotI2, plotp1, plotp2, PAoffset, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-herrorbar", "-herrorbar2", "-verrorbar", "-verrorbar2", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, application.verbose_state);
+ strcpy(pgplot_options.box.title, datain.filename);
+      pgplot_options.box.title_ch = titlech;
+      pgplot_options.box.title_lw = titlelw;
+      pgplotPAplot(datain, extendedPol, 0, 0
+     , &pgplot_options, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", "\\gx [deg]", plotl1, plotl2, plotI1, plotI2, plotp1, plotp2, 0.0, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-herrorbar", "-herrorbar2", "-verrorbar", "-verrorbar2", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, NULL, NULL, application.verbose_state);
       if(firstfiletoopen) {
  ppgqid(&deviceID);
       }
@@ -714,7 +488,7 @@ int main(int argc, char **argv)
 ) {
       copy_params_PSRData(datain, &dataout, application.verbose_state);
       if(extension != NULL) {
- if(change_filename_extension(filename_ptr, ofilename, extension, MaxOutputNameLength, application.verbose_state) == 0) {
+ if(change_filename_extension(filename_ptr, ofilename, extension, MaxFilenameLength, application.verbose_state) == 0) {
    fflush(stdout);
    printerror(application.verbose_state.debug, "ERROR ppol: Changing filename failed");
    return 0;
@@ -736,7 +510,6 @@ int main(int argc, char **argv)
  dataout.fptr_hdr = stdout;
  dataout.format = application.oformat;
       }
- dataout.poltype = POLTYPE_ILVPAdPA;
       if(!writeHeaderPSRData(&dataout, argc, argv, application.history_cmd_only, application.verbose_state))
  return 0;
       if(application.oformat == PPOL_format) {
@@ -748,7 +521,7 @@ int main(int argc, char **argv)
       }
       if(dataout.format == PPOL_format || dataout.format == PPOL_SHORT_format) {
  dataout.offpulse_rms = datain.offpulse_rms;
- if(writePPOLfile(dataout, datain.data, extended, onlysignificantPA, twoprofiles, PAoffset, application.verbose_state) == 0) {
+ if(writePPOLfile(dataout, datain.data, extended, onlysignificantPA, twoprofiles, 0.0, application.verbose_state) == 0) {
    fflush(stdout);
    printerror(application.verbose_state.debug, "ERROR ppol: Cannot write data");
    return 0;
@@ -767,12 +540,16 @@ int main(int argc, char **argv)
  }
       }
     }
-    closePSRData(&datain, application.verbose_state);
-    closePSRData(&dataout, application.verbose_state);
+    closePSRData(&datain, 0, application.verbose_state);
+    if(dataout.format == PPOL_format || dataout.format == PPOL_SHORT_format) {
+      dataout.offpulse_rms = NULL;
+    }
+    closePSRData(&dataout, 0, application.verbose_state);
     firstfiletoopen = 0;
     if(compute_PA)
       free(profileI);
   }
   ppgend();
+  terminateApplication(&application);
   return 0;
 }

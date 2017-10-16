@@ -35,8 +35,8 @@ int main(int argc, char **argv)
   double min, max;
   psrsalsaApplication application;
   datafile_definition datain;
-  pgplot_viewport_def viewport;
-  pgplot_box_def box;
+  pgplot_options_definition pgplot_options;
+  pgplot_clear_options(&pgplot_options);
 
 
   initApplication(&application, "pdist", "[options] inputfile(s)");
@@ -82,7 +82,7 @@ int main(int argc, char **argv)
   if(argc < 2) {
     printf("Program to generate or plot a histogram by binning data. Also a cummulative\n");
     printf("distribution can be generated. Usage:\n\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("Input options:\n");
     printf("-2               Turn on 2D mode: Read in two columns of data, resulting in the\n");
     printf("                 distribution N(x,y) rathern than N(x).\n");
@@ -138,6 +138,7 @@ int main(int argc, char **argv)
     printf("More information about fitting distributions (in the context of pulse energies) can be found in:\n");
     printf(" - Weltevrede et al. 2006, A&A, 458, 269\n\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }else {
     for(i = 1; i < argc; i++) {
@@ -173,23 +174,12 @@ int main(int argc, char **argv)
    polspecified = 1;
  else
    colspecified = 1;
-
-
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%d %d", &file_column1, &file_column2, NULL) == 0) {
+ int ret;
+ ret = parse_command_string(application.verbose_state, argc, argv, i+1, 0, 1, "%d %d", &file_column1, &file_column2, NULL);
+ file_column2_defined = 0;
+ if(ret == 2) {
    file_column2_defined = 1;
-
-   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%d %d", &file_column1, &file_column2, NULL)) {
-     printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
-     return 0;
-   }
- }else if(parse_command_string(application.verbose_state, argc, argv, i+1, 1, "%d", &file_column1, NULL) == 0) {
-   file_column2_defined = 0;
-
-   if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%d", &file_column1, NULL)) {
-     printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
-     return 0;
-   }
- }else {
+ }else if(ret == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse %s option, need 1 or 2 integer values.\n", argv[i]);
    return 0;
  }
@@ -200,7 +190,7 @@ int main(int argc, char **argv)
    return 0;
  }
  nrbins_specified = 1;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &nrbins, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &nrbins, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -211,7 +201,7 @@ int main(int argc, char **argv)
    return 0;
  }
  nrbins_specifiedy = 1;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%ld", &nrbinsy, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &nrbinsy, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -222,7 +212,7 @@ int main(int argc, char **argv)
    return 0;
  }
  dx_specified = 1;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &dx, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &dx, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -233,28 +223,28 @@ int main(int argc, char **argv)
    return 0;
  }
  dy_specified = 1;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &dy, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &dy, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-rangex") == 0) {
  rangex_set = 1;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf", &rangex_min, &rangex_max, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &rangex_min, &rangex_max, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-rangey") == 0) {
  rangey_set = 1;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf", &rangey_min, &rangey_max, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &rangey_min, &rangey_max, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-select") == 0) {
  select = 1;
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf %lf", &select1, &select2, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &select1, &select2, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -268,7 +258,7 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-zero") == 0) {
  centered_at_zero = 0;
       }else if(strcmp(argv[i], "-zeroshift") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, "%lf", &extra_phase, NULL)) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &extra_phase, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -278,9 +268,9 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-cdf") == 0) {
  cdf = 1;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "pdist: Unknown option: %s\n\nRun pdist without command line arguments to show help", argv[i]);
+   terminateApplication(&application);
    return 0;
  }else {
    if(applicationAddFilename(i, application.verbose_state) == 0)
@@ -289,15 +279,13 @@ int main(int argc, char **argv)
       }
     }
   }
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-  if(numberInApplicationFilenameList(application, argv, application.verbose_state) == 0) {
+  if(numberInApplicationFilenameList(&application, argv, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR pdist: No files specified");
     return 0;
   }
-
   if(select) {
     if(twoDmode) {
       printerror(application.verbose_state.debug, "ERROR pdist: The -2 option cannot be used with -select.\n");
@@ -320,7 +308,6 @@ int main(int argc, char **argv)
       return 0;
     }
   }
-
   if(cdf) {
     if(nrbins_specified || dx_specified) {
       printerror(application.verbose_state.debug, "ERROR pdist: For a cdf -n and -dx should not be used.\n");
@@ -352,28 +339,19 @@ int main(int argc, char **argv)
       }
     }
   }
-
   int initial_iformat, currentfile;
   currentfile = 1;
   initial_iformat = application.iformat;
-
-
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
-
-
-    cleanPSRData(&datain, application.verbose_state);
     application.iformat = initial_iformat;
     if(application.iformat <= 0 && colspecified == 0)
       application.iformat = guessPSRData_format(filename_ptr, 1, application.verbose_state);
     if(colspecified)
       application.iformat = -1;
-
     if(polspecified && application.iformat <= 0) {
       printerror(application.verbose_state.debug, "ERROR pdist: Data is not recognized as pulsar data, but -pol was used. Use -col for ascii files or -iformat to force the use of a input format.\n");
       return 0;
     }
-
-
     if(application.iformat > 0) {
       verbose_definition verbose;
       cleanVerboseState(&verbose);
@@ -399,7 +377,6 @@ int main(int argc, char **argv)
    file_column1 = 2;
  }
       }
-
       if(application.verbose_state.verbose)
  printf("Loading %ld points", datain.NrSubints*datain.NrFreqChan*datain.NrBins);
       if(twoDmode)
@@ -453,10 +430,14 @@ int main(int argc, char **argv)
   }
   data_y[ndata] = log10(data_y[ndata]);
        }
-       if(data_y[ndata] > max_y_data || ndata == 0) {
+       if(ndata == 0) {
+  max_y_data = data_y[ndata];
+  min_y_data = data_y[ndata];
+       }
+       if(data_y[ndata] > max_y_data) {
   max_y_data = data_y[ndata];
        }
-       if(data_y[ndata] < min_y_data || ndata == 0) {
+       if(data_y[ndata] < min_y_data) {
   min_y_data = data_y[ndata];
        }
        total_y += data_y[ndata];
@@ -473,7 +454,7 @@ int main(int argc, char **argv)
    printf("average = %Le\n", total_y/(long double)ndata);
  }
       }
-      closePSRData(&datain, application.verbose_state);
+      closePSRData(&datain, 0, application.verbose_state);
     }else {
       int skiplines = 0;
       if(twoDmode) {
@@ -516,7 +497,6 @@ int main(int argc, char **argv)
  }
       }
     }
-
     if(cdf == 0 && select == 0) {
       switch(set_binning_histogram(min_x_data, max_x_data, rangex_set, rangex_min, rangex_max, nrbins_specified, nrbins, centered_at_zero, extra_phase, &min_x, &max_x, &dx, application.verbose_state)) {
       case 0: break;
@@ -535,7 +515,6 @@ int main(int argc, char **argv)
    }
  }
       }
-
       if(twoDmode) {
  switch(set_binning_histogram(min_y_data, max_y_data, rangey_set, rangey_min, rangey_max, nrbins_specifiedy, nrbinsy, centered_at_zero, extra_phase, &min_y, &max_y, &dy, application.verbose_state)) {
  case 0: break;
@@ -558,10 +537,7 @@ int main(int argc, char **argv)
    }
  }
       }
-
     }
-
-
     if(cdf == 0) {
       if(truncate) {
  if(rangex_set) {
@@ -582,14 +558,10 @@ int main(int argc, char **argv)
  }
       }
     }
-
-
     if(cdf == 0 && select == 0)
       nrbins = calculate_bin_number(max_x, dx, min_x, centered_at_zero, extra_phase) + 1;
     else
       nrbins = ndata;
-
-
     if(select == 0)
       fprintf(stdout, "Distribution will have %ld bins.\n", nrbins);
     if(twoDmode) {
@@ -598,7 +570,6 @@ int main(int argc, char **argv)
     }else {
       nrbinsy = 1;
     }
-
     distr = (long *)malloc(nrbins*nrbinsy*sizeof(long));
     if(distr == NULL) {
       printerror(application.verbose_state.debug, "ERROR pdist: Cannot allocate memory.\n");
@@ -606,42 +577,38 @@ int main(int argc, char **argv)
     }
     for(i = 0; i < nrbins*nrbinsy; i++)
       distr[i] = 0;
-
-
     if(showGraphics) {
-      pgplot_clear_viewport_def(&viewport);
-      clear_pgplot_box(&box);
-      box.drawtitle = 1;
-      strcpy(box.title, title);
+      pgplot_options.box.drawtitle = 1;
+      strcpy(pgplot_options.box.title, title);
       if(xlabelset) {
- strcpy(box.xlabel, argv[xlabelset]);
+ strcpy(pgplot_options.box.xlabel, argv[xlabelset]);
       }else {
  if(read_log)
-   strcpy(box.xlabel, "log X");
+   strcpy(pgplot_options.box.xlabel, "log X");
  else
-   strcpy(box.xlabel, "X");
+   strcpy(pgplot_options.box.xlabel, "X");
       }
       if(twoDmode) {
  if(read_log)
-   strcpy(box.ylabel, "log Y");
+   strcpy(pgplot_options.box.ylabel, "log Y");
  else
-   strcpy(box.ylabel, "Y");
+   strcpy(pgplot_options.box.ylabel, "Y");
       }else {
  if(plotlog)
-   strcpy(box.ylabel, "log N");
+   strcpy(pgplot_options.box.ylabel, "log N");
  else
-   strcpy(box.ylabel, "N");
+   strcpy(pgplot_options.box.ylabel, "N");
       }
-      strcpy(viewport.plotDevice, application.pgplotdevice);
+      strcpy(pgplot_options.viewport.plotDevice, application.pgplotdevice);
       if(showGraphics == 2) {
- viewport.dontclose = 1;
+ pgplot_options.viewport.dontclose = 1;
       }
       if(currentfile > 1 && showGraphics == 2) {
- viewport.noclear = 1;
- viewport.dontopen = 1;
- box.drawbox = 0;
- box.drawtitle = 0;
- box.drawlabels = 0;
+ pgplot_options.viewport.noclear = 1;
+ pgplot_options.viewport.dontopen = 1;
+ pgplot_options.box.drawbox = 0;
+ pgplot_options.box.drawtitle = 0;
+ pgplot_options.box.drawlabels = 0;
       }
     }else {
       if(filename != 0) {
@@ -666,10 +633,7 @@ int main(int argc, char **argv)
  return 0;
       }
     }
-
-
     if(twoDmode) {
-
       for(i = 0; i < ndata; i++) {
  j = calculate_bin_number(data_x[i], dx, min_x, centered_at_zero, extra_phase);
  k = calculate_bin_number(data_y[i], dy, min_y, centered_at_zero, extra_phase);
@@ -683,7 +647,6 @@ int main(int argc, char **argv)
  }
  distr[k*nrbins+j] += 1;
       }
-
       for(i = 0; i < nrbins; i++) {
  for(j = 0; j < nrbinsy; j++) {
    x = calculate_bin_location(i, dx, min_x, centered_at_zero, extra_phase);
@@ -743,9 +706,8 @@ int main(int argc, char **argv)
    }
  }
  printf("Count range: %f to %f\n", min, max);
-
  int showwedge = 0;
- if(pgplotMap(viewport, cmap, nrbins, nrbinsy,
+ if(pgplotMap(&pgplot_options, cmap, nrbins, nrbinsy,
        calculate_bin_location(0, dx, min_x, centered_at_zero, extra_phase),
        calculate_bin_location(0, dx, max_x, centered_at_zero, extra_phase),
        calculate_bin_location(0, dx, min_x, centered_at_zero, extra_phase)-0.5*dx,
@@ -754,14 +716,13 @@ int main(int argc, char **argv)
        calculate_bin_location(0, dy, max_y, centered_at_zero, extra_phase),
        calculate_bin_location(0, dy, min_y, centered_at_zero, extra_phase)-0.5*dy,
        calculate_bin_location(0, dy, max_y, centered_at_zero, extra_phase)+0.5*dy,
-       box, application.cmap, 0, 0, 0, NULL, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, showwedge, 0, 0, application.verbose_state) == 0) {
+       application.cmap, 0, 0, 0, NULL, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, showwedge, 0, 0, application.verbose_state) == 0) {
    printerror(application.verbose_state.debug, "ERROR pdist: Plotting failed.\n");
    return 0;
  }
  free(cmap);
       }
     }else {
-
       if(select) {
  nrbins = 0;
  for(i = 0; i < ndata; i++) {
@@ -789,17 +750,11 @@ int main(int argc, char **argv)
    }
  }else {
    gsl_sort(data_x, 1, ndata);
-   data_y = malloc(ndata*sizeof(double));
-   if(data_y == NULL) {
-     printerror(application.verbose_state.debug, "ERROR pdist: Memory allocation error.\n");
-     return 0;
-   }
    for(i = 0; i < ndata; i++) {
      data_y[i] = (i+1)/(double)(ndata);
    }
  }
       }
-
       if(!showGraphics) {
  for(i = 0; i < nrbins; i++) {
    x = i*dx;
@@ -887,34 +842,32 @@ int main(int argc, char **argv)
    colour = currentfile;
  }
  if(cdf == 0) {
-   if(pgplotGraph1(viewport, distr_float, NULL, NULL, nrbins,
+   if(pgplotGraph1(&pgplot_options, distr_float, NULL, NULL, nrbins,
      calculate_bin_location(0, dx, min_x, centered_at_zero, extra_phase),
      calculate_bin_location(nrbins-1, dx, min_x, centered_at_zero, extra_phase),
      dontsetranges,
      calculate_bin_location(0, dx, min_x, centered_at_zero, extra_phase) - dx,
      calculate_bin_location(nrbins-1, dx, min_x, centered_at_zero, extra_phase) + dx,
-     0, 0, forceMinZero, box, 1, 0, 0, colour, 1, NULL, application.verbose_state) == 0) {
+     0, 0, forceMinZero, 1, 0, 0, colour, 1, NULL, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR pdist: Cannot plot graph\n");
      return 0;
    }
  }else {
-   if(pgplotGraph1(viewport, distr_float, distr_x_float, NULL, nrbins,
+   if(pgplotGraph1(&pgplot_options, distr_float, distr_x_float, NULL, nrbins,
      0,
      0,
      dontsetranges,
      0,
      0,
-     0, 0, forceMinZero, box, 1*0, 0, 0, colour, 1, NULL, application.verbose_state) == 0) {
+     0, 0, forceMinZero, 1*0, 0, 0, colour, 1, NULL, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR pdist: Cannot plot graph\n");
      return 0;
    }
+   free(distr_x_float);
  }
-
+ free(distr_float);
       }
-
     }
-
-
     free(data_x);
     free(data_y);
     free(distr);
@@ -922,11 +875,8 @@ int main(int argc, char **argv)
       fclose(ofile);
       free(oname);
     }
-
-
-
     if(showGraphics == 1) {
-      if(currentfile != numberInApplicationFilenameList(application, argv, application.verbose_state)) {
+      if(currentfile != numberInApplicationFilenameList(&application, argv, application.verbose_state)) {
  i = pgplot_device_type(application.pgplotdevice, application.verbose_state);
  if(i < 3 || i > 10) {
    printf("Press a key to continue\n");
@@ -935,12 +885,11 @@ int main(int argc, char **argv)
  }
       }
     }
-
     currentfile += 1;
   }
   if(showGraphics == 2) {
     ppgend();
   }
-
+  terminateApplication(&application);
   return 0;
 }

@@ -154,39 +154,118 @@ void pgplot_makeframe(pgplot_frame_def_internal *frame)
     }
   }
 }
-int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def viewport, pgplot_box_def box, char *xlabel, char *ylabel, char *ylabel_pa, float longitude_left, float longitude_right, float Imin, float Imax, float pa_bottom, float pa_top, float PAoffset, float sigma_limit, float datalinewidth, float ysize2, int dashed, int noynumbers, char *textoption, char *herrorbaroption, char *herrorbaroption2, char *verrorbaroption, char *verrorbaroption2, int argc, char **argv, int outline_txt, int outline_lw, int outline_color, int overlayPA, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, verbose_definition verbose)
+int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int showEll, pgplot_options_definition *pgplot, char *xlabel, char *ylabel, char *ylabel_pa, char *ylabel_ell, float longitude_left, float longitude_right, float Imin, float Imax, float pa_bottom, float pa_top, float PAoffset, float sigma_limit, float datalinewidth, float ysize2, int dashed, int noynumbers, char *textoption, char *herrorbaroption, char *herrorbaroption2, char *verrorbaroption, char *verrorbaroption2, int argc, char **argv, int outline_txt, int outline_lw, int outline_color, int overlayPA, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, datafile_definition *padist, datafile_definition *elldist, verbose_definition verbose)
 {
-  int deviceID, text_ci, text_lw, text_f, ok, domove;
-  float ymin, ymax, text_x, text_y, text_ch, I, Iold;
+  int deviceID, text_ci, text_lw, text_f, ok, domove, showPAdist, showELLdist;
+  float ymin, ymax, text_x, text_y, text_ch, I, Iold, overallplotscaling;
   long i, j;
   char *newtext;
   pgplot_frame_def_internal frame;
-  if(pgplot_opendevice(viewport, &deviceID, verbose) == 0) {
+  pgplot_options_definition *pgplot_backup;
+  showPAdist = 0;
+  showELLdist = 0;
+  overallplotscaling = 1;
+  if(showEll && (showPAdist == 0 && showELLdist == 0)) {
+    overallplotscaling = 0.78;
+  }else if(showEll && (showPAdist || showELLdist)) {
+    overallplotscaling = 0.53;
+  }else if(showEll == 0 && (showPAdist || showELLdist)) {
+    overallplotscaling = 0.63;
+  }
+  if(showPAdist && showELLdist) {
+    overallplotscaling = 0.4;
+  }
+  pgplot_backup = (pgplot_options_definition *)malloc(sizeof(pgplot_options_definition));
+  if(pgplot_backup == NULL) {
+    printerror(verbose.debug, "ERROR pgplotPAplot: Memory allocation error\n");
+    return 0;
+  }
+  memcpy(pgplot_backup, pgplot, sizeof(pgplot_options_definition));
+  pgplot->box.box_labelsize *= overallplotscaling;
+  pgplot->box.label_ch *= overallplotscaling;
+  float vp_left, vp_right, vp_profile_top, vp_profile_bottom, vp_paswing_top, vp_paswing_bottom, vp_ellswing_top, vp_ellswing_bottom, vp_padist_top, vp_padist_bottom, vp_elldist_top, vp_elldist_bottom;
+  vp_left = 0.1+pgplot->viewport.dxplot;
+  vp_right = 0.1+pgplot->viewport.dxplot+0.8*pgplot->viewport.xsize*overallplotscaling;
+  vp_profile_bottom = 0.35+(1-overallplotscaling)*0.6+pgplot->viewport.dyplot;
+  vp_profile_top = vp_profile_bottom +0.55*pgplot->viewport.ysize*overallplotscaling;
+  if(nopaswing == 0) {
+    vp_paswing_bottom = vp_profile_bottom -0.25*pgplot->viewport.ysize*ysize2*overallplotscaling;
+    vp_paswing_top = vp_profile_top - 0.55*pgplot->viewport.ysize*overallplotscaling;
+  }else {
+    vp_paswing_bottom = vp_profile_bottom;
+    vp_paswing_top = vp_profile_bottom + overallplotscaling*0.25*pgplot->viewport.ysize*ysize2;
+  }
+  if(showEll) {
+    vp_ellswing_bottom = vp_paswing_bottom - overallplotscaling*0.25*pgplot->viewport.ysize*ysize2;
+    vp_ellswing_top = vp_paswing_top - overallplotscaling*0.25*pgplot->viewport.ysize*ysize2;
+  }else {
+    vp_ellswing_bottom = vp_paswing_bottom;
+    vp_ellswing_top = vp_paswing_top;
+  }
+  if(showPAdist) {
+    vp_padist_top = vp_ellswing_bottom;
+    vp_padist_bottom = vp_padist_top - overallplotscaling*0.5*pgplot->viewport.ysize*ysize2;
+  }else {
+    vp_padist_top = vp_ellswing_top;
+    vp_padist_bottom = vp_ellswing_bottom;
+  }
+  if(showELLdist) {
+    vp_elldist_top = vp_padist_bottom;
+    vp_elldist_bottom = vp_elldist_top - overallplotscaling*0.5*pgplot->viewport.ysize*ysize2;
+  }else {
+    vp_elldist_top = vp_padist_top;
+    vp_elldist_bottom = vp_padist_bottom;
+  }
+  if(pgplot_opendevice(&(pgplot->viewport), &deviceID, verbose) == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR pgplotPAplot: Cannot open plot device");
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
     return 0;
   }
   if(data.poltype == POLTYPE_PAdPA) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR pgplotPAplot: Data does only have PA points, but no profile");
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
     return 0;
   }
-  if(data.poltype != POLTYPE_ILVPAdPA) {
+  if(data.poltype != POLTYPE_ILVPAdPA && data.poltype != POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR pgplotPAplot: Data does not appear to contain PA data");
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
     return 0;
   }
-  if(data.NrPols != 5) {
+  if(data.poltype == POLTYPE_ILVPAdPA && data.NrPols != 5) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR pgplotPAplot: Data does not appear to contain PA data as NrPols != 5");
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
     return 0;
   }
-  newtext = str_replace_header_params(data, box.title, verbose);
+  if(data.poltype == POLTYPE_ILVPAdPATEldEl && data.NrPols != 8) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR pgplotPAplot: Data does not appear to contain PA data as NrPols != 8");
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
+    return 0;
+  }
+  if((showtotpol || showEll) && data.poltype != POLTYPE_ILVPAdPATEldEl) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR pgplotPAplot: Data does not appear to contain the total polarization and/or ellipticity angle, but it was requested to be plotted");
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
+    return 0;
+  }
+  newtext = str_replace_header_params(data, pgplot->box.title, verbose);
   if(newtext == NULL) {
     printerror(verbose.debug, "ERROR pgplotPAplot: Cannot substuture header parameter in the tile");
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
     return 0;
   }
-  strcpy(box.title, newtext);
+  strcpy(pgplot->box.title, newtext);
   free(newtext);
   clear_pgplot_frame(&frame);
   ymin = ymax = NAN;
@@ -203,8 +282,14 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
       ymax = data.data[j+2*data.NrBins];
     if(data.data[j+2*data.NrBins] < ymin)
       ymin = data.data[j+2*data.NrBins];
+    if(showtotpol) {
+      if(data.data[j+5*data.NrBins] > ymax)
+ ymax = data.data[j+5*data.NrBins];
+      if(data.data[j+5*data.NrBins] < ymin)
+ ymin = data.data[j+5*data.NrBins];
+    }
   }
-  ppgsvp(0.1+viewport.dxplot, 0.1+viewport.dxplot+0.8*viewport.xsize, 0.35+viewport.dyplot, 0.35+viewport.dyplot+0.55*viewport.ysize);
+  ppgsvp(vp_left, vp_right, vp_profile_bottom, vp_profile_top);
   if(Imin != Imax) {
     frame.swin_x1 = longitude_left;
     frame.swin_x2 = longitude_right;
@@ -218,19 +303,24 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
     frame.swin_y2 = ymax+(ymax-ymin)*0.05;
     ppgswin(longitude_left,longitude_right,ymin-(ymax-ymin)*0.05,ymax+(ymax-ymin)*0.05);
   }
-  if(noynumbers) {
-    strcpy(box.box_xopt, "bcst");
-    strcpy(box.box_yopt, "bcts");
+  if(nopaswing == 1 && showEll == 0 && showPAdist == 0 && showELLdist == 0) {
+    strcpy(pgplot->box.xlabel, xlabel);
+    strcpy(pgplot->box.box_xopt, "bcnst");
   }else {
-    strcpy(box.box_xopt, "bcst");
-    strcpy(box.box_yopt, "bcnts");
+    pgplot->box.xlabel[0] = 0;
+    strcpy(pgplot->box.box_xopt, "bcst");
+  }
+  if(noynumbers) {
+    strcpy(pgplot->box.box_yopt, "bcts");
+  }else {
+    strcpy(pgplot->box.box_yopt, "bcnts");
   }
   if(!noynumbers) {
-    box.drawlabels = 1;
-    strcpy(box.ylabel, ylabel);
+    pgplot->box.drawlabels = 1;
+    strcpy(pgplot->box.ylabel, ylabel);
   }
-  pgplot_drawbox(box);
-  box.drawtitle = 0;
+  pgplot_drawbox(&(pgplot->box));
+  pgplot->box.drawtitle = 0;
   ppgslw(datalinewidth);
   if(dashed) {
     ppgsls(4);
@@ -266,10 +356,30 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
       }
     }
   }
-  ppgsci(1);
-  if(dashed) {
-    ppgsls(1);
+  if(showtotpol) {
+    if(dashed) {
+      ppgsls(1);
+    }
+    if(!dashed) {
+      ppgsci(4);
+      ppgsls(2);
+    }
+    domove = 1;
+    for(j = 0; j < (data.NrBins); j++) {
+      if(isnan(get_pulse_longitude(data, 0, j, verbose)) || isnan(data.data[j+5*data.NrBins])) {
+ domove = 1;
+      }else {
+ if(domove) {
+   ppgmove(get_pulse_longitude(data, 0, j, verbose), data.data[j+5*data.NrBins]);
+   domove = 0;
+ }else {
+   ppgdraw(get_pulse_longitude(data, 0, j, verbose), data.data[j+5*data.NrBins]);
+ }
+      }
+    }
   }
+  ppgsci(1);
+  ppgsls(1);
   domove = 1;
   for(j = 0; j < (data.NrBins); j++) {
     if(isnan(get_pulse_longitude(data, 0, j, verbose)) || isnan(data.data[j])) {
@@ -283,21 +393,6 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
       }
     }
   }
-  if(dashed) {
-    ppgslw(4);
-    ppgsls(1);
-    ppgslw(datalinewidth);
-  }
-  if(!dashed) {
-    ppgsci(4);
-    ppgsls(2);
-  }
-  if(Ppulse != NULL) {
-    ppgmove(get_pulse_longitude(data, 0, 0, verbose), Ppulse[0]);
-    for(j = 1; j < (data.NrBins); j++) {
-      ppgdraw(get_pulse_longitude(data, 0, j, verbose), Ppulse[j]);
-    }
-  }
   ppgsls(1);
   if(textoption != NULL && argv != NULL && argc != 0) {
     for(j = 0; j < argc; j++) {
@@ -306,6 +401,8 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
  if(i != 6) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", textoption);
+   memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+   free(pgplot_backup);
    return 0;
  }
  ppgsch(text_ch);
@@ -313,6 +410,8 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
  newtext = str_replace_header_params(data, argv[j+2], verbose);
  if(newtext == NULL) {
    printerror(verbose.debug, "ERROR pgplotPAplot: Cannot substuture header parameter in -text option");
+   memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+   free(pgplot_backup);
    return 0;
  }
  if(outline_txt > 0) {
@@ -341,6 +440,8 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
  if(i != 7) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", herrorbaroption);
+   memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+   free(pgplot_backup);
    return 0;
  }
  ppgsch(herr_size);
@@ -365,6 +466,8 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
  if(i != 7) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", verrorbaroption);
+   memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+   free(pgplot_backup);
    return 0;
  }
  ppgsch(verr_size);
@@ -380,155 +483,273 @@ int pgplotPAplot(datafile_definition data, float *Ppulse, pgplot_viewport_def vi
       }
     }
   }
-  ppgsls(1);
-  ppgsci(1);
-  ppgslw(1);
-  ppgsvp(0.1+viewport.dxplot,0.1+viewport.dxplot+0.8*viewport.xsize, 0.35+viewport.dyplot-0.25*viewport.ysize*ysize2, 0.35+viewport.dyplot);
-  frame.swin_x1 = longitude_left;
-  frame.swin_x2 = longitude_right;
-  frame.swin_y1 = pa_bottom;
-  frame.swin_y2 = pa_top;
-  ppgswin(longitude_left,longitude_right,pa_bottom,pa_top);
-  ppgslw(box.box_lw);
-  box.drawlabels = 1;
-  if(!noynumbers) {
-    strcpy(box.xlabel, xlabel);
-    strcpy(box.ylabel, ylabel_pa);
-  }else {
-    strcpy(box.xlabel, xlabel);
-    box.ylabel[0] = 0;
-  }
-  strcpy(box.box_xopt, "bcnst");
-  pgplot_drawbox(box);
-  float x, xold;
-  ppgslw(datalinewidth);
-  if(overlayPAfine)
-    overlayPAfine = 100;
-  else
-    overlayPAfine = 1;
-  if(overlayPA) {
-    ppgsci(2);
-    for(j = 0; j < (data.NrBins); j++) {
-      for(i = 0; i < overlayPAfine; i++) {
- x = get_pulse_longitude(data, 0, j, verbose);
- if(j == data.NrBins-1) {
-   x += (get_pulse_longitude(data, 0, j, verbose)-get_pulse_longitude(data, 0, j-1, verbose))*i/(float)overlayPAfine;
- }else {
-   x += (get_pulse_longitude(data, 0, j+1, verbose)-get_pulse_longitude(data, 0, j, verbose))*i/(float)overlayPAfine;
- }
- I = paswing(overlayalpha, overlaybeta, x, overlaypa0, overlayl0, nrJumps, jump_longitudes, jump_offsets, 0, 0);
- if(I > 180)
-   I -= 180;
- if(I > 180)
-   I -= 180;
- if(I < 0)
-   I += 180;
- if(I < 0)
-   I += 180;
- if(j != 0 || i != 0) {
-   if(fabs(I-Iold-180) < fabs(I-Iold))
-     Iold -= 180;
-   if(fabs(I-Iold+180) < fabs(I-Iold))
-     Iold += 180;
-   if(fabs(I-Iold) < 30) {
-     ppgmove(xold, Iold);
-     ppgdraw(x, I);
-     if(pa_bottom < -10) {
-       ppgmove(xold, Iold-180);
-       ppgdraw(x, I-180);
+  if(nopaswing == 0) {
+    ppgsls(1);
+    ppgsci(1);
+    ppgslw(1);
+    ppgsvp(vp_left, vp_right, vp_paswing_bottom, vp_paswing_top);
+    frame.swin_x1 = longitude_left;
+    frame.swin_x2 = longitude_right;
+    frame.swin_y1 = pa_bottom;
+    frame.swin_y2 = pa_top;
+    ppgswin(longitude_left,longitude_right,pa_bottom,pa_top);
+    ppgslw(pgplot->box.box_lw);
+    pgplot->box.drawlabels = 1;
+    if(showEll == 0 && showPAdist == 0 && showELLdist == 0) {
+      strcpy(pgplot->box.xlabel, xlabel);
+      strcpy(pgplot->box.box_xopt, "bcnst");
+    }else {
+      pgplot->box.xlabel[0] = 0;
+      strcpy(pgplot->box.box_xopt, "bcst");
+    }
+    if(!noynumbers) {
+      strcpy(pgplot->box.ylabel, ylabel_pa);
+    }else {
+      pgplot->box.ylabel[0] = 0;
+    }
+    pgplot_drawbox(&(pgplot->box));
+    float x, xold;
+    ppgslw(datalinewidth);
+    if(overlayPAfine)
+      overlayPAfine = 100;
+    else
+      overlayPAfine = 1;
+    if(overlayPA) {
+      ppgsci(2);
+      for(j = 0; j < (data.NrBins); j++) {
+ for(i = 0; i < overlayPAfine; i++) {
+   x = get_pulse_longitude(data, 0, j, verbose);
+   if(j == data.NrBins-1) {
+     x += (get_pulse_longitude(data, 0, j, verbose)-get_pulse_longitude(data, 0, j-1, verbose))*i/(float)overlayPAfine;
+   }else {
+     x += (get_pulse_longitude(data, 0, j+1, verbose)-get_pulse_longitude(data, 0, j, verbose))*i/(float)overlayPAfine;
+   }
+   I = paswing(overlayalpha, overlaybeta, x, overlaypa0, overlayl0, nrJumps, jump_longitudes, jump_offsets, 0, 0);
+   if(I > 180)
+     I -= 180;
+   if(I > 180)
+     I -= 180;
+   if(I < 0)
+     I += 180;
+   if(I < 0)
+     I += 180;
+   if(j != 0 || i != 0) {
+     if(fabs(I-Iold-180) < fabs(I-Iold))
+       Iold -= 180;
+     if(fabs(I-Iold+180) < fabs(I-Iold))
+       Iold += 180;
+     if(fabs(I-Iold) < 30) {
+       ppgmove(xold, Iold);
+       ppgdraw(x, I);
+       if(pa_bottom < -10) {
+  ppgmove(xold, Iold-180);
+  ppgdraw(x, I-180);
+       }
      }
    }
+   Iold = I;
+   xold = x;
  }
- Iold = I;
- xold = x;
       }
+      ppgsci(1);
     }
     ppgsci(1);
-  }
-  for(j = 0; j < (data.NrBins); j++) {
-    ok = 1;
-    if(data.offpulse_rms != NULL) {
-      if(data.data[j+data.NrBins] < sigma_limit*data.offpulse_rms[1])
+    for(j = 0; j < (data.NrBins); j++) {
+      ok = 1;
+      if(data.offpulse_rms != NULL) {
+ if(data.data[j+data.NrBins] < sigma_limit*data.offpulse_rms[1])
+   ok = 0;
+      }
+      if(data.data[j+4*data.NrBins] < 0)
  ok = 0;
+      if(ok && !isnan(data.data[j+3*data.NrBins]) && !isnan(get_pulse_longitude(data, 0, j, verbose))) {
+ I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) + 180.0;
+ ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
+ ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+4*data.NrBins], 1.0);
+ I = derotate_180(data.data[j+3*data.NrBins]+PAoffset);
+ ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
+ ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+4*data.NrBins], 1.0);
+ I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) - 180.0;
+ ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
+ ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+4*data.NrBins], 1.0);
+ I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) - 360.0;
+ ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
+ ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+4*data.NrBins], 1.0);
+      }
     }
-    if(data.data[j+4*data.NrBins] < 0)
-      ok = 0;
-    if(ok && !isnan(data.data[j+3*data.NrBins]) && !isnan(get_pulse_longitude(data, 0, j, verbose))) {
-      I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) + 180.0;
-      ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
-      ymax = I+data.data[j+4*data.NrBins];
-      ymin = I-data.data[j+4*data.NrBins];
-      ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+4*data.NrBins], 1.0);
-      I = derotate_180(data.data[j+3*data.NrBins]+PAoffset);
-      ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
-      ymax = I+data.data[j+4*data.NrBins];
-      ymin = I-data.data[j+4*data.NrBins];
-      ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+4*data.NrBins], 1.0);
-      I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) - 180.0;
-      ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
-      ymax = I+data.data[j+4*data.NrBins];
-      ymin = I-data.data[j+4*data.NrBins];
-      ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+4*data.NrBins], 1.0);
-      I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) - 360.0;
-      ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
-      ymax = I+data.data[j+4*data.NrBins];
-      ymin = I-data.data[j+4*data.NrBins];
-      ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+4*data.NrBins], 1.0);
-    }
-  }
-  if(herrorbaroption2 != NULL && argv != NULL && argc != 0) {
-    for(j = 0; j < argc; j++) {
-      float herr_x1, herr_x2, herr_x3, herr_y, herr_size, herr_lw;
-      int herr_ci;
-      if(strcmp(argv[j], herrorbaroption2) == 0) {
- i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &herr_x1, &herr_x2, &herr_x3, &herr_y, &herr_size, &herr_lw, &herr_ci);
- if(i != 7) {
-   fflush(stdout);
-   printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", herrorbaroption2);
-   return 0;
+    if(herrorbaroption2 != NULL && argv != NULL && argc != 0) {
+      for(j = 0; j < argc; j++) {
+ float herr_x1, herr_x2, herr_x3, herr_y, herr_size, herr_lw;
+ int herr_ci;
+ if(strcmp(argv[j], herrorbaroption2) == 0) {
+   i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &herr_x1, &herr_x2, &herr_x3, &herr_y, &herr_size, &herr_lw, &herr_ci);
+   if(i != 7) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", herrorbaroption2);
+     memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+     free(pgplot_backup);
+     return 0;
+   }
+   ppgsch(herr_size);
+   ppgsci(herr_ci);
+   ppgslw(herr_lw);
+   ppgpt1(herr_x2, herr_y, 2);
+   ppgerr1(1, herr_x2, herr_y, herr_x3-herr_x2, herr_size);
+   ppgerr1(3, herr_x2, herr_y, herr_x2-herr_x1, herr_size);
+   ppgsch(1);
+   ppgslw(1);
+   ppgsci(1);
+   j += 1;
  }
- ppgsch(herr_size);
- ppgsci(herr_ci);
- ppgslw(herr_lw);
- ppgpt1(herr_x2, herr_y, 2);
- ppgerr1(1, herr_x2, herr_y, herr_x3-herr_x2, herr_size);
- ppgerr1(3, herr_x2, herr_y, herr_x2-herr_x1, herr_size);
- ppgsch(1);
- ppgslw(1);
- ppgsci(1);
- j += 1;
+      }
+    }
+    if(verrorbaroption2 != NULL && argv != NULL && argc != 0) {
+      for(j = 0; j < argc; j++) {
+ float verr_y1, verr_y2, verr_y3, verr_x, verr_size, verr_lw;
+ int verr_ci;
+ if(strcmp(argv[j], verrorbaroption2) == 0) {
+   i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &verr_x, &verr_y1, &verr_y2, &verr_y3, &verr_size, &verr_lw, &verr_ci);
+   if(i != 7) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", verrorbaroption);
+     memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+     free(pgplot_backup);
+     return 0;
+   }
+   ppgsch(verr_size);
+   ppgsci(verr_ci);
+   ppgslw(verr_lw);
+   ppgpt1(verr_x, verr_y2, 2);
+   ppgerr1(2, verr_x, verr_y2, verr_y3-verr_y2, verr_size);
+   ppgerr1(4, verr_x, verr_y2, verr_y2-verr_y1, verr_size);
+   ppgsch(1);
+   ppgslw(1);
+   ppgsci(1);
+   j += 1;
+ }
       }
     }
   }
-  if(verrorbaroption2 != NULL && argv != NULL && argc != 0) {
-    for(j = 0; j < argc; j++) {
-      float verr_y1, verr_y2, verr_y3, verr_x, verr_size, verr_lw;
-      int verr_ci;
-      if(strcmp(argv[j], verrorbaroption2) == 0) {
- i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &verr_x, &verr_y1, &verr_y2, &verr_y3, &verr_size, &verr_lw, &verr_ci);
- if(i != 7) {
-   fflush(stdout);
-   printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", verrorbaroption);
-   return 0;
- }
- ppgsch(verr_size);
- ppgsci(verr_ci);
- ppgslw(verr_lw);
- ppgpt1(verr_x, verr_y2, 2);
- ppgerr1(2, verr_x, verr_y2, verr_y3-verr_y2, verr_size);
- ppgerr1(4, verr_x, verr_y2, verr_y2-verr_y1, verr_size);
- ppgsch(1);
- ppgslw(1);
- ppgsci(1);
- j += 1;
+  if(showEll) {
+    ppgsls(1);
+    ppgsci(1);
+    ppgslw(1);
+    ppgsvp(vp_left, vp_right, vp_ellswing_bottom, vp_ellswing_top);
+    frame.swin_x1 = longitude_left;
+    frame.swin_x2 = longitude_right;
+    frame.swin_y1 = -45;
+    frame.swin_y2 = +45;
+    ppgswin(longitude_left,longitude_right,-45,45);
+    ppgslw(pgplot->box.box_lw);
+    pgplot->box.drawlabels = 1;
+    if(!noynumbers) {
+      strcpy(pgplot->box.ylabel, ylabel_ell);
+    }else {
+      pgplot->box.ylabel[0] = 0;
+    }
+    if(showPAdist == 0 && showELLdist == 0) {
+      strcpy(pgplot->box.xlabel, xlabel);
+      strcpy(pgplot->box.box_xopt, "bcnst");
+    }else {
+      pgplot->box.xlabel[0] = 0;
+      strcpy(pgplot->box.box_xopt, "bcst");
+    }
+    pgplot_drawbox(&(pgplot->box));
+    ppgslw(datalinewidth);
+    for(j = 0; j < (data.NrBins); j++) {
+      ok = 1;
+      if(data.offpulse_rms != NULL) {
+ if(data.data[j+5*data.NrBins] < sigma_limit*data.offpulse_rms[5])
+   ok = 0;
+      }
+      if(data.data[j+7*data.NrBins] < 0)
+ ok = 0;
+      if(ok && !isnan(data.data[j+6*data.NrBins]) && !isnan(get_pulse_longitude(data, 0, j, verbose))) {
+ I = derotate_90(data.data[j+6*data.NrBins]) + 90.0;
+ ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
+ ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+7*data.NrBins], 1.0);
+ I = derotate_90(data.data[j+6*data.NrBins]);
+ ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
+ ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+7*data.NrBins], 1.0);
+ I = derotate_90(data.data[j+6*data.NrBins]) - 90.0;
+ ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
+ ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+7*data.NrBins], 1.0);
+ I = derotate_90(data.data[j+6*data.NrBins]) - 180.0;
+ ppgpt1(get_pulse_longitude(data, 0, j, verbose), I, -2);
+ ppgerr1(6, get_pulse_longitude(data, 0, j, verbose), I, data.data[j+7*data.NrBins], 1.0);
       }
     }
   }
-  if(!viewport.dontclose)
+  int cmaptype;
+  cmaptype = pgplot_device_type(NULL, verbose);
+  if(cmaptype <= 2)
+    cmaptype = PPGPLOT_GRAYSCALE;
+  else
+    cmaptype = PPGPLOT_INVERTED_GRAYSCALE;
+  if(showPAdist) {
+    ppgsls(1);
+    ppgsci(1);
+    ppgslw(1);
+    ppgsvp(vp_left, vp_right, vp_padist_bottom, vp_padist_top);
+    ppgslw(pgplot->box.box_lw);
+    pgplot->box.drawlabels = 1;
+    if(!noynumbers) {
+      strcpy(pgplot->box.ylabel, ylabel_pa);
+    }else {
+      pgplot->box.ylabel[0] = 0;
+    }
+    if(showELLdist == 0) {
+      strcpy(pgplot->box.xlabel, xlabel);
+      strcpy(pgplot->box.box_xopt, "bcnst");
+    }else {
+      pgplot->box.xlabel[0] = 0;
+      strcpy(pgplot->box.box_xopt, "bcst");
+    }
+    ppgslw(datalinewidth);
+    pgplot->viewport.dontopen = 1;
+    pgplot->viewport.dontclose = 1;
+    if(pgplotMap(pgplot, padist->data, padist->NrBins, padist->NrSubints, get_pulse_longitude(data, 0, 0, verbose), get_pulse_longitude(data, 0, padist->NrBins-1, verbose), longitude_left, longitude_right, -90+0.5*(180.0/(float)padist->NrSubints), 90-0.5*(180.0/(float)padist->NrSubints), -90, 90, cmaptype, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR pgplotPAplot: Plotting of the PA distribution failed.");
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
+      return 0;
+    }
+    pgplot_drawbox(&(pgplot->box));
+  }
+  if(showELLdist) {
+    ppgsls(1);
+    ppgsci(1);
+    ppgslw(1);
+    ppgsvp(vp_left, vp_right, vp_elldist_bottom, vp_elldist_top);
+    ppgslw(pgplot->box.box_lw);
+    pgplot->box.drawlabels = 1;
+    strcpy(pgplot->box.xlabel, xlabel);
+    if(!noynumbers) {
+      strcpy(pgplot->box.ylabel, ylabel_ell);
+    }else {
+      pgplot->box.ylabel[0] = 0;
+    }
+    strcpy(pgplot->box.box_xopt, "bcnst");
+    ppgslw(datalinewidth);
+    pgplot->viewport.dontopen = 1;
+    pgplot->viewport.dontclose = 1;
+    if(pgplotMap(pgplot, elldist->data, elldist->NrBins, elldist->NrSubints, get_pulse_longitude(data, 0, 0, verbose), get_pulse_longitude(data, 0, elldist->NrBins-1, verbose), longitude_left, longitude_right, -45+0.5*(90.0/(float)elldist->NrSubints), 45-0.5*(90.0/(float)elldist->NrSubints), -45, 45, cmaptype, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR pgplotPAplot: Plotting of the ellipticity angle distribution failed.");
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
+      return 0;
+    }
+    pgplot_drawbox(&(pgplot->box));
+  }
+  if(pgplot->viewport.dontclose == 0)
     ppgclos();
+  memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+  free(pgplot_backup);
   return 1;
 }
-int pgplotGraph1(pgplot_viewport_def viewport, float *data, float *datax, float *sigma, int nrx, float xmin, float xmax, int dontsetranges, float xmin_show, float xmax_show, float ymin_show, float ymax_show, int forceMinZero, pgplot_box_def pgplotbox, int hist, int noline, int pointtype, int color, int boxcolor, regions_definition *regions, verbose_definition verbose)
+int pgplotGraph1(pgplot_options_definition *pgplot, float *data, float *datax, float *sigma, int nrx, float xmin, float xmax, int dontsetranges, float xmin_show, float xmax_show, float ymin_show, float ymax_show, int forceMinZero, int hist, int noline, int pointtype, int color, int boxcolor, pulselongitude_regions_definition *regions, verbose_definition verbose)
 {
   float min, max;
   float x, xnext, y;
@@ -558,7 +779,7 @@ int pgplotGraph1(pgplot_viewport_def viewport, float *data, float *datax, float 
     }
   }
   xnext = 0;
-  if(pgplot_opendevice(viewport, &deviceID, verbose) == 0) {
+  if(pgplot_opendevice(&(pgplot->viewport), &deviceID, verbose) == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR pgplotGraph1: Cannot open plot device");
     return 0;
@@ -619,10 +840,10 @@ int pgplotGraph1(pgplot_viewport_def viewport, float *data, float *datax, float 
   }
   clear_pgplot_frame(&frame);
   frame.svp = 1;
-  frame.svp_x1 = 0.1+viewport.dxplot;
-  frame.svp_x2 = 0.1+viewport.dxplot+0.8*viewport.xsize;
-  frame.svp_y1 = 0.1+viewport.dyplot;
-  frame.svp_y2 = 0.1+viewport.dyplot+0.8*viewport.ysize;
+  frame.svp_x1 = 0.1+pgplot->viewport.dxplot;
+  frame.svp_x2 = 0.1+pgplot->viewport.dxplot+0.8*pgplot->viewport.xsize;
+  frame.svp_y1 = 0.1+pgplot->viewport.dyplot;
+  frame.svp_y2 = 0.1+pgplot->viewport.dyplot+0.8*pgplot->viewport.ysize;
   if(dontsetranges == 0)
     frame.swin = 1;
   else
@@ -633,7 +854,7 @@ int pgplotGraph1(pgplot_viewport_def viewport, float *data, float *datax, float 
   frame.swin_y2 = max;
   pgplot_makeframe(&frame);
   ppgsci(boxcolor);
-  pgplot_drawbox(pgplotbox);
+  pgplot_drawbox(&(pgplot->box));
   ppgsci(1);
   color_prev = color;
   ppgbbuf();
@@ -718,27 +939,31 @@ int pgplotGraph1(pgplot_viewport_def viewport, float *data, float *datax, float 
   }
   ppgebuf();
   ppgsci(1);
-  if(!viewport.dontclose)
+  if(!pgplot->viewport.dontclose)
     ppgclos();
   return 1;
 }
-int pgplot_opendevice(pgplot_viewport_def viewport, int *deviceID, verbose_definition verbose)
+int pgplot_opendevice(pgplot_viewport_definition *viewport, int *deviceID, verbose_definition verbose)
 {
-  if(viewport.dontopen == 0) {
-    *deviceID = ppgopen(viewport.plotDevice);
+  if(viewport->dontopen == 0) {
+    *deviceID = ppgopen(viewport->plotDevice);
     if(*deviceID <= 0) {
       fflush(stdout);
-      printerror(verbose.debug, "ERROR pgplot_opendevice: Cannot open plot device called '%s'", viewport.plotDevice);
+      printerror(verbose.debug, "ERROR pgplot_opendevice: Cannot open plot device called '%s'", viewport->plotDevice);
       return 0;
     }
-    pgplot_setWindowsize(viewport.windowwidth, viewport.windowheight, viewport.aspectratio);
+    pgplot_setWindowsize(viewport->windowwidth, viewport->windowheight, viewport->aspectratio);
     ppgask(0);
   }
-  if(viewport.noclear == 0)
+  if(viewport->noclear == 0)
     ppgpage();
   return 1;
 }
-void pgplot_clear_viewport_def(pgplot_viewport_def *viewport)
+void pgplot_clear_options(pgplot_options_definition *pgplot) {
+  pgplot_clear_viewport_def(&(pgplot->viewport));
+  clear_pgplot_box(&(pgplot->box));
+}
+void pgplot_clear_viewport_def(pgplot_viewport_definition *viewport)
 {
   viewport->windowwidth = 0;
   viewport->windowheight = 0;
@@ -916,10 +1141,11 @@ void clear_pgplot_frame(pgplot_frame_def_internal *frame)
   frame->TR[4] = 0;
   frame->TR[5] = 0;
 }
-void clear_pgplot_box(pgplot_box_def *box)
+void clear_pgplot_box(pgplot_box_definition *box)
 {
   box->drawbox = 1;
   box->box_lw = 1;
+  box->box_f = 1;
   box->box_labelsize = 1;
   box->box_xtick = 0;
   box->box_ytick = 0;
@@ -934,41 +1160,53 @@ void clear_pgplot_box(pgplot_box_def *box)
   box->title[0] = 0;
   box->drawlabels = 1;
   box->label_ch = 1;
+  box->label_lw = 1;
+  box->label_f = 1;
   box->dxlabel = 0;
   box->dylabel = 0;
   box->xlabel[0] = 0;
   box->ylabel[0] = 0;
   box->wedgelabel[0] = 0;
 }
-void pgplot_drawbox(pgplot_box_def box)
+void pgplot_drawbox(pgplot_box_definition *box)
 {
-  if(box.drawbox) {
-    ppgslw(box.box_lw);
-    ppgsch(box.box_labelsize);
-    ppgbox(box.box_xopt,box.box_xtick,box.box_nxsub,box.box_yopt,box.box_ytick,box.box_nysub);
+  if(box->drawbox) {
+    ppgslw(box->box_lw);
+    ppgsch(box->box_labelsize);
+    ppgscf(box->box_f);
+    ppgbox(box->box_xopt,box->box_xtick,box->box_nxsub,box->box_yopt,box->box_ytick,box->box_nysub);
   }
-  if(box.drawtitle) {
-    ppgsch(box.title_ch);
-    ppgslw(box.title_lw);
-    ppgscf(box.title_f);
-    ppgmtxt("T", (1.5*box.box_labelsize)/box.title_ch, 0.5, 0.5, box.title);
+  if(box->drawtitle) {
+    ppgsch(box->title_ch);
+    ppgslw(box->title_lw);
+    ppgscf(box->title_f);
+    ppgmtxt("T", (1.5*box->box_labelsize)/box->title_ch, 0.5, 0.5, box->title);
   }
-  if(box.drawlabels) {
-    ppgslw(box.box_lw);
-    ppgsch(box.label_ch);
-    ppgmtxt("L", ((2.5+box.dylabel)*box.box_labelsize)/box.label_ch, 0.5, 0.5, box.ylabel);
-    ppgmtxt("B", ((1.5+box.dxlabel)*box.box_labelsize)/box.label_ch+1, 0.5, 0.5, box.xlabel);
+  if(box->drawlabels) {
+    ppgslw(box->label_lw);
+    ppgsch(box->label_ch);
+    ppgscf(box->label_f);
+    ppgmtxt("L", ((2.5+box->dylabel)*box->box_labelsize)/box->label_ch, 0.5, 0.5, box->ylabel);
+    ppgmtxt("B", ((1.5+box->dxlabel)*box->box_labelsize)/box->label_ch+1, 0.5, 0.5, box->xlabel);
   }
   ppgsch(1);
   ppgslw(1);
+  ppgscf(1);
 }
-int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float xmin, float xmax, float xminshow, float xmaxshow, float ymin, float ymax, float yminshow, float ymaxshow, pgplot_box_def pgplotbox, int maptype, int itf, int nogray, int nrcontours, float *contours, int contourlw, int forceMinZero, float saturize, int levelset, float levelmin, float levelmax, int levelInversion, int onlyData, int sideright, int forceMinZeroRight, int sidetop, int forceMinZeroTop, int sidelw, int showwedge, int plotSubset, int showTwice, verbose_definition verbose)
+int pgplotMap(pgplot_options_definition *pgplot, float *cmap, int nrx, int nry, float xmin, float xmax, float xminshow, float xmaxshow, float ymin, float ymax, float yminshow, float ymaxshow, int maptype, int itf, int nogray, int nrcontours, float *contours, int contourlw, int forceMinZero, float saturize, int levelset, float levelmin, float levelmax, int levelInversion, int onlyData, int sideright, int forceMinZeroRight, int sidetop, int forceMinZeroTop, int sidelw, int showwedge, int plotSubset, int showTwice, verbose_definition verbose)
 {
   float datamin, datamax, xmin2, xmax2;
   float *collapse, x, y, remember2_x1, remember2_x2, remember2_y1, remember2_y2;
   int i, j, deviceID, firstc, lastc, firstpoint;
   float junk_f, lasty;
   pgplot_frame_def_internal pgplot_frame_internal;
+  pgplot_options_definition *pgplot_backup;
+  pgplot_backup = (pgplot_options_definition *)malloc(sizeof(pgplot_options_definition));
+  if(pgplot_backup == NULL) {
+    printerror(verbose.debug, "ERROR pgplotMap: Memory allocation error");
+    return 0;
+  }
+  memcpy(pgplot_backup, pgplot, sizeof(pgplot_options_definition));
   clear_pgplot_frame(&pgplot_frame_internal);
   internal_pgplot_xmin = xmin;
   internal_pgplot_xmax = xmax;
@@ -982,29 +1220,31 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     printf("pgplotMap -- Horizontal dimensions %f - %f (shown %f - %f)\n", xmin, xmax, xminshow, xmaxshow);
     printf("pgplotMap -- Vertical dimensions %f - %f (shown %f - %f)\n", ymin, ymax, yminshow, ymaxshow);
   }
-  if(pgplot_opendevice(viewport, &deviceID, verbose) == 0) {
+  if(pgplot_opendevice(&(pgplot->viewport), &deviceID, verbose) == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR pgplotMap: Cannot open plot device");
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
     return 0;
   }
   if(onlyData == 0) {
-    pgplot_setWindowsize(viewport.windowwidth, viewport.windowheight, viewport.aspectratio);
+    pgplot_setWindowsize(pgplot->viewport.windowwidth, pgplot->viewport.windowheight, pgplot->viewport.aspectratio);
   }
   ppgslw(1);
   ppgsci(1);
   ppgscf(1);
   ppgsch(1);
   if(onlyData == 0 || onlyData == 2) {
-    pgplot_frame_internal.svp_x1 = viewport.dxplot+0.15;
-    pgplot_frame_internal.svp_y1 = viewport.dyplot+0.15;
+    pgplot_frame_internal.svp_x1 = pgplot->viewport.dxplot+0.15;
+    pgplot_frame_internal.svp_y1 = pgplot->viewport.dyplot+0.15;
     if(sideright)
-      pgplot_frame_internal.svp_x2 = (0.75-0.15)*viewport.xsize+pgplot_frame_internal.svp_x1;
+      pgplot_frame_internal.svp_x2 = (0.75-0.15)*pgplot->viewport.xsize+pgplot_frame_internal.svp_x1;
     else
-      pgplot_frame_internal.svp_x2 = (0.90-0.15)*viewport.xsize+pgplot_frame_internal.svp_x1;
+      pgplot_frame_internal.svp_x2 = (0.90-0.15)*pgplot->viewport.xsize+pgplot_frame_internal.svp_x1;
     if(sidetop)
-      pgplot_frame_internal.svp_y2 = (0.75-0.15)*viewport.ysize+pgplot_frame_internal.svp_y1;
+      pgplot_frame_internal.svp_y2 = (0.75-0.15)*pgplot->viewport.ysize+pgplot_frame_internal.svp_y1;
     else
-      pgplot_frame_internal.svp_y2 = (0.90-0.15)*viewport.ysize+pgplot_frame_internal.svp_y1;
+      pgplot_frame_internal.svp_y2 = (0.90-0.15)*pgplot->viewport.ysize+pgplot_frame_internal.svp_y1;
     pgplot_frame_internal.svp = 1;
   }else {
     pgplot_frame_internal.svp = 0;
@@ -1059,6 +1299,8 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
   if(pgplot_set_maptype(maptype, verbose) == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR pgplotMap: Cannot set colour map");
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
     return 0;
   }
   int subset_nrx, subset_nry, subset_extrabefore, subset_extraafter;
@@ -1135,8 +1377,10 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     ppgimag(cmap_subset, subset_nrx, subset_nry, 1, subset_nrx, 1, subset_nry, datamax, datamin, pgplot_frame_internal.TR);
   }
   if(showwedge && sideright == 0) {
-    ppgsch(pgplotbox.box_labelsize*0.5);
-    ppgwedg("RI", 0, 6, datamax, datamin, pgplotbox.wedgelabel);
+    ppgsch(pgplot->box.box_labelsize*0.5);
+    ppgslw(ceil(0.5*pgplot->box.box_lw));
+    ppgwedg("RI", 0, 6, datamax, datamin, pgplot->box.wedgelabel);
+    ppgslw(1);
   }
   if(nrcontours > 0) {
     ppgslw(contourlw);
@@ -1150,17 +1394,19 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
   if(plotSubset)
     free(cmap_subset);
   if(onlyData != 0)
-    pgplotbox.drawbox = 0;
+    pgplot->box.drawbox = 0;
   if(sidetop && onlyData != 1)
-    pgplotbox.drawtitle = 0;
+    pgplot->box.drawtitle = 0;
   if(onlyData != 0)
-    pgplotbox.drawlabels = 0;
-  pgplot_drawbox(pgplotbox);
+    pgplot->box.drawlabels = 0;
+  pgplot_drawbox(&(pgplot->box));
   if(sideright) {
     collapse = (float *)calloc(nry, sizeof(float));
     if(collapse == NULL) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR pgplotMap: Cannot allocate memory");
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
       return 0;
     }
     for(i = 0; i < nrx; i++) {
@@ -1198,9 +1444,9 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     if(forceMinZeroRight)
       xmin2 = 0;
     if(sidetop)
-      junk_f = (0.75-0.15)*viewport.ysize+viewport.dyplot+0.15;
+      junk_f = (0.75-0.15)*pgplot->viewport.ysize+pgplot->viewport.dyplot+0.15;
     else
-      junk_f = (0.90-0.15)*viewport.ysize+viewport.dyplot+0.15;
+      junk_f = (0.90-0.15)*pgplot->viewport.ysize+pgplot->viewport.dyplot+0.15;
     if(onlyData != 0) {
       ppgqvp(0, &pgplot_frame_internal.svp_x1, &pgplot_frame_internal.svp_x2, &pgplot_frame_internal.svp_y1, &pgplot_frame_internal.svp_y2);
       ppgqwin(&remember2_x1, &remember2_x2, &remember2_y1, &remember2_y2);
@@ -1211,12 +1457,14 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     else
       ppgswin(xmin2, xmax2, yminshow, ymaxshow+ymaxshow-yminshow);
     if(showwedge) {
-      ppgsch(pgplotbox.box_labelsize*0.5);
-      ppgwedg("RI", 0, 6, datamax, datamin, pgplotbox.wedgelabel);
+      ppgsch(pgplot->box.box_labelsize*0.5);
+      ppgslw(ceil(0.5*pgplot->box.box_lw));
+      ppgwedg("RI", 0, 6, datamax, datamin, pgplot->box.wedgelabel);
+      ppgslw(1);
     }
     if(onlyData == 0 || onlyData == 2) {
-      ppgslw(pgplotbox.box_lw);
-      ppgsch(pgplotbox.box_labelsize*0.5);
+      ppgslw(pgplot->box.box_lw);
+      ppgsch(pgplot->box.box_labelsize*0.5);
       if(sideright == 4) {
  ppgbox("bcsti",0.0,0,"bc",0.0,0);
       }else if(sideright == 3) {
@@ -1270,6 +1518,8 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     if(collapse == NULL) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR pgplotMap: Cannot allocate memory");
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
       return 0;
     }
     for(i = 0; i < nry; i++) {
@@ -1311,9 +1561,9 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     if(forceMinZeroRight)
       xmin2 = 0;
     if(sideright)
-      junk_f = (0.75-0.15)*viewport.xsize+viewport.dxplot+0.15;
+      junk_f = (0.75-0.15)*pgplot->viewport.xsize+pgplot->viewport.dxplot+0.15;
     else
-      junk_f = (0.90-0.15)*viewport.xsize+viewport.dxplot+0.15;
+      junk_f = (0.90-0.15)*pgplot->viewport.xsize+pgplot->viewport.dxplot+0.15;
     if(onlyData != 0) {
       ppgqvp(0, &pgplot_frame_internal.svp_x1, &pgplot_frame_internal.svp_x2, &pgplot_frame_internal.svp_y1, &pgplot_frame_internal.svp_y2);
       ppgqwin(&remember2_x1, &remember2_x2, &remember2_y1, &remember2_y2);
@@ -1322,12 +1572,13 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     ppgsvp(pgplot_frame_internal.svp_x1, junk_f, pgplot_frame_internal.svp_y2, pgplot_frame_internal.svp_y2+0.15);
     ppgswin(xminshow, xmaxshow, xmin2, xmax2);
     if(onlyData == 0 || onlyData == 2) {
-      ppgsch(pgplotbox.box_labelsize*0.5);
-      ppgslw(pgplotbox.box_lw);
-      if(sidetop == 2)
+      ppgsch(pgplot->box.box_labelsize*0.5);
+      ppgslw(pgplot->box.box_lw);
+      if(sidetop == 2) {
  ppgbox("bcsti",0.0,0,"bctsi",0.0,0);
-      else
+      }else {
  ppgbox("bcsti",0.0,0,"bcntsi",0.0,0);
+      }
       ppgsch(1);
       ppgslw(1);
     }
@@ -1342,13 +1593,13 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     }
     ppgslw(1);
     if(onlyData == 0 || onlyData == 2) {
-      ppgsch(pgplotbox.title_ch);
-      ppgslw(pgplotbox.title_lw);
-      ppgscf(pgplotbox.title_f);
-      ppgptxt(0.5*(xmaxshow-xminshow)+xminshow, xmax2+0.3*(pgplotbox.label_ch/1.7)*(xmax2-xmin2), 0, 0.5, pgplotbox.title);
+      ppgsch(pgplot->box.title_ch);
+      ppgslw(pgplot->box.title_lw);
+      ppgscf(pgplot->box.title_f);
+      ppgptxt(0.5*(xmaxshow-xminshow)+xminshow, xmax2+0.3*(pgplot->box.label_ch/1.7)*(xmax2-xmin2), 0, 0.5, pgplot->box.title);
       ppgscf(1);
       ppgslw(1);
-      ppgsch(pgplotbox.label_ch);
+      ppgsch(pgplot->box.label_ch);
     }
     free(collapse);
     if(onlyData != 0) {
@@ -1363,24 +1614,31 @@ int pgplotMap(pgplot_viewport_def viewport, float *cmap, int nrx, int nry, float
     else
       ppgswin(xminshow, xmaxshow, yminshow, ymaxshow+ymaxshow-yminshow);
   }
-  if(!viewport.dontclose)
+  memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+  free(pgplot_backup);
+  if(!pgplot->viewport.dontclose)
     ppgclos();
   return 1;
 }
-int selectRegions(float *profileI, int nrBins, pgplot_viewport_def viewport, pgplot_box_def pgplotbox, int onlyOne, int powerTwo, int evenNumber, regions_definition *regions, verbose_definition verbose)
+int selectRegions(float *profileI, int nrBins, pgplot_options_definition *pgplot, int onlyOne, int powerTwo, int evenNumber, pulselongitude_regions_definition *regions, verbose_definition verbose)
 {
   int i, j, k, bin1, bin2, replot;
   float x, y;
   char c;
-  pgplot_viewport_def viewport2;
+  pgplot_options_definition *pgplot2;
+  pgplot2 = (pgplot_options_definition *)malloc(sizeof(pgplot_options_definition));
+  if(pgplot2 == NULL) {
+    printerror(verbose.debug, "ERROR selectRegions: Memory allocation error");
+    return 0;
+  }
   x = y = 0;
   c = 0;
   bin1 = bin2 = 0;
-  if(strcmp(viewport.plotDevice, "?") == 0)
+  if(strcmp(pgplot->viewport.plotDevice, "?") == 0)
     printf("Select plotting device to show profile in order to select the onpulse region\n  ");
-  memcpy(&viewport2, &viewport, sizeof(pgplot_viewport_def));
-  viewport2.dontclose = 1;
-  pgplotGraph1(viewport2, profileI, NULL, NULL, nrBins, 0, nrBins-1, 0, 0, nrBins-1, 0, 0, 0, pgplotbox, 1, 0, 0, 1, 1, regions, verbose);
+  memcpy(pgplot2, pgplot, sizeof(pgplot_options_definition));
+  pgplot2->viewport.dontclose = 1;
+  pgplotGraph1(pgplot2, profileI, NULL, NULL, nrBins, 0, nrBins-1, 0, 0, nrBins-1, 0, 0, 0, 1, 0, 0, 1, 1, regions, verbose);
   printf("Select onpulse region (click left and right of region, you can select multiple regions and pressing 'r' inside the PGPLOT window removes selections one by one).\nWhen finished press S inside the PGPLOT window.\n");
   i = 0;
   replot = 0;
@@ -1392,10 +1650,11 @@ int selectRegions(float *profileI, int nrBins, pgplot_viewport_def viewport, pgp
     if(c == 0) {
       fflush(stdout);
       printwarning(verbose.debug, "WARNING selectRegions: PGPLOT device does not support cursor: no pulse phase selection can be made.");
-      if(viewport.dontclose == 0) {
+      if(pgplot->viewport.dontclose == 0) {
  ppgclos();
  fflush(stdout);
       }
+      free(pgplot2);
       return -1;
     }else if(c == 65) {
       if(i == 0)
@@ -1455,28 +1714,30 @@ int selectRegions(float *profileI, int nrBins, pgplot_viewport_def viewport, pgp
       regions->right_bin[regions->nrRegions] = bin2;
       regions->bins_defined[regions->nrRegions] = 1;
       regions->nrRegions += 1;
-      if(regions->nrRegions == maxNrRegions) {
+      if(regions->nrRegions == MAX_pulselongitude_regions) {
  fflush(stdout);
  printerror(verbose.debug, "ERROR selectRegions: Too many regions selected.");
  ppgend();
+ free(pgplot2);
  return regions->nrRegions;
       }
       replot = 1;
       i = 0;
     }
     if(replot) {
-      memcpy(&viewport2, &viewport, sizeof(pgplot_viewport_def));
-      viewport2.dontclose = 1;
-      viewport2.dontopen = 1;
-      pgplotGraph1(viewport2, profileI, NULL, NULL, nrBins, 0, nrBins-1, 0, 0, nrBins-1, 0, 0, 0, pgplotbox, 1, 0, 0, 1, 1, regions, verbose);
+      memcpy(pgplot2, pgplot, sizeof(pgplot_options_definition));
+      pgplot2->viewport.dontclose = 1;
+      pgplot2->viewport.dontopen = 1;
+      pgplotGraph1(pgplot2, profileI, NULL, NULL, nrBins, 0, nrBins-1, 0, 0, nrBins-1, 0, 0, 0, 1, 0, 0, 1, 1, regions, verbose);
       replot = 0;
     }
   }while(i < 3);
-  if(viewport.dontclose == 0)
+  if(pgplot->viewport.dontclose == 0)
     ppgclos();
+  free(pgplot2);
   return regions->nrRegions;
 }
-int checkRegions(int bin, regions_definition *regions, int whichregion, verbose_definition verbose)
+int checkRegions(int bin, pulselongitude_regions_definition *regions, int whichregion, verbose_definition verbose)
 {
   int i;
   if(regions == NULL)
@@ -1494,16 +1755,56 @@ int checkRegions(int bin, regions_definition *regions, int whichregion, verbose_
   }
   return 0;
 }
-void clearRegion(regions_definition *region)
+int initPulselongitudeRegion(pulselongitude_regions_definition *region, verbose_definition verbose)
+{
+  region->bins_defined = malloc(MAX_pulselongitude_regions*sizeof(int));
+  region->left_bin = malloc(MAX_pulselongitude_regions*sizeof(int));
+  region->right_bin = malloc(MAX_pulselongitude_regions*sizeof(int));
+  region->frac_defined = malloc(MAX_pulselongitude_regions*sizeof(int));
+  region->left_frac = malloc(MAX_pulselongitude_regions*sizeof(float));
+  region->right_frac = malloc(MAX_pulselongitude_regions*sizeof(float));
+  if(region->bins_defined == NULL || region->left_bin == NULL || region->right_bin == NULL || region->frac_defined == NULL || region->left_frac == NULL || region->right_frac == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR initPulselongitudeRegion: Memory allocation error");
+    return 0;
+  }
+  clearPulselongitudeRegion(region);
+  return 1;
+}
+void freePulselongitudeRegion(pulselongitude_regions_definition *region)
+{
+  free(region->bins_defined);
+  free(region->left_bin);
+  free(region->right_bin);
+  free(region->frac_defined);
+  free(region->left_frac);
+  free(region->right_frac);
+}
+void copyPulselongitudeRegion(pulselongitude_regions_definition source, pulselongitude_regions_definition *destination)
+{
+  int i;
+  destination->nrRegions = source.nrRegions;
+  if(source.nrRegions > 0) {
+    for(i = 0; i < source.nrRegions; i++) {
+      destination->bins_defined[i] = source.bins_defined[i];
+      destination->left_bin[i] = source.left_bin[i];
+      destination->right_bin[i] = source.right_bin[i];
+      destination->frac_defined[i] = source.frac_defined[i];
+      destination->left_frac[i] = source.left_frac[i];
+      destination->right_frac[i] = source.right_frac[i];
+    }
+  }
+}
+void clearPulselongitudeRegion(pulselongitude_regions_definition *region)
 {
   int i;
   region->nrRegions = 0;
-  for(i = 0; i < maxNrRegions; i++) {
+  for(i = 0; i < MAX_pulselongitude_regions; i++) {
     region->frac_defined[i] = 0;
     region->bins_defined[i] = 0;
   }
 }
-void region_frac_to_int(regions_definition *region, float scale, float offset)
+void region_frac_to_int(pulselongitude_regions_definition *region, float scale, float offset)
 {
   int i;
   for(i = 0; i < region->nrRegions; i++) {
@@ -1514,7 +1815,7 @@ void region_frac_to_int(regions_definition *region, float scale, float offset)
     }
   }
 }
-void region_int_to_frac(regions_definition *region, float scale, float offset)
+void region_int_to_frac(pulselongitude_regions_definition *region, float scale, float offset)
 {
   int i;
   for(i = 0; i < region->nrRegions; i++) {
@@ -1525,7 +1826,7 @@ void region_int_to_frac(regions_definition *region, float scale, float offset)
     }
   }
 }
-void regionShowNextTimeUse(regions_definition region, char *option, char *optionFrac, FILE *where)
+void regionShowNextTimeUse(pulselongitude_regions_definition region, char *option, char *optionFrac, FILE *where)
 {
   int i, ok;
   if(region.nrRegions > 0) {

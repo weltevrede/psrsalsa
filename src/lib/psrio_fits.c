@@ -34,7 +34,6 @@ void print_fitsio_version_used(FILE *stream)
 }
 
 
-
 void psrfits_set_noweights(int val)
 {
   psrfits_noweights = val;
@@ -385,7 +384,18 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
       return 0;
     }
     datafile->freqMode = FREQMODE_UNIFORM;
-    if(!fits_read_col(datafile->fits_fptr, TFLOAT, colnum, 1+pulsenr, 1, 1, NULL, &datafile->uniform_freq_cent, &anynul, &status)) {
+    if(datafile->freqlabel_list != NULL) {
+      free(datafile->freqlabel_list);
+      datafile->freqlabel_list = NULL;
+    }
+    double freq;
+    if(!fits_read_col(datafile->fits_fptr, TFLOAT, colnum, 1+pulsenr, 1, 1, NULL, &freq, &anynul, &status)) {
+    }
+    set_centre_frequency(datafile, freq, verbose);
+    if(set_bandwidth(datafile, 0.0, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readFITSpulse: Bandwidth changing failed");
+      return 0;
     }
   }
   if(fits_get_colnum (datafile->fits_fptr, CASEINSEN, "DATA", &colnum, &status)) {
@@ -503,6 +513,16 @@ int readPSRCHIVE_ASCIIHeader(datafile_definition *datafile, verbose_definition v
   }
   datafile->tsub_list[0] = 0;
   datafile->freqMode = FREQMODE_UNIFORM;
+  if(datafile->freqlabel_list != NULL) {
+    free(datafile->freqlabel_list);
+    datafile->freqlabel_list = NULL;
+  }
+  set_centre_frequency(datafile, 0.0, verbose);
+  if(set_bandwidth(datafile, 0.0, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRCHIVE_ASCIIHeader: Setting bandwidth failed");
+    return 0;
+  }
   free(filename);
   free(tmp);
   free(psrname);
@@ -755,7 +775,7 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
     return 0;
   }
-  dummy_float = datafile->uniform_bw;
+  dummy_float = get_bandwidth(*datafile, verbose);
   if(fits_write_key(datafile->fits_fptr, TFLOAT, "OBSBW", &dummy_float, "[MHz] Bandwidth for observation", &status) != 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
@@ -893,6 +913,8 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     sprintf(dummy_txt, "AABBCRCI");
   }else if(datafile->poltype == POLTYPE_ILVPAdPA) {
     sprintf(dummy_txt, "ILVPAdPA");
+  }else if(datafile->poltype == POLTYPE_ILVPAdPATEldEl) {
+    sprintf(dummy_txt, "ILVPATEL");
   }else if(datafile->poltype == POLTYPE_PAdPA) {
     sprintf(dummy_txt, "PAdPA");
   }else {
@@ -946,7 +968,7 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
     return 0;
   }
-  if(get_channelbw(*datafile, 0, 0, &dummy_double, verbose) == 0) {
+  if(get_channelbandwidth(*datafile, &dummy_double, verbose) == 0) {
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot obtain channel bandwidth.");
     return 0;
   }
@@ -1028,6 +1050,8 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
       sprintf(dummy_txt, "AABBCRCI");
     }else if(datafile->poltype == POLTYPE_ILVPAdPA) {
       sprintf(dummy_txt, "ILVPAdPA");
+    }else if(datafile->poltype == POLTYPE_ILVPAdPATEldEl) {
+      sprintf(dummy_txt, "ILVPATEL");
     }else if(datafile->poltype == POLTYPE_PAdPA) {
       sprintf(dummy_txt, "PAdPA");
     }else {
@@ -1038,7 +1062,7 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
       printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
       return 0;
     }
-    if(datafile->poltype != POLTYPE_STOKES && datafile->poltype != POLTYPE_COHERENCY && datafile->poltype != POLTYPE_ILVPAdPA && datafile->poltype != POLTYPE_PAdPA) {
+    if(datafile->poltype != POLTYPE_STOKES && datafile->poltype != POLTYPE_COHERENCY && datafile->poltype != POLTYPE_ILVPAdPA && datafile->poltype != POLTYPE_PAdPA && datafile->poltype != POLTYPE_ILVPAdPATEldEl) {
       fflush(stdout);
       printwarning(verbose.debug, "WARNING writePSRFITSHeader: poltype is not set.");
     }
@@ -1115,7 +1139,7 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
       printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
       return 0;
     }
-    if(get_channelbw(*datafile, 0, 0, &dummy_double, verbose) == 0) {
+    if(get_channelbandwidth(*datafile, &dummy_double, verbose) == 0) {
       printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot obtain channel bandwidth.");
       return 0;
     }
@@ -1164,7 +1188,7 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
  return 0;
       }
       for(j = 0; j < datafile->NrFreqChan; j++) {
- dummy_double = get_channel_freq(*datafile, j, verbose);
+ dummy_double = get_weighted_channel_freq(*datafile, i, j, verbose);
  if(fits_write_col(datafile->fits_fptr, TDOUBLE, 14, i+1, 1+j, 1, &dummy_double, &status) != 0) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR writePSRFITSHeader: Error writing frequency.");
@@ -1277,7 +1301,7 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     }
     for(i = 0; i < datafile->NrSubints; i++) {
       for(j = 0; j < datafile->NrFreqChan; j++) {
- dummy_float = get_channel_freq(*datafile, j, verbose);
+ dummy_float = get_weighted_channel_freq(*datafile, i, j, verbose);
  if(fits_write_col(datafile->fits_fptr, TFLOAT, 1, i+1, 1+j, 1, &dummy_float, &status) != 0) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR writePSRFITSHeader: Error writing frequency.");
@@ -1330,80 +1354,46 @@ void fits_strip_quotes(char *src, char *dst)
 }
 void update_freqs_using_DAT_FREQ_column(datafile_definition *datafile, verbose_definition verbose)
 {
-  int i, colnum, anynul;
+  int colnum, anynul;
   int status = 0;
+  if(datafile->freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): The frequency channels should be assumed to be uniform at this point.", datafile->filename);
+    exit(0);
+  }
   if(fits_get_colnum (datafile->fits_fptr, CASEINSEN, "DAT_FREQ", &colnum, &status)) {
     fflush(stdout);
     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find DAT_FREQ in table to determine observing frequency.", datafile->filename);
     status = 0;
   }else {
-    double freq0, freq1, cfreq, dfreq, deltafreq, freqlast;
-    double freq;
-    int ok, suppresswarning;
-    suppresswarning = 0;
-    ok = 1;
-    cfreq = freq0 = freq1 = deltafreq = freqlast = 0;
-    status = 0;
-    for(i = 0; i < datafile->NrFreqChan; i++) {
-      if(fits_read_col(datafile->fits_fptr, TDOUBLE, colnum, 1, 1+i, 1, NULL, &(freq), &anynul, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read DAT_FREQ in subint table to determine observing frequency.", datafile->filename);
- ok = 0;
- status = 0;
- break;
-      }else {
- cfreq += freq;
- if(i == 0) {
-   freq0 = freq;
-   deltafreq = -freq;
- }else if(i == 1) {
-   deltafreq += freq;
-   freqlast = freq;
- }else {
-   if(fabs(freq-freqlast - deltafreq) > 1e-6 && suppresswarning == 0) {
-     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Frequency channels do not appear to be equally spaced (%lf - %lf != %lf for channel %ld). You can expect problems. Warnings for other channels are suppressed.", datafile->filename, freq, freqlast, deltafreq, i);
-     suppresswarning = 1;
-   }
-   freqlast = freq;
- }
- if(i == datafile->NrFreqChan-1)
-   freq1 = freq;
-      }
+    datafile->freqMode = FREQMODE_FREQTABLE;
+    if(datafile->freqlabel_list != NULL) {
+      free(datafile->freqlabel_list);
     }
-    if(ok) {
-      cfreq /= (double)datafile->NrFreqChan;
-      if(fabs(cfreq-datafile->uniform_freq_cent) > 1e-6) {
- if(datafile->uniform_freq_cent > 0 && (datafile->uniform_freq_cent < 0.99e10 || datafile->uniform_freq_cent > 1.01e10)) {
-   double chanbw;
-   if(get_channelbw(*datafile, 0, 0, &chanbw, verbose) == 0) {
-     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain channel bandwidth.", datafile->filename);
+    datafile->freqlabel_list = malloc(datafile->NrSubints*datafile->NrFreqChan*sizeof(double));
+    if(datafile->freqlabel_list == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Memory allocation error.", datafile->filename);
+      exit(0);
+    }
+    long subint, freqchan;
+    double freq;
+    for(subint = 0; subint < datafile->NrSubints; subint++) {
+      for(freqchan = 0; freqchan < datafile->NrFreqChan; freqchan++) {
+ if(fits_read_col(datafile->fits_fptr, TDOUBLE, colnum, 1+subint, 1+freqchan, 1, NULL, &(freq), &anynul, &status)) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read DAT_FREQ in subint table to determine observing frequency.", datafile->filename);
+   status = 0;
+   datafile->freqMode = FREQMODE_UNIFORM;
+   free(datafile->freqlabel_list);
+   datafile->freqlabel_list = NULL;
+   return;
+ }else {
+   if(set_weighted_channel_freq(datafile, subint, freqchan, freq, verbose) == 0) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Error setting (weighted) frequency for channel/subint.", datafile->filename);
      exit(0);
    }
-   if(fabs(datafile->uniform_freq_cent-cfreq-0.5*fabs(chanbw)) < 1e-6) {
-     if(verbose.debug) {
-       printf("  readPSRFITSHeader (%s): Updating centre frequency from %lf to %lf MHz as suggested by the frequency list in the fits table, corresponding to an offset expected from a dropped DC channel.\n", datafile->filename, datafile->uniform_freq_cent, cfreq);
-     }
-   }else {
-     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Updating centre frequency from %lf to %lf MHz as suggested by the frequency list in the fits table.", datafile->filename, datafile->uniform_freq_cent, cfreq);
-   }
- }else {
-   if(verbose.debug)
-     printf("  readPSRFITSHeader (%s): Use subint frequency table frequency as centre frequency = %f MHz.\n", datafile->filename, cfreq);
- }
- datafile->freqMode = FREQMODE_UNIFORM;
- datafile->uniform_freq_cent = cfreq;
-      }
-      if(datafile->NrFreqChan > 1) {
- dfreq = (freq1-freq0)/(double)(datafile->NrFreqChan-1);
- double chanbw;
- if(get_channelbw(*datafile, 0, 0, &chanbw, verbose) == 0) {
-   printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot obtain channel bandwidth.", datafile->filename);
-   exit(0);
- }
- if(fabs(dfreq-chanbw) > 1e-6) {
-   fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Updating channel bandwidth from %lf to %lf MHz suggested by the frequency list in the subint table.", datafile->filename, chanbw, dfreq);
-   datafile->uniform_bw = dfreq*datafile->NrFreqChan;
  }
       }
     }
@@ -1416,7 +1406,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
   int hdutype, nkeys, i, colnum, anynul, dmnotset, rmnotset, periodnotset, gentypenotset, tsubnotset, tsubsettotobs;
   int nodata, issearch, samptimenotset, dummy_int;
   long numrows;
-  double f, dummy_double, f1, f2;
+  double f, dummy_double, f1, f2, freq_cent;
   char command[2000], tmpfilename[2000];
   char dummy_txt[2000];
   FILE *fin;
@@ -1538,15 +1528,20 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
   }
   fits_parse_value(card, value, comment, &status);
   datafile->freqMode = FREQMODE_UNIFORM;
-  sscanf(value, "%lf", &(datafile->uniform_freq_cent));
-  if(datafile->uniform_freq_cent < 1 && (datafile->uniform_freq_cent < -1.1 || datafile->uniform_freq_cent > -0.9)) {
+  if(datafile->freqlabel_list != NULL) {
+    free(datafile->freqlabel_list);
+    datafile->freqlabel_list = NULL;
+  }
+  sscanf(value, "%lf", &freq_cent);
+  set_centre_frequency(datafile, freq_cent, verbose);
+  if(freq_cent < 1 && (freq_cent < -1.1 || freq_cent > -0.9)) {
     fflush(stdout);
     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBSFREQ keyword is not defined or zero", datafile->filename);
   }else {
-    datafile->freq_ref = datafile->uniform_freq_cent;
+    datafile->freq_ref = freq_cent;
   }
   if(verbose.debug)
-    printf("  readPSRFITSHeader (%s): OBSFREQ = %lf (-1 or 1e10 is interpreted as infinity)\n", datafile->filename, datafile->uniform_freq_cent);
+    printf("  readPSRFITSHeader (%s): OBSFREQ = %lf (-1 or 1e10 is interpreted as infinity)\n", datafile->filename, freq_cent);
   if(fits_read_card(datafile->fits_fptr,"FD_POLN", card, &status)) {
     fflush(stdout);
     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_POLN keyword does not exist", datafile->filename);
@@ -1668,8 +1663,9 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     }
   }
   datafile->tsubMode = TSUBMODE_UNKNOWN;
-  if(datafile->tsub_list != NULL)
+  if(datafile->tsub_list != NULL) {
     free(datafile->tsub_list);
+  }
   datafile->tsub_list = (double *)malloc(sizeof(double));
   if(datafile->tsub_list == NULL) {
     fflush(stdout);
@@ -1874,8 +1870,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       if(fits_read_col(datafile->fits_fptr, TDOUBLE, colnum, numrows, 1, 1, NULL, &(freq_history), &anynul, &status)) {
  fflush(stdout);
  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find centre frequency in history table.", datafile->filename);
- datafile->freqMode = FREQMODE_UNIFORM;
- datafile->uniform_freq_cent = 0;
+ set_centre_frequency(datafile, 0.0, verbose);
  status = 0;
       }
       if((freq_history > -1.01 && freq_history < -0.99)) {
@@ -1883,9 +1878,8 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
    printf("  readPSRFITSHeader (%s): Frequency defined in history table = %lf is interpreted as infinity\n", datafile->filename, freq_history);
  freq_history = 1e10;
       }
-      if(datafile->uniform_freq_cent < 1) {
- datafile->freqMode = FREQMODE_UNIFORM;
- datafile->uniform_freq_cent = freq_history;
+      if(get_centre_frequency(*datafile, verbose) < 1) {
+ set_centre_frequency(datafile, freq_history, verbose);
  if(verbose.debug)
    printf("  readPSRFITSHeader (%s): Use history table frequency as centre frequency.\n", datafile->filename);
       }
@@ -1899,7 +1893,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       }
     }
   }
-  if(datafile->uniform_freq_cent < 1) {
+  if(get_centre_frequency(*datafile, verbose) < 1) {
     if(verbose.debug)
       printf("  readPSRFITSHeader (%s): Try to get centre frequency from polyco table\n", datafile->filename);
     if(fits_movnam_hdu(datafile->fits_fptr, BINARY_TBL, "POLYCO", 0, &status)) {
@@ -1918,14 +1912,13 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
    printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot read column", datafile->filename);
    status = 0;
  }else {
-   datafile->freqMode = FREQMODE_UNIFORM;
-   datafile->uniform_freq_cent = dummy_double;
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FREQUENCY=%f according to polyco", datafile->filename, datafile->uniform_freq_cent);
+   set_centre_frequency(datafile, dummy_double, verbose);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FREQUENCY=%f according to polyco", datafile->filename, dummy_double);
  }
       }
     }
   }
-  if(datafile->uniform_freq_cent < 1) {
+  if(get_centre_frequency(*datafile, verbose) < 1) {
     if(verbose.debug)
       printf("  readPSRFITSHeader (%s): Try to get centre frequency from tempo2 predictor table\n", datafile->filename);
     if(fits_movnam_hdu(datafile->fits_fptr, BINARY_TBL, "T2PREDICT", 0, &status)) {
@@ -1951,8 +1944,8 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
    sscanf(command, "%s", dummy_txt);
    if(strcmp(dummy_txt, "FREQ_RANGE") == 0) {
      sscanf(command, "%s %lf %lf", dummy_txt, &f1, &f2);
-     datafile->uniform_freq_cent = 0.5*(f1+f2);
-     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FREQUENCY=%f according to tempo2 predictor", datafile->filename, datafile->uniform_freq_cent);
+     set_centre_frequency(datafile, 0.5*(f1+f2), verbose);
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FREQUENCY=%lf according to tempo2 predictor", datafile->filename, get_centre_frequency(*datafile, verbose));
    }
  }
       }
@@ -2072,6 +2065,8 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
  datafile->poltype = POLTYPE_COHERENCY;
       }else if(strcmp(dummy_txt, "ILVPAdPA") == 0 || strcmp(dummy_txt, "ILVPADPA") == 0 || strcmp(dummy_txt, "ILVPA") == 0) {
  datafile->poltype = POLTYPE_ILVPAdPA;
+      }else if(strcmp(dummy_txt, "ILVPATEL") == 0 || strcmp(dummy_txt, "PAELL+") == 0) {
+ datafile->poltype = POLTYPE_ILVPAdPATEldEl;
       }else if(strcmp(dummy_txt, "PAdPA") == 0 || strcmp(dummy_txt, "PADPA") == 0 || strcmp(dummy_txt, "PA") == 0) {
  datafile->poltype = POLTYPE_PAdPA;
       }else if(strcmp(dummy_txt, "UNKNOWN") == 0) {
@@ -2190,8 +2185,14 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       return 0;
     }else {
       fits_parse_value(card, value, comment, &status);
-      sscanf(value, "%lf", &(datafile->uniform_bw));
-      datafile->uniform_bw *= datafile->NrFreqChan;
+      double bw;
+      sscanf(value, "%lf", &bw);
+      bw *= datafile->NrFreqChan;
+      if(set_bandwidth(datafile, bw, verbose) == 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Bandwidth changing failed.", datafile->filename);
+ return 0;
+      }
     }
     if (fits_read_card(datafile->fits_fptr,"DM", card, &status)) {
       fflush(stdout);
@@ -2241,9 +2242,15 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
    if(datafile->NrSubints == 1) {
      datafile->tsubMode = TSUBMODE_FIXEDTSUB;
    }
-   if(datafile->tsub_list != NULL)
+   if(datafile->tsub_list != NULL) {
      free(datafile->tsub_list);
+   }
    datafile->tsub_list = (double *)malloc(datafile->NrSubints*sizeof(double));
+   if(datafile->tsub_list == NULL) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR readPSRFITSHeader: Memory allocation error");
+     return 0;
+   }
  }
  tot_duration = subint_duration = 0;
  for(i = 0; i < datafile->NrSubints; i++) {

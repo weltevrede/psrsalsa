@@ -68,6 +68,11 @@ int continuous_shift(datafile_definition fin, datafile_definition *fout, int shi
   long nout, p, f, n;
   float *Ipulse, *Ifirst, *Ilast;
   verbose_definition verbose_counters_verbose2;
+  if(fin.freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR continuous_shift: Frequency channels need to be uniformely separated.");
+    return 0;
+  }
   copyVerboseState(verbose, &verbose_counters_verbose2);
   if(verbose2)
     verbose_counters_verbose2.nocounters = 0;
@@ -473,57 +478,87 @@ long double get_mjd_subint(datafile_definition datafile, long subint, verbose_de
   mjd += offset/(3600.0*24.0);
   return mjd;
 }
-double get_channelbw(datafile_definition datafile, long subint, long channel, double *channelbw, verbose_definition verbose)
+int get_channelbandwidth(datafile_definition datafile, double *channelbw, verbose_definition verbose)
 {
-  if(datafile.freqMode != FREQMODE_UNIFORM) {
-    printerror(verbose.debug, "ERROR get_channelbw: Unknown observing frequency (freqMode = %d)", datafile.freqMode);
-    return 0;
-  }
   if(datafile.isTransposed == 0)
-    *channelbw = datafile.uniform_bw/(double)datafile.NrFreqChan;
+    *channelbw = get_bandwidth(datafile, verbose)/(double)datafile.NrFreqChan;
   else
-    *channelbw = datafile.uniform_bw/(double)datafile.NrSubints;
+    *channelbw = get_bandwidth(datafile, verbose)/(double)datafile.NrSubints;
   return 1;
 }
-double get_bw(datafile_definition datafile, verbose_definition verbose)
+void set_channelbandwidth(datafile_definition *datafile, double channelbw, verbose_definition verbose)
 {
-  if(datafile.freqMode != FREQMODE_UNIFORM) {
-    printerror(verbose.debug, "ERROR get_bw: Unknown observing frequency");
-    exit(0);
-  }
-  return datafile.uniform_bw;
+  datafile->bandwidth = channelbw*datafile->NrFreqChan;
 }
-double get_centre_freq(datafile_definition datafile, verbose_definition verbose)
+double get_bandwidth(datafile_definition datafile, verbose_definition verbose)
 {
-  if(datafile.freqMode != FREQMODE_UNIFORM) {
-    printerror(verbose.debug, "ERROR get_centre_freq: Unknown observing frequency");
-    exit(0);
-  }
-  return datafile.uniform_freq_cent;
+  return datafile.bandwidth;
 }
-double get_channel_freq(datafile_definition psrdata, long channel, verbose_definition verbose)
+int set_bandwidth(datafile_definition *datafile, double bw, verbose_definition verbose)
+{
+  datafile->bandwidth = bw;
+  return 1;
+}
+double get_centre_frequency(datafile_definition datafile, verbose_definition verbose)
+{
+  return datafile.centrefreq;
+}
+void set_centre_frequency(datafile_definition *datafile, double freq, verbose_definition verbose)
+{
+  datafile->centrefreq = freq;
+}
+double get_nonweighted_channel_freq(datafile_definition psrdata, long channel, verbose_definition verbose)
 {
   double freq_bottom, cfreq;
-  if(psrdata.freqMode != FREQMODE_UNIFORM) {
-    printerror(verbose.debug, "ERROR get_channel_freq: Unknown observing frequency");
-    if(verbose.debug) {
-      printerror(0, "freqMode is set to %d, expected %d.\n", psrdata.freqMode, FREQMODE_UNIFORM);
-    }
-    exit(0);
-  }
-  double chanbw;
-  if(get_channelbw(psrdata, 0, 0, &chanbw, verbose) == 0) {
-    printerror(verbose.debug, "ERROR get_channel_freq (%s): Cannot obtain channel bandwidth.", psrdata.filename);
-    exit(0);
-  }
   if(psrdata.isTransposed == 0) {
-    freq_bottom = psrdata.uniform_freq_cent - 0.5*(double)psrdata.NrFreqChan*chanbw;
+    if(channel < 0 || channel >= psrdata.NrFreqChan) {
+      printerror(verbose.debug, "ERROR get_nonweighted_channel_freq: channel out of range (channel=%ld/%ld).", channel, psrdata.NrFreqChan);
+      exit(0);
+    }
+  }else {
+    if(channel < 0 || channel >= psrdata.NrSubints) {
+      printerror(verbose.debug, "ERROR get_nonweighted_channel_freq: channel out of range (channel=%ld/%ld).", channel, psrdata.NrFreqChan);
+      exit(0);
+    }
+  }
+  double chanbw, cfreq_total;
+  if(get_channelbandwidth(psrdata, &chanbw, verbose) == 0) {
+    printerror(verbose.debug, "ERROR get_nonweighted_channel_freq (%s): Cannot obtain channel bandwidth.", psrdata.filename);
+    exit(0);
+  }
+  cfreq_total = get_centre_frequency(psrdata, verbose);
+  if(psrdata.isTransposed == 0) {
+    freq_bottom = cfreq_total - 0.5*(double)psrdata.NrFreqChan*chanbw;
     cfreq = freq_bottom + chanbw*(channel+0.5);
   }else {
-    freq_bottom = psrdata.uniform_freq_cent - 0.5*(double)psrdata.NrSubints*chanbw;
+    freq_bottom = cfreq_total - 0.5*(double)psrdata.NrSubints*chanbw;
     cfreq = freq_bottom + chanbw*(channel+0.5);
   }
   return cfreq;
+}
+double get_weighted_channel_freq(datafile_definition psrdata, long subint, long channel, verbose_definition verbose)
+{
+  if(psrdata.freqMode != FREQMODE_FREQTABLE) {
+    return get_nonweighted_channel_freq(psrdata, channel, verbose);
+  }
+  if(subint < 0 || channel < 0 || subint >= psrdata.NrSubints || channel >= psrdata.NrFreqChan) {
+      printerror(verbose.debug, "ERROR get_weighted_channel_freq: subint/channel out of range (subint=%ld/%ld, channel=%ld/%ld).", subint, psrdata.NrSubints, channel, psrdata.NrFreqChan);
+      exit(0);
+  }
+  return psrdata.freqlabel_list[subint*psrdata.NrFreqChan+channel];
+}
+int set_weighted_channel_freq(datafile_definition *psrdata, long subint, long channel, double freq, verbose_definition verbose)
+{
+  if(psrdata->freqMode != FREQMODE_FREQTABLE) {
+    printerror(verbose.debug, "ERROR set_weighted_channel_freq: freqMode is set to %d, expected %d.\n", psrdata->freqMode, FREQMODE_FREQTABLE);
+    return 0;
+  }
+  if(subint < 0 || channel < 0 || subint >= psrdata->NrSubints || channel >= psrdata->NrFreqChan) {
+      printerror(verbose.debug, "ERROR set_weighted_channel_freq: subint/channel out of range (subint=%ld/%ld, channel=%ld/%ld).", subint, psrdata->NrSubints, channel, psrdata->NrFreqChan);
+      return 0;
+  }
+  psrdata->freqlabel_list[subint*psrdata->NrFreqChan+channel] = freq;
+  return 1;
 }
 int data_parang(datafile_definition data, long subintnr, double *parang, verbose_definition verbose)
 {

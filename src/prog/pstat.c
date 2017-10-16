@@ -26,6 +26,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define CORREL 20
 #define PEARSON 21
 #define MOMENTS 30
+#define MEDIAN 31
 #define CHI2TEST_HIST 50
 #define CHI2TEST_CDF 51
 
@@ -62,7 +63,7 @@ int main(int argc, char **argv)
     printf("files are required depending on the statistical test to be performed. The input\n");
     printf("files should be ascii files with each line having an equal number of columns.\n");
     printf("Lines starting with a # will be ignored. Usage:\n\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("Input/Output options:\n");
     printf("-col \"c1 c2 c3\"  Specify one, two or three column numbers (counting from 1) to\n");
     printf("                 be read in from the first input file. Some statistical tests\n");
@@ -114,6 +115,8 @@ int main(int argc, char **argv)
     printf("-kssin           Like -ks, but compare single input distribution with a\n");
     printf("                 sinusoidal distribution between 0 and 90 deg.\n");
     printf("                 Example:  pstat -kssin -col 1 file1\n");
+    printf("-median          Compute the median of the distribution.\n");
+    printf("                 Example:  pstat -median -col 1 file1\n");
     printf("-moments         Compute different moments of the distribution (mean, variance\n");
     printf("                 etc.)\n");
     printf("                 Example:  pstat -moments -col 1 file1\n");
@@ -123,6 +126,7 @@ int main(int argc, char **argv)
     printf("                 or:       pstat -pearson -col \"1 2\" file1\n");
     printf("\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }else {
     for(i = 1; i < argc; i++) {
@@ -131,31 +135,29 @@ int main(int argc, char **argv)
       if(processCommandLine(&application, argc, argv, &index)) {
  i = index;
       }else if(strcmp(argv[i], "-col") == 0 || strcmp(argv[i], "-col1") == 0) {
- j = sscanf(argv[i+1], "%d %d %d", &file1_column1, &file1_column2, &file1_column3);
- if(j == 1) {
+ int ret;
+ ret = parse_command_string(application.verbose_state, argc, argv, i+1, 0, 1, "%d %d %d", &file1_column1, &file1_column2, &file1_column3, NULL);
+ if(ret == 1) {
    file1_column2 = 0;
    file1_column3 = 0;
- }else if(j == 2) {
+ }else if(ret == 2) {
    file1_column3 = 0;
- }else {
-   if(j != 3) {
-     printerror(application.verbose_state.debug, "Cannot parse %s option, need 1, 2 or 3 values.\n", argv[i]);
-     return 0;
-   }
+ }else if(ret != 3) {
+   printerror(application.verbose_state.debug, "ERROR pstat: Cannot parse '%s' option, 1, 2 or 3 values.", argv[i]);
+   return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-col2") == 0) {
- j = sscanf(argv[i+1], "%d %d %d", &file2_column1, &file2_column2, &file2_column3);
- if(j == 1) {
+ int ret;
+ ret = parse_command_string(application.verbose_state, argc, argv, i+1, 0, 1, "%d %d %d", &file2_column1, &file2_column2, &file2_column3, NULL);
+ if(ret == 1) {
    file2_column2 = 0;
    file2_column3 = 0;
- }else if(j == 2) {
+ }else if(ret == 2) {
    file2_column3 = 0;
- }else {
-   if(j != 3) {
-     printerror(application.verbose_state.debug, "Cannot parse %s option, need 1, 2 or 3 values.\n", argv[i]);
-     return 0;
-   }
+ }else if(ret != 3) {
+   printerror(application.verbose_state.debug, "ERROR pstat: Cannot parse '%s' option, 1, 2 or 3 values.", argv[i]);
+   return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-output") == 0) {
@@ -191,6 +193,12 @@ int main(int argc, char **argv)
    return 0;
  }
  typetest = MOMENTS;
+      }else if(strcmp(argv[i], "-median") == 0) {
+ if(typetest != 0) {
+   printerror(application.verbose_state.debug, "pstat: Cannot specify more than one type of statistical test at the time");
+   return 0;
+ }
+ typetest = MEDIAN;
       }else if(strcmp(argv[i], "-kssin") == 0) {
  if(typetest != 0) {
    printerror(application.verbose_state.debug, "pstat: Cannot specify more than one type of statistical test at the time");
@@ -198,16 +206,15 @@ int main(int argc, char **argv)
  }
  typetest = KSSIN;
       }else if(strcmp(argv[i], "-chi2hist") == 0) {
- j = sscanf(argv[i+1], "%lf %lf %lf", &threshold1, &threshold2, &threshold3);
- if(j == 1) {
+ int ret;
+ ret = parse_command_string(application.verbose_state, argc, argv, i+1, 0, 1, "%lf %lf %lf", &threshold1, &threshold2, &threshold3, NULL);
+ if(ret == 1) {
    threshold2 = threshold3 = -1;
- }else if(j == 2) {
+ }else if(ret == 2) {
    threshold3 = -1;
- }else {
-   if(j != 3) {
-     printerror(application.verbose_state.debug, "Cannot parse %s option, need at least one threshold value.\n", argv[i]);
-     return 0;
-   }
+ }else if(ret != 3) {
+   printerror(application.verbose_state.debug, "ERROR pstat: Cannot parse '%s' option, 1, 2 or 3 values.", argv[i]);
+   return 0;
  }
  if(typetest != 0) {
    printerror(application.verbose_state.debug, "pstat: Cannot specify more than one type of statistical test at the time");
@@ -224,9 +231,9 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-log") == 0) {
  read_log = 1;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "pstat: Unknown option: %s\n\nRun pstat without command line arguments to show help", argv[i]);
+   terminateApplication(&application);
    return 0;
  }else {
    if(applicationAddFilename(i, application.verbose_state) == 0)
@@ -235,17 +242,13 @@ int main(int argc, char **argv)
       }
     }
   }
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-
-
-
   {
     int nrInputFiles;
     int nrInputColumns;
-    nrInputFiles = numberInApplicationFilenameList(application, argv, application.verbose_state);
+    nrInputFiles = numberInApplicationFilenameList(&application, argv, application.verbose_state);
     if(nrInputFiles < 1) {
       printerror(application.verbose_state.debug, "ERROR pstat: No files specified");
       return 0;
@@ -297,7 +300,6 @@ int main(int argc, char **argv)
       nrInputColumns++;
     if(file2_column3)
       nrInputColumns++;
-
     if(typetest == KSTEST) {
       if(nrInputColumns != 2) {
  printerror(application.verbose_state.debug, "ERROR pstat: KS-test requires two columns of data to be read in. Example: pstat -ks -col1 1 -col2 1 file1 file2 or pstat -ks -col \"1 2\" file1");
@@ -316,6 +318,11 @@ int main(int argc, char **argv)
     }else if(typetest == MOMENTS) {
       if(nrInputColumns != 1) {
  printerror(application.verbose_state.debug, "ERROR pstat: Computation of the moments of a distribution requires one columns of data to be read in. Example: pstat -moments -col 1 file1");
+ return 0;
+      }
+    }else if(typetest == MEDIAN) {
+      if(nrInputColumns != 1) {
+ printerror(application.verbose_state.debug, "ERROR pstat: Computation of the median of a distribution requires one columns of data to be read in. Example: pstat -median -col 1 file1");
  return 0;
       }
     }else if(typetest == KSFLAT) {
@@ -343,15 +350,12 @@ int main(int argc, char **argv)
       return 0;
     }
   }
-
-
   char *filename_ptr;
   double *input_array[6];
   long number_values[6];
   int number_input_arrays;
   number_input_arrays = 0;
   number_values[0] = 0;
-
   filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state);
   if(filename_ptr == NULL) {
     printerror(application.verbose_state.debug, "ERROR pstat: Bug!");
@@ -359,13 +363,10 @@ int main(int argc, char **argv)
   }
   if(file1_column1) {
     double min_x, max_x, avrg;
-
-
     if(read_ascii_column_double(filename_ptr, 0, '#', -1, 1, &number_values[number_input_arrays], file1_column1, 1.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
       printerror(application.verbose_state.debug, "ERROR pstat: cannot load file.\n");
       return 0;
     }
-
     number_input_arrays++;
   }
   if(file1_column2) {
@@ -384,7 +385,6 @@ int main(int argc, char **argv)
     }
     number_input_arrays++;
   }
-
   if(file2_column1 || file2_column2 || file2_column3) {
     filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state);
     if(filename_ptr == NULL) {
@@ -392,7 +392,6 @@ int main(int argc, char **argv)
       return 0;
     }
   }
-
   if(file2_column1) {
     double min_x, max_x, avrg;
     if(read_ascii_column_double(filename_ptr, 0, '#', -1, 1, &number_values[number_input_arrays], file2_column1, 1.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
@@ -417,7 +416,6 @@ int main(int argc, char **argv)
     }
     number_input_arrays++;
   }
-
   FILE *fout;
   if(output_idx) {
     fout = fopen(argv[output_idx], "w");
@@ -476,9 +474,17 @@ int main(int argc, char **argv)
     fprintf(fout, "Skewness           = %e\n", skew);
     kurt = gsl_stats_kurtosis(input_array[0], 1, number_values[0]);
     fprintf(fout, "Kurtosis           = %e\n", kurt);
+  }else if(typetest == MEDIAN) {
+    double median;
+    if(number_input_arrays != 1) {
+      printerror(application.verbose_state.debug, "ERROR pstat: Computation of the moments of a distribution requires one columns of data to be read in.");
+      return 0;
+    }
+    gsl_sort(input_array[0], 1, number_values[0]);
+    median = gsl_stats_median_from_sorted_data(input_array[0], 1, number_values[0]);
+    fprintf(fout, "Median = %e\n", median);
   }else if(typetest == PEARSON) {
     double cc;
-
     if(number_input_arrays != 2) {
       printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two input arrays to be specified");
       return 0;
@@ -487,7 +493,6 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two input arrays of equal length");
       return 0;
     }
-
 #if GSL_VERSION_NUMBER >= 110
     cc = gsl_stats_correlation(input_array[0], 1, input_array[1], 1, number_values[0]);
     fprintf(fout, "Pearson correlation coefficient = %e\n", cc);
@@ -495,7 +500,6 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR pstat: Pearson correlation coefficient cannot be calculated if GSL < 1.10");
     return 0;
 #endif
-
   }else if(typetest == CORREL) {
     if(number_input_arrays != 2) {
       printerror(application.verbose_state.debug, "ERROR pstat: Correlation requires two input arrays to be specified");
@@ -509,8 +513,6 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pstat: Input array too long.");
       return 0;
     }
-
-
     float *x1, *y1;
     x1 = malloc(number_values[0]*sizeof(float));
     y1 = malloc(number_values[1]*sizeof(float));
@@ -522,9 +524,6 @@ int main(int argc, char **argv)
       x1[i] = (input_array[0])[i];
     for(i = 0; i < number_values[1]; i++)
       y1[i] = (input_array[1])[i];
-
-
-
     int extrazeropad, cc_length;
     float *ans;
     extrazeropad = 0;
@@ -534,7 +533,6 @@ int main(int argc, char **argv)
     }
     free(x1);
     free(y1);
-
     int lagoutput;
     lagoutput = 1;
     if(lagoutput == 0) {
@@ -546,12 +544,10 @@ int main(int argc, char **argv)
       for(i = 0; i < cc_length/2; i++)
  fprintf(fout, "%ld %e\n", i, ans[i]);
     }
-
     free(ans);
   }else if(typetest == CHI2TEST_HIST) {
     double binwidth, ratio, offset, chi2;
     long offset_binnr, file2_x_col, dof, i2, nr_overlapping_bins;
-
     if(number_input_arrays != 4 && number_input_arrays != 6) {
       printerror(application.verbose_state.debug, "ERROR pstat: The chi-square histogram test requires four or six columns of data to be specified.");
       return 0;
@@ -562,8 +558,6 @@ int main(int argc, char **argv)
     }else {
       file2_x_col = 3;
     }
-
-
     binwidth = (input_array[0])[1] - (input_array[0])[0];
     ratio = binwidth/((input_array[file2_x_col])[1] - (input_array[file2_x_col])[0]);
     if(application.verbose_state.verbose) {
@@ -573,8 +567,6 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pstat: The binwidths of the two histograms appear to be different (%e != %e).", (input_array[0])[1] - (input_array[0])[0], (input_array[file2_x_col])[1] - (input_array[file2_x_col])[0]);
       return 0;
     }
-
-
     offset = (input_array[file2_x_col])[0];
     offset -= (input_array[0])[0];
     offset /= binwidth;
@@ -587,10 +579,9 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pstat: The bins of the two histograms do not appear to be aligned, but have an offset of %lf.", offset);
       return 0;
     }
-
-
     double height1, height2;
     height1 = 0;
+    height2 = 0;
     for(i = 0; i < number_values[0]; i++)
       height1 += (input_array[1])[i];
     for(i = 0; i < number_values[file2_x_col]; i++)
@@ -601,8 +592,6 @@ int main(int argc, char **argv)
     if(height1/height2 > 1.001 || height2/height1 > 1.001) {
       printwarning(application.verbose_state.debug, "WARNING pstat: The two histograms appear to be normalised differently, so the derived numbers are unlikely to give useful results.");
     }
-
-
     chi2 = 0;
     dof = 0;
     nr_overlapping_bins = 0;
@@ -619,7 +608,6 @@ int main(int argc, char **argv)
       if(i2 >= 0 && i2 < number_values[file2_x_col]) {
  height2 = (input_array[file2_x_col+1])[i2];
  hist2_exist = 1;
-
  if(hist1_exist) {
    offset = (input_array[file2_x_col])[i2];
    offset -= (input_array[0])[i];
@@ -633,14 +621,12 @@ int main(int argc, char **argv)
       }else {
  height2 = 0;
       }
-
       if(hist1_exist || hist2_exist) {
  if(height1 >= threshold1 && height2 >= threshold2 && (height1+height2) >= threshold3) {
    double delta_y, var;
    delta_y = height2 - height1;
    if(number_input_arrays == 4) {
      chi2 += delta_y*delta_y;
-
      dof++;
    }else {
      var = 0;
@@ -648,13 +634,9 @@ int main(int argc, char **argv)
        var += (input_array[2])[i] * (input_array[2])[i];
      if(hist2_exist)
        var += (input_array[file2_x_col+2])[i2] * (input_array[file2_x_col+2])[i2];
-
      chi2 += delta_y*delta_y/var;
      dof++;
-
    }
-
-
  }
       }
     }
@@ -676,34 +658,25 @@ int main(int argc, char **argv)
   }else if(typetest == CHI2TEST_CDF) {
     double x1, cdf1, cdf2, chi2;
     long start2, dof;
-
     if(number_input_arrays != 2) {
       printerror(application.verbose_state.debug, "ERROR pstat: The chi-square CDF test requires two columns of data to be specified.");
       return 0;
     }
-
-
     if(number_values[0] > number_values[1]) {
       i = number_values[0];
       number_values[0] = number_values[1];
       number_values[1] = i;
-
       input_array[2] = input_array[0];
       input_array[0] = input_array[1];
       input_array[1] = input_array[2];
     }
-
     gsl_sort(input_array[0], 1, number_values[0]);
     gsl_sort(input_array[1], 1, number_values[1]);
-
     start2 = 0;
     chi2 = 0;
     dof = 0;
     for(i = 0; i < number_values[0] - 1; i++) {
       cdf1 = (i+1)/(double)number_values[0];
-
-
-
       x1 = (input_array[0])[i] + 0.5*((input_array[0])[i+1]-(input_array[0])[i]);
       if(application.verbose_state.debug)
  printf("Going to find chi2 of observation distribution cdf point: (%e, %e)\n", x1, cdf1);
@@ -722,15 +695,10 @@ int main(int argc, char **argv)
    cdf2 = (number_values[1]-1 +0.5)/(double)number_values[1];
  }
       }else {
-
  for(j = start2; j < number_values[1]; j++) {
    if((input_array[1])[j] >= x1) {
      if(application.verbose_state.debug)
        printf("  First model cdf point after point of interest: (%e %e)\n", (input_array[1])[j], (j+1)/(double)number_values[1]);
-
-
-
-
      long index1, index2;
      index1 = j-1;
      index2 = j;
@@ -739,7 +707,6 @@ int main(int argc, char **argv)
        return 0;
      }
      while((input_array[1])[index2] == (input_array[1])[index1]) {
-
        if(index2 < number_values[1] - 1) {
   index2++;
        }else if(index1 > 1) {
@@ -749,27 +716,17 @@ int main(int argc, char **argv)
   return 0;
        }
      }
-
-
-
-
      if(application.verbose_state.debug)
        printf("  Going to interpolate following model points: (%e %e) and (%e %e)\n", (input_array[1])[index1], (index1+1-0.5)/(double)number_values[1], (input_array[1])[index2], (index2+1-0.5)/(double)number_values[1]);
-
-
      if(index1 < 0 || index2 >= number_values[1]) {
        printerror(application.verbose_state.debug, "ERROR pstat: Interpolation failed - trying to access second array out of limits (index1=%ld, index2=%ld).\n", index1, index2);
        return 0;
      }
-
-
      cdf2 = ((index2+1-0.5)/(double)number_values[1] - (index1+1-0.5)/(double)number_values[1]) * (x1 - (input_array[1])[index1]) / ((input_array[1])[index2] - (input_array[1])[index1]) + (index1+1-0.5)/(double)number_values[1];
-
      if(!isfinite(cdf2)) {
        printerror(application.verbose_state.debug, "ERROR pstat: Interpolation failed: i=%ld, j=%ld (array2=[%e, %e, %e]), \n", i, j, (input_array[1])[j-1], (input_array[1])[j], (input_array[1])[j+1]);
        return 0;
      }
-
      start2 = j - 2;
      if(start2 < 0)
        start2 = 0;
@@ -784,7 +741,6 @@ int main(int argc, char **argv)
  printf("  new chi2 = %e\n", chi2);
       }
     }
-
     if(application.verbose_state.verbose) {
       printf("\nTotal number of bins considered: %ld\n", dof);
     }
@@ -796,13 +752,9 @@ int main(int argc, char **argv)
   if(output_idx) {
     fclose(fout);
   }
-  if(number_input_arrays > 0)
-    free(input_array[0]);
-  if(number_input_arrays > 1)
-    free(input_array[1]);
-  if(number_input_arrays > 2)
-    free(input_array[2]);
-  if(number_input_arrays > 3)
-    free(input_array[3]);
+  for(i = 0; i < number_input_arrays; i++) {
+    free(input_array[i]);
+  }
+  terminateApplication(&application);
   return 0;
 }

@@ -29,12 +29,15 @@ int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
   int dPa_polnr;
   long i, j, nrpoints;
   float *olddata;
-  if(datafile->poltype != POLTYPE_ILVPAdPA && datafile->poltype != POLTYPE_PAdPA) {
-    printerror(verbose.debug, "ERROR filterPApoints: Data doesn't appear to have poltype ILVPAdPA or PAdPA.");
+  if(datafile->poltype != POLTYPE_ILVPAdPA && datafile->poltype != POLTYPE_PAdPA && datafile->poltype != POLTYPE_ILVPAdPATEldEl) {
+    printerror(verbose.debug, "ERROR filterPApoints: Data doesn't appear to have poltype ILVPAdPA, PAdPA or ILVPAdPATEldEl.");
     return 0;
   }
   if(datafile->poltype == POLTYPE_ILVPAdPA && datafile->NrPols != 5) {
     printerror(verbose.debug, "ERROR filterPApoints: 5 polarization channels were expected, but there are only %ld.", datafile->NrPols);
+    return 0;
+  }else if(datafile->poltype == POLTYPE_ILVPAdPATEldEl && datafile->NrPols != 8) {
+    printerror(verbose.debug, "ERROR filterPApoints: 8 polarization channels were expected, but there are only %ld.", datafile->NrPols);
     return 0;
   }else if(datafile->poltype == POLTYPE_PAdPA && datafile->NrPols != 2) {
     printerror(verbose.debug, "ERROR filterPApoints: 2 polarization channels were expected, but there are only %ld.", datafile->NrPols);
@@ -49,7 +52,7 @@ int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
     return 0;
   }
 
-  if(datafile->poltype == POLTYPE_ILVPAdPA) {
+  if(datafile->poltype == POLTYPE_ILVPAdPA || datafile->poltype == POLTYPE_ILVPAdPATEldEl) {
     dPa_polnr = 4;
   }else if(datafile->poltype == POLTYPE_PAdPA) {
     dPa_polnr = 1;
@@ -84,6 +87,15 @@ int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
  datafile->data[j+2*nrpoints] = olddata[i+2*datafile->NrBins];
  datafile->data[j+3*nrpoints] = olddata[i+3*datafile->NrBins];
  datafile->data[j+4*nrpoints] = olddata[i+4*datafile->NrBins];
+      }else if(datafile->poltype == POLTYPE_ILVPAdPATEldEl) {
+ datafile->data[j+0*nrpoints] = olddata[i+0*datafile->NrBins];
+ datafile->data[j+1*nrpoints] = olddata[i+1*datafile->NrBins];
+ datafile->data[j+2*nrpoints] = olddata[i+2*datafile->NrBins];
+ datafile->data[j+3*nrpoints] = olddata[i+3*datafile->NrBins];
+ datafile->data[j+4*nrpoints] = olddata[i+4*datafile->NrBins];
+ datafile->data[j+5*nrpoints] = olddata[i+5*datafile->NrBins];
+ datafile->data[j+6*nrpoints] = olddata[i+6*datafile->NrBins];
+ datafile->data[j+7*nrpoints] = olddata[i+7*datafile->NrBins];
       }else {
  datafile->data[j+0*nrpoints] = olddata[i+0*datafile->NrBins];
  datafile->data[j+1*nrpoints] = olddata[i+1*datafile->NrBins];
@@ -96,14 +108,17 @@ int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
   datafile->NrBins = nrpoints;
   return datafile->NrBins;
 }
-int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, float paoffset, verbose_definition verbose)
+int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselongitude_regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, float paoffset, verbose_definition verbose)
 {
   int indent;
-  long i, j, NrOffpulseBins, pulsenr, freqnr;
+  long i, j, NrOffpulseBins, pulsenr, freqnr, output_nr_pols;
   float ymax, I, RMSQ, RMSU, RMSP, *Loffpulse, *Poffpulse, medianL, medianP, *newdata;
   if(verbose.verbose) {
     for(indent = 0; indent < verbose.indent; indent++) printf(" ");
-    printf("Constructing PA and degree of linear polarization\n");
+    printf("Constructing PA and degree of linear polarization");
+    if(extended)
+      printf(", total polarization and ellipticity");
+    printf("\n");
     for(indent = 0; indent < verbose.indent; indent++) printf(" ");
     printf("  Reference frequency for PA is ");
     if(datafile->isDeFarad) {
@@ -115,7 +130,7 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
  printf("%f MHz\n", datafile->freq_ref);
     }else {
       if(datafile->NrFreqChan == 1)
- printf("%f MHz\n", get_centre_freq(*datafile, verbose));
+ printf("%lf MHz\n", get_centre_frequency(*datafile, verbose));
       else
  printf("observing frequencies of individual frequency channels\n");
     }
@@ -136,6 +151,9 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
     if(paoffset != 0)
       printf(", PA shifted by %f deg\n", paoffset);
     printf("\n");
+    if(extended) {
+      printwarning(verbose.debug, "WARNING make_paswing_fromIQUV: Total polarization is computed, and the median off-pulse value is subtracted (probably not a very good idea).");
+    }
   }
   if(datafile->NrPols != 4) {
     fflush(stdout);
@@ -178,8 +196,13 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
   }
   Loffpulse = (float *)malloc((datafile->NrBins)*sizeof(float));
   Poffpulse = (float *)malloc((datafile->NrBins)*sizeof(float));
-  newdata = (float *)malloc(datafile->NrBins*datafile->NrSubints*datafile->NrFreqChan*5*sizeof(float));
-  datafile->offpulse_rms = (float *)malloc(datafile->NrSubints*datafile->NrFreqChan*5*sizeof(float));
+  if(extended) {
+    output_nr_pols = 8;
+  }else {
+    output_nr_pols = 5;
+  }
+  newdata = (float *)malloc(datafile->NrBins*datafile->NrSubints*datafile->NrFreqChan*output_nr_pols*sizeof(float));
+  datafile->offpulse_rms = (float *)malloc(datafile->NrSubints*datafile->NrFreqChan*output_nr_pols*sizeof(float));
   if(Loffpulse == NULL || Poffpulse == NULL || newdata == NULL || datafile->offpulse_rms == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Memory allocation error.");
@@ -201,18 +224,23 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
     fflush(stdout);
     printwarning(verbose.debug, "WARNING make_paswing_fromIQUV: Normalization will cause all subintegrations/frequency channels to be normalised individually. This may not be desired.");
   }
-  long sindex_I, sindex_Q, sindex_U, sindex_V, newindex_I, newindex_L, newindex_V, newindex_Pa, newindex_dPa;
+  long sindex_I, sindex_Q, sindex_U, sindex_V, newindex_I, newindex_L, newindex_V, newindex_Pa, newindex_dPa, newindex_T, newindex_Ell, newindex_dEll;
   for(pulsenr = 0; pulsenr < datafile->NrSubints; pulsenr++) {
     for(freqnr = 0; freqnr < datafile->NrFreqChan; freqnr++) {
       sindex_I = datafile->NrBins*(0+datafile->NrPols*(freqnr+pulsenr*datafile->NrFreqChan));
       sindex_Q = datafile->NrBins*(1+datafile->NrPols*(freqnr+pulsenr*datafile->NrFreqChan));
       sindex_U = datafile->NrBins*(2+datafile->NrPols*(freqnr+pulsenr*datafile->NrFreqChan));
       sindex_V = datafile->NrBins*(3+datafile->NrPols*(freqnr+pulsenr*datafile->NrFreqChan));
-      newindex_I = datafile->NrBins*(0+5*(freqnr+datafile->NrFreqChan*pulsenr));
-      newindex_L = datafile->NrBins*(1+5*(freqnr+datafile->NrFreqChan*pulsenr));
-      newindex_V = datafile->NrBins*(2+5*(freqnr+datafile->NrFreqChan*pulsenr));
-      newindex_Pa = datafile->NrBins*(3+5*(freqnr+datafile->NrFreqChan*pulsenr));
-      newindex_dPa = datafile->NrBins*(4+5*(freqnr+datafile->NrFreqChan*pulsenr));
+      newindex_I = datafile->NrBins*(0+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
+      newindex_L = datafile->NrBins*(1+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
+      newindex_V = datafile->NrBins*(2+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
+      newindex_Pa = datafile->NrBins*(3+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
+      newindex_dPa = datafile->NrBins*(4+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
+      if(extended) {
+ newindex_T = datafile->NrBins*(5+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
+ newindex_Ell = datafile->NrBins*(6+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
+ newindex_dEll = datafile->NrBins*(7+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
+      }
       if(normalize == 0) {
  ymax = 1;
       }else {
@@ -230,16 +258,21 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
  datafile->data[sindex_U + j] /= ymax;
  datafile->data[sindex_V + j] /= correctV*correctQV*ymax;
  newdata[j+newindex_L] = sqrt((datafile->data[sindex_Q+j])*(datafile->data[sindex_Q+j])+(datafile->data[sindex_U+j])*(datafile->data[sindex_U+j]));
- if(Ppulse != NULL) {
-   Ppulse[j] = sqrt(newdata[j+newindex_L]*newdata[j+newindex_L]+(datafile->data[sindex_V+j])*(datafile->data[sindex_V+j]));
+ if(extended) {
+   newdata[j+newindex_T] = sqrt(newdata[j+newindex_L]*newdata[j+newindex_L]+datafile->data[sindex_V+j]*datafile->data[sindex_V+j]);
  }
       }
+      datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
+      datafile->offpulse_rms[1+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
+      datafile->offpulse_rms[2+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
+      datafile->offpulse_rms[3+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = -1;
+      datafile->offpulse_rms[4+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = -1;
+      if(extended) {
+ datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
+ datafile->offpulse_rms[6+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = -1;
+ datafile->offpulse_rms[7+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = -1;
+      }
       I = 0;
-      datafile->offpulse_rms[0+5*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
-      datafile->offpulse_rms[1+5*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
-      datafile->offpulse_rms[2+5*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
-      datafile->offpulse_rms[3+5*(freqnr + datafile->NrFreqChan*pulsenr)] = -1;
-      datafile->offpulse_rms[4+5*(freqnr + datafile->NrFreqChan*pulsenr)] = -1;
       RMSQ = 0;
       RMSU = 0;
       RMSP = 0;
@@ -248,23 +281,29 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
  Loffpulse[i] = 0;
  if(checkRegions(i, &onpulse, 0, verbose) == 0) {
    NrOffpulseBins++;
-   I += datafile->data[datafile->NrBins*(0+datafile->NrPols*(freqnr+pulsenr*datafile->NrFreqChan))+i];
-   datafile->offpulse_rms[0+5*(freqnr + datafile->NrFreqChan*pulsenr)] += (datafile->data[sindex_I+i])*(datafile->data[sindex_I+i]);
+   I += datafile->data[sindex_I+i];
    RMSQ += (datafile->data[sindex_Q+i])*(datafile->data[sindex_Q+i]);
    RMSU += (datafile->data[sindex_U+i])*(datafile->data[sindex_U+i]);
-   datafile->offpulse_rms[1+5*(freqnr + datafile->NrFreqChan*pulsenr)] += (newdata[i+newindex_L])*(newdata[i+newindex_L]);
-   datafile->offpulse_rms[2+5*(freqnr + datafile->NrFreqChan*pulsenr)] += (datafile->data[sindex_V+i])*(datafile->data[sindex_V+i]);
+   datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (datafile->data[sindex_I+i])*(datafile->data[sindex_I+i]);
+   datafile->offpulse_rms[1+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (newdata[i+newindex_L])*(newdata[i+newindex_L]);
+   datafile->offpulse_rms[2+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (datafile->data[sindex_V+i])*(datafile->data[sindex_V+i]);
+   if(extended) {
+     datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (newdata[i+newindex_L])*(newdata[i+newindex_L]) + (datafile->data[sindex_V+i])*(datafile->data[sindex_V+i]);
+   }
    Loffpulse[NrOffpulseBins-1] = newdata[i+newindex_L];
-   if(Ppulse != NULL)
-     Poffpulse[NrOffpulseBins-1] = Ppulse[i];
+   if(extended)
+     Poffpulse[NrOffpulseBins-1] = newdata[i+newindex_T];
  }
       }
       I /= (float)NrOffpulseBins;
-      datafile->offpulse_rms[0+5*(freqnr + datafile->NrFreqChan*pulsenr)] = sqrt(datafile->offpulse_rms[0+5*(freqnr + datafile->NrFreqChan*pulsenr)])/(float)sqrt(NrOffpulseBins);
-      RMSQ = sqrt(RMSQ)/(float)sqrt(NrOffpulseBins);
-      RMSU = sqrt(RMSU)/(float)sqrt(NrOffpulseBins);
-      datafile->offpulse_rms[1+5*(freqnr + datafile->NrFreqChan*pulsenr)] = sqrt(datafile->offpulse_rms[1+5*(freqnr + datafile->NrFreqChan*pulsenr)])/(float)sqrt(NrOffpulseBins);
-      datafile->offpulse_rms[2+5*(freqnr + datafile->NrFreqChan*pulsenr)] = sqrt(datafile->offpulse_rms[2+5*(freqnr + datafile->NrFreqChan*pulsenr)])/(float)sqrt(NrOffpulseBins);
+      RMSQ = sqrt(RMSQ/(float)NrOffpulseBins);
+      RMSU = sqrt(RMSU/(float)NrOffpulseBins);
+      datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = sqrt(datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]/(float)NrOffpulseBins);
+      datafile->offpulse_rms[1+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = sqrt(datafile->offpulse_rms[1+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]/(float)NrOffpulseBins);
+      datafile->offpulse_rms[2+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = sqrt(datafile->offpulse_rms[2+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]/(float)NrOffpulseBins);
+      if(extended) {
+ datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = sqrt(datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]/(float)NrOffpulseBins);
+      }
       if(verbose.verbose) {
  if((freqnr == 0 && pulsenr == 0) || verbose.debug) {
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
@@ -272,15 +311,19 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
    fprintf(stdout, "    Averige baseline Stokes I: %f\n", I);
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
-   fprintf(stdout, "    RMS I: %f\n", datafile->offpulse_rms[0+5*(freqnr + datafile->NrFreqChan*pulsenr)]);
+   fprintf(stdout, "    RMS I:                  %f\n", datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]);
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
-   fprintf(stdout, "    RMS Q: %f\n", RMSQ);
+   fprintf(stdout, "    RMS Q:                  %f\n", RMSQ);
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
-   fprintf(stdout, "    RMS U: %f\n", RMSU);
+   fprintf(stdout, "    RMS U:                  %f\n", RMSU);
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
-   fprintf(stdout, "    RMS V: %f\n", datafile->offpulse_rms[2+5*(freqnr + datafile->NrFreqChan*pulsenr)]);
+   fprintf(stdout, "    RMS V:                  %f\n", datafile->offpulse_rms[2+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]);
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
-   fprintf(stdout, "    RMS L: %f\n", datafile->offpulse_rms[1+5*(freqnr + datafile->NrFreqChan*pulsenr)]);
+   fprintf(stdout, "    RMS L (before de-bias): %f\n", datafile->offpulse_rms[1+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]);
+   if(extended) {
+     for(indent = 0; indent < verbose.indent; indent++) printf(" ");
+     fprintf(stdout, "    RMS sqrt(Q^2+U^2+V^2):  %f\n", datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]);
+   }
  }
       }
       gsl_sort_float (Loffpulse, 1, NrOffpulseBins);
@@ -290,13 +333,13 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
  for(indent = 0; indent < verbose.indent; indent++) printf(" ");
  fprintf(stdout, "    Median L: %f\n", medianL);
       }
-      if(Ppulse != NULL) {
+      if(extended) {
  gsl_sort_float (Poffpulse, 1, NrOffpulseBins);
  medianP = gsl_stats_float_median_from_sorted_data(Poffpulse, 1, NrOffpulseBins);
  fflush(stdout);
  if((verbose.verbose && freqnr == 0 && pulsenr == 0) || verbose.debug) {
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
-   fprintf(stdout, "    Median sqrt(L^2+V^2): %f\n", medianP);
+   fprintf(stdout, "    Median sqrt(Q^2+U^2+V^2): %f\n", medianP);
  }
       }
       for(j = 0; j < (datafile->NrBins); j++) {
@@ -309,8 +352,8 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
  }else if(correctLbias == 0) {
    newdata[j+newindex_L] -= medianL;
  }
- if(Ppulse != NULL)
-   Ppulse[j] -= medianP;
+ if(extended)
+   newdata[j+newindex_T] -= medianP;
       }
       for(i = 0; i < (datafile->NrBins); i++) {
  newdata[i+newindex_Pa] = 90.0*atan2(datafile->data[sindex_U+i],datafile->data[sindex_Q+i])/M_PI;
@@ -325,6 +368,10 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
  }else {
    newdata[i+newindex_dPa] = 0;
  }
+ if(extended) {
+   newdata[i+newindex_Ell] = 0;
+     newdata[i+newindex_dEll] = 0;
+ }
       }
       for(j = 0; j < (datafile->NrBins); j++) {
  newdata[j+newindex_I] = datafile->data[j+sindex_I];
@@ -337,8 +384,12 @@ int make_paswing_fromIQUV(datafile_definition *datafile, float *Ppulse, regions_
   if(nolongitudes == 0) {
     datafile->tsampMode = TSAMPMODE_LONGITUDELIST;
   }
-  datafile->NrPols = 5;
-  datafile->poltype = POLTYPE_ILVPAdPA;
+  datafile->NrPols = output_nr_pols;
+  if(extended) {
+    datafile->poltype = POLTYPE_ILVPAdPATEldEl;
+  }else {
+    datafile->poltype = POLTYPE_ILVPAdPA;
+  }
   free(Loffpulse);
   free(Poffpulse);
   return 1;
@@ -387,13 +438,6 @@ int readPPOLHeader(datafile_definition *datafile, int extended, verbose_definiti
   datafile->NrSubints = 1;
   datafile->NrFreqChan = 1;
   datafile->datastart = 0;
-  if(extended) {
-    datafile->poltype = POLTYPE_ILVPAdPA;
-    datafile->NrPols = 5;
-  }else {
-    datafile->poltype = POLTYPE_PAdPA;
-    datafile->NrPols = 2;
-  }
   rewind(datafile->fptr);
   ret = fread(txt, 1, 3, datafile->fptr);
   txt[3] = 0;
@@ -417,14 +461,21 @@ int readPPOLHeader(datafile_definition *datafile, int extended, verbose_definiti
       if(txt[0] != '#') {
  if(extended) {
    word_ptr = pickWordFromString(txt, 2, &nrwords, 1, ' ', verbose);
-   if(nrwords != 10) {
+   if(nrwords != 10 && nrwords != 14) {
      fflush(stdout);
-     printerror(verbose.debug, "ERROR readPPOLHeader: Line should have 10 words, got %d", nrwords);
+     printerror(verbose.debug, "ERROR readPPOLHeader: Line should have 10 or 14 words, got %d", nrwords);
      if(nrwords == 3)
        printerror(verbose.debug, "                             Maybe file is in format %s?", returnFileFormat_str(PPOL_SHORT_format));
      printerror(verbose.debug, "                             Line: '%s'.", txt);
      free(txt);
      return 0;
+   }
+   if(nrwords == 10) {
+     datafile->poltype = POLTYPE_ILVPAdPA;
+     datafile->NrPols = 5;
+   }else {
+     datafile->poltype = POLTYPE_ILVPAdPATEldEl;
+     datafile->NrPols = 8;
    }
  }else {
    word_ptr = pickWordFromString(txt, 1, &nrwords, 1, ' ', verbose);
@@ -454,6 +505,10 @@ int readPPOLHeader(datafile_definition *datafile, int extended, verbose_definiti
       }
     }
   }while(ret_ptr != NULL && dummy_float < 360);
+  if(extended == 0) {
+    datafile->poltype = POLTYPE_PAdPA;
+    datafile->NrPols = 2;
+  }
   fflush(stdout);
   if(verbose.verbose) fprintf(stdout, "Going to load %ld points from %s\n", datafile->NrBins, datafile->filename);
   if(datafile->NrBins == 0) {
@@ -506,6 +561,10 @@ int readPPOLfile(datafile_definition *datafile, float *data, int extended, float
   if(extended) {
     datafile->offpulse_rms[3] = -1;
     datafile->offpulse_rms[4] = -1;
+    if(datafile->NrPols == 8) {
+      datafile->offpulse_rms[6] = -1;
+      datafile->offpulse_rms[7] = -1;
+    }
   }
   for(i = 0; i < datafile->NrBins; i++) {
     ret_ptr = fgets(txt, maxlinelength, datafile->fptr);
@@ -519,7 +578,11 @@ int readPPOLfile(datafile_definition *datafile, float *data, int extended, float
       if(extended == 0) {
  sscanf(txt, "%lf %f %f", &(datafile->tsamp_list[k]), &(data[k]), &(data[k+datafile->NrBins]));
       }else {
- sscanf(txt, "%ld %lf %f %f %f %f %f %f %f %f", &dummy_long, &(datafile->tsamp_list[k]), &(data[k]), &(datafile->offpulse_rms[0]), &(data[k+datafile->NrBins]), &(datafile->offpulse_rms[1]), &(data[k+2*datafile->NrBins]), &(datafile->offpulse_rms[2]), &(data[k+3*datafile->NrBins]), &(data[k+4*datafile->NrBins]));
+ if(datafile->NrPols == 8) {
+   sscanf(txt, "%ld %lf %f %f %f %f %f %f %f %f %f %f %f %f", &dummy_long, &(datafile->tsamp_list[k]), &(data[k]), &(datafile->offpulse_rms[0]), &(data[k+datafile->NrBins]), &(datafile->offpulse_rms[1]), &(data[k+2*datafile->NrBins]), &(datafile->offpulse_rms[2]), &(data[k+3*datafile->NrBins]), &(data[k+4*datafile->NrBins]), &(data[k+5*datafile->NrBins]), &(datafile->offpulse_rms[5]), &(data[k+6*datafile->NrBins]), &(data[k+7*datafile->NrBins]));
+ }else {
+   sscanf(txt, "%ld %lf %f %f %f %f %f %f %f %f", &dummy_long, &(datafile->tsamp_list[k]), &(data[k]), &(datafile->offpulse_rms[0]), &(data[k+datafile->NrBins]), &(datafile->offpulse_rms[1]), &(data[k+2*datafile->NrBins]), &(datafile->offpulse_rms[2]), &(data[k+3*datafile->NrBins]), &(data[k+4*datafile->NrBins]));
+ }
       }
       datafile->tsamp_list[k] += add_longitude_shift;
       if(datafile->tsamp_list[k] >= 0 && datafile->tsamp_list[k] < 360) {
@@ -543,15 +606,18 @@ int readPPOLfile(datafile_definition *datafile, float *data, int extended, float
 int writePPOLfile(datafile_definition datafile, float *data, int extended, int onlysignificantPA, int twoprofiles, float PAoffset, verbose_definition verbose)
 {
   long j;
-  if(datafile.poltype != POLTYPE_ILVPAdPA && datafile.poltype != POLTYPE_PAdPA) {
-    printerror(verbose.debug, "ERROR writePPOLfile: Data doesn't appear to have poltype ILVPAdPA or PAdPA (it is %d).", datafile.poltype);
+  if(datafile.poltype != POLTYPE_ILVPAdPA && datafile.poltype != POLTYPE_PAdPA && datafile.poltype != POLTYPE_ILVPAdPATEldEl) {
+    printerror(verbose.debug, "ERROR writePPOLfile: Data doesn't appear to have poltype ILVPAdPA, PAdPA or ILVPAdPATEldEl (it is %d).", datafile.poltype);
     return 0;
   }
   if(datafile.poltype == POLTYPE_ILVPAdPA && datafile.NrPols != 5) {
-    printerror(verbose.debug, "ERROR writePPOLfile: 5 polarization channels were expected, but there are only %ld.", datafile.NrPols);
+    printerror(verbose.debug, "ERROR writePPOLfile: 5 polarization channels were expected, but there are %ld.", datafile.NrPols);
     return 0;
   }else if(datafile.poltype == POLTYPE_PAdPA && datafile.NrPols != 2) {
-    printerror(verbose.debug, "ERROR writePPOLfile: 2 polarization channels were expected, but there are only %ld.", datafile.NrPols);
+    printerror(verbose.debug, "ERROR writePPOLfile: 2 polarization channels were expected, but there are %ld.", datafile.NrPols);
+    return 0;
+  }else if(datafile.poltype == POLTYPE_ILVPAdPATEldEl && datafile.NrPols != 8) {
+    printerror(verbose.debug, "ERROR writePPOLfile: 8 polarization channels were expected, but there are %ld.", datafile.NrPols);
     return 0;
   }
   if(datafile.NrSubints > 1 || datafile.NrFreqChan > 1) {
@@ -563,18 +629,20 @@ int writePPOLfile(datafile_definition datafile, float *data, int extended, int o
     return 0;
   }
   int pa_offset, dpa_offset;
-  if(datafile.poltype == POLTYPE_ILVPAdPA) {
+  if(datafile.poltype == POLTYPE_ILVPAdPA || datafile.poltype == POLTYPE_ILVPAdPATEldEl) {
     pa_offset = 3;
     dpa_offset = 4;
-  }
-  if(datafile.poltype == POLTYPE_PAdPA) {
+  }else if(datafile.poltype == POLTYPE_PAdPA) {
     pa_offset = 0;
     dpa_offset = 1;
   }
   for(j = 0; j < datafile.NrBins; j++) {
     if(data[j+dpa_offset*datafile.NrBins] > 0 || onlysignificantPA == 0) {
       if(extended) {
- fprintf(datafile.fptr, "%ld %e %e %e %e %e %e %e %e %e\n", j, datafile.tsamp_list[j], data[j], datafile.offpulse_rms[0], data[j+datafile.NrBins], datafile.offpulse_rms[1], data[j+2*datafile.NrBins], datafile.offpulse_rms[2], data[j+pa_offset*datafile.NrBins]+PAoffset, data[j+dpa_offset*datafile.NrBins]);
+ fprintf(datafile.fptr, "%ld %e %e %e %e %e %e %e %e %e", j, datafile.tsamp_list[j], data[j], datafile.offpulse_rms[0], data[j+datafile.NrBins], datafile.offpulse_rms[1], data[j+2*datafile.NrBins], datafile.offpulse_rms[2], data[j+pa_offset*datafile.NrBins]+PAoffset, data[j+dpa_offset*datafile.NrBins]);
+ if(datafile.poltype == POLTYPE_ILVPAdPATEldEl)
+   fprintf(datafile.fptr, " %e %e %e %e", data[j+5*datafile.NrBins], datafile.offpulse_rms[5], data[j+6*datafile.NrBins], data[j+7*datafile.NrBins]);
+ fprintf(datafile.fptr, "\n");
       }else {
  fprintf(datafile.fptr, "%e %e %e\n", datafile.tsamp_list[j], data[j+pa_offset*datafile.NrBins]+PAoffset, data[j+dpa_offset*datafile.NrBins]);
       }
@@ -584,7 +652,10 @@ int writePPOLfile(datafile_definition datafile, float *data, int extended, int o
     for(j = 0; j < datafile.NrBins; j++) {
       if(data[j+dpa_offset*datafile.NrBins] > 0 || onlysignificantPA == 0) {
  if(extended) {
-   fprintf(datafile.fptr, "%ld %e %e %e %e %e %e %e %e %e\n", j+datafile.NrBins, datafile.tsamp_list[j]+360, data[j], datafile.offpulse_rms[0], data[j+datafile.NrBins], datafile.offpulse_rms[1], data[j+2*datafile.NrBins], datafile.offpulse_rms[2], data[j+3*datafile.NrBins]+PAoffset, data[j+dpa_offset*datafile.NrBins]);
+   fprintf(datafile.fptr, "%ld %e %e %e %e %e %e %e %e %e", j, datafile.tsamp_list[j]+360, data[j], datafile.offpulse_rms[0], data[j+datafile.NrBins], datafile.offpulse_rms[1], data[j+2*datafile.NrBins], datafile.offpulse_rms[2], data[j+pa_offset*datafile.NrBins]+PAoffset, data[j+dpa_offset*datafile.NrBins]);
+   if(datafile.poltype == POLTYPE_ILVPAdPATEldEl)
+     fprintf(datafile.fptr, " %e %e %e %e", data[j+5*datafile.NrBins], datafile.offpulse_rms[5], data[j+6*datafile.NrBins], data[j+7*datafile.NrBins]);
+   fprintf(datafile.fptr, "\n");
  }else {
    fprintf(datafile.fptr, "%e %e %e\n", datafile.tsamp_list[j]+360, data[j]+PAoffset, data[j+dpa_offset*datafile.NrBins]);
  }

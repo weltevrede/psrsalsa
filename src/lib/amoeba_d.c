@@ -93,11 +93,11 @@ int doAmoeba_d(int algorithm, double *xstart, double *dx, int *fixed, double *xf
  xfit[i] = xstart[i];
       }
     }
-    if(reachedEpsilon > ftol)
-      return 1;
     free(xstart_nmsimplex_d);
     free(dx_nmsimplex_d);
     free(x_internal_psrsalsa_d);
+    if(reachedEpsilon > ftol)
+      return 1;
   }
   for(i = 0; i < nrparams; i++) {
     if(dplus != NULL)
@@ -160,8 +160,13 @@ int find_errors_amoeba_d(int algorithm, double *dx, int *fixed, double *xfit, do
  dxnew[paramnr] = step;
  do {
    ret = doAmoeba_d(algorithm, xstartnew, dxnew, fixednew, xfitnew, &yfitnew, nrparams, funk, ftol, &nfunknew, 0, 0, sigma, NULL, NULL);
-   if(ret == 3)
+   if(ret == 3) {
+     free(fixednew);
+     free(xstartnew);
+     free(dxnew);
+     free(xfitnew);
      return 3;
+   }
    if(ret == 1) {
      fprintf(stderr, "WARNING find_point_amoeba_d: Adjusting amoeba tollerance to try to converge (for errorbar estimation).\n");
      ftol *= 10;
@@ -170,8 +175,13 @@ int find_errors_amoeba_d(int algorithm, double *dx, int *fixed, double *xfit, do
      break;
    }
  }while(ftol < 0.01);
- if(ret == 1)
+ if(ret == 1) {
+   free(fixednew);
+   free(xstartnew);
+   free(dxnew);
+   free(xfitnew);
    return 1;
+ }
  if(yfitnew < yfit*(sigma+1.0) && yold < yfit*(sigma+1.0)) {
    x0 = x1;
  }else if(yfitnew > yfit*(sigma+1.0) && yold < yfit*(sigma+1.0)) {
@@ -207,6 +217,7 @@ int find_errors_amoeba_d(int algorithm, double *dx, int *fixed, double *xfit, do
   }
   free(fixednew);
   free(xstartnew);
+  free(dxnew);
   free(xfitnew);
   return 0;
 }

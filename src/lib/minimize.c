@@ -356,6 +356,7 @@ int find_1D_error(double (*funk)(double *, void *), double *xminimum, int paramn
       if(dxmax >= 0) {
  if(fabs(x_upper - xminimum[paramnr]) > dxmax) {
    *errorbar = dxmax;
+   free(xminimum_fiddle);
    return 0;
  }
       }
@@ -365,14 +366,17 @@ int find_1D_error(double (*funk)(double *, void *), double *xminimum, int paramn
       if(dxmax >= 0) {
  if(fabs(x_lower - xminimum[paramnr]) > dxmax) {
    *errorbar = dxmax;
+   free(xminimum_fiddle);
    return 0;
  }
       }
       diff = internal_find_1D_error_funk(x_lower, params);
     }
     ittr++;
-    if(ittr == max_itr)
+    if(ittr == max_itr) {
+      free(xminimum_fiddle);
       return 1;
+    }
   }while(diff < 0);
   if(verbose) {
     for(i = 0; i < verbose - 1; i++)
@@ -399,5 +403,6 @@ int find_1D_error(double (*funk)(double *, void *), double *xminimum, int paramn
       printf("  Other unspecified error\n");
     }
   }
+  free(xminimum_fiddle);
   return ret;
 }

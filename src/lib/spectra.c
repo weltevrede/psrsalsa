@@ -26,7 +26,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
   #include "nr.h"
   #include "nrutil.h"
 #endif
-int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *twodfs, regions_definition *onpulse, int region, verbose_definition verbose)
+int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *twodfs, pulselongitude_regions_definition *onpulse, int region, verbose_definition verbose)
 {
   unsigned long nr_fftblocks;
   float junk_float;
@@ -231,7 +231,7 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
 #endif
   return 1;
 }
-int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrfs, int subtractDC, float *phase_track, float *phase_track_phases, int calcPhaseTrack, float freq_min, float freq_max, int track_only_first_region, float *subpulseAmplitude, int calcsubpulseAmplitude, int mask_freqs, int inverseFFT, regions_definition *regions, float *var_rms, int argc, char **argv, verbose_definition verbose)
+int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrfs, int subtractDC, float *phase_track, float *phase_track_phases, int calcPhaseTrack, float freq_min, float freq_max, int track_only_first_region, float *subpulseAmplitude, int calcsubpulseAmplitude, int mask_freqs, int inverseFFT, pulselongitude_regions_definition *regions, float *var_rms, int argc, char **argv, verbose_definition verbose)
 {
   long fftblock, binnr, pulsenr;
   unsigned long nr_fftblocks;
@@ -523,8 +523,9 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
     printf("Done                       \n");
   free(data1);
   free(lrfs_tmp);
-  if(calcPhaseTrack) {
+  if(calcPhaseTrack || calcsubpulseAmplitude) {
     free(phase_track_complex);
+    free(phase_track_complex_template);
   }
 #ifdef USEFFTW3
   fftwf_destroy_plan(plan1);
@@ -532,7 +533,7 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
 #endif
   return 1;
 }
-void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size, unsigned long nrpulses, float *sigma, float *rms_sigma, float *modind, float *rms_modind, regions_definition *regions, float var_rms, verbose_definition verbose)
+void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size, unsigned long nrpulses, float *sigma, float *rms_sigma, float *modind, float *rms_modind, pulselongitude_regions_definition *regions, float var_rms, verbose_definition verbose)
 {
   long b, f, n, nrblocks;
   float var, max, rms, av_sigma, rms_var;
@@ -676,7 +677,7 @@ void foldP3_simple(float *data, long nry, long starty, long nrx, float *map, flo
     }
   }
 }
-int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float foldp3, int refine, int cyclesperblock, int noSmooth, float smoothWidth, float slope, float subpulse_offset, regions_definition *onpulse
+int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float foldp3, int refine, int cyclesperblock, int noSmooth, float smoothWidth, float slope, float subpulse_offset, pulselongitude_regions_definition *onpulse
 , verbose_definition verbose)
 {
   float *blockmap, correl, maxcorrel, *template, *nrcounts, *nrcounts_block;
@@ -801,6 +802,7 @@ verbose.debug);
     }
   }
   free(nrcounts);
+  free(bestoffset);
   if(verbose.verbose)
     printf("  Done\n");
   return 1;

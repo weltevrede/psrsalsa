@@ -706,7 +706,8 @@ int puma_nrpol(Header_type hdr)
   if(hdr.redn.OI) {
       NrPol = 1;
       if(hdr.redn.OQ && hdr.redn.OU && hdr.redn.OV) NrPol=4;
-      if(hdr.redn.OP && hdr.redn.OV && hdr.redn.OTheta && hdr.redn.Op && hdr.redn.Ov == 0 && hdr.redn.Opoldeg == 0) NrPol=5;
+      if(hdr.redn.OP && hdr.redn.OV && hdr.redn.OTheta && hdr.redn.Op && hdr.redn.Ov == 0 && hdr.redn.Opoldeg == 0 && hdr.redn.OU == 0 && hdr.redn.OX == 0 && hdr.redn.OY == 0) NrPol=5;
+      if(hdr.redn.OP && hdr.redn.OV && hdr.redn.OTheta && hdr.redn.Op && hdr.redn.Ov == 0 && hdr.redn.Opoldeg == 0 && hdr.redn.OU == 1 && hdr.redn.OX == 1 && hdr.redn.OY == 1) NrPol=8;
   }
   return NrPol;
 }
@@ -773,17 +774,27 @@ int readWSRTHeader(datafile_definition *datafile, verbose_definition verbose)
   datafile->tsub_list = (double *)malloc(sizeof(double));
   if(datafile->tsub_list == NULL) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR : Memory allocation error");
+    printerror(verbose.debug, "ERROR readWSRTHeader: Memory allocation error");
     return 0;
   }
   datafile->tsub_list[0] = puma_hdr.obs.Dur/(double)datafile->NrSubints;
   datafile->mjd_start = puma_hdr.redn.MJDint + puma_hdr.redn.MJDfrac;
   datafile->freqMode = FREQMODE_UNIFORM;
-  datafile->uniform_freq_cent = puma_hdr.redn.FreqCent;
-  datafile->uniform_bw = puma_hdr.WSRT.Band[0].Width;
+  if(datafile->freqlabel_list != NULL) {
+    free(datafile->freqlabel_list);
+    datafile->freqlabel_list = NULL;
+  }
+  set_centre_frequency(datafile, puma_hdr.redn.FreqCent, verbose);
+  double bw;
+  bw = puma_hdr.WSRT.Band[0].Width;
   double channelbw = puma_hdr.redn.DeltaFreq;
-  if(channelbw < 0 || datafile->uniform_bw < 0) {
-    datafile->uniform_bw = -fabs(datafile->uniform_bw);
+  if(channelbw < 0 || bw < 0) {
+    bw = -fabs(bw);
+  }
+  if(set_bandwidth(datafile, bw, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readWSRTHeader: Bandwidth changing failed.");
+    return 0;
   }
   datafile->NrFreqChan = puma_hdr.redn.NFreqs;
   datafile->ra = puma_hdr.src.RA;
@@ -1175,7 +1186,12 @@ int writeWSRTHeader(datafile_definition datafile, verbose_definition verbose)
   float *fdummy;
   int *idummy;
   char *dummy;
-  FillPuMaHeaderSimple(&puma_hdr, 200700000, 1, 0, 0, get_bw(datafile, verbose), get_centre_freq(datafile, verbose), datafile.NrBins, datafile.mjd_start, datafile.mjd_start, "", get_tobs(datafile, verbose), datafile.psrname, datafile.ra, datafile.dec, 1, 1, datafile.NrFreqChan, get_tsamp(datafile, 0, verbose), datafile.NrPols, 0, 8, 1, datafile.observatory, observatory_long_geodetic(datafile), observatory_lat_geodetic(datafile), observatory_height_geodetic(datafile));
+  if(datafile.freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writeWSRTHeader: Writing this data format is only implemented when the frequency channels are uniformely separated.");
+    return 0;
+  }
+  FillPuMaHeaderSimple(&puma_hdr, 200700000, 1, 0, 0, get_bandwidth(datafile, verbose), get_centre_frequency(datafile, verbose), datafile.NrBins, datafile.mjd_start, datafile.mjd_start, "", get_tobs(datafile, verbose), datafile.psrname, datafile.ra, datafile.dec, 1, 1, datafile.NrFreqChan, get_tsamp(datafile, 0, verbose), datafile.NrPols, 0, 8, 1, datafile.observatory, observatory_long_geodetic(datafile), observatory_lat_geodetic(datafile), observatory_height_geodetic(datafile));
   puma_hdr.gen.ParBlkSize = 0;
   strncpy(puma_hdr.gen.ScanNum, datafile.scanID, NAMELEN);
   puma_hdr.redn.NBins = datafile.NrBins;
@@ -1205,9 +1221,9 @@ int writeWSRTHeader(datafile_definition datafile, verbose_definition verbose)
   puma_hdr.redn.DeltaTime = get_tsamp(datafile, 0, verbose);
   puma_hdr.redn.MJDint = (int)datafile.mjd_start;
   puma_hdr.redn.MJDfrac = datafile.mjd_start - puma_hdr.redn.MJDint;
-  puma_hdr.redn.FreqCent = get_centre_freq(datafile, verbose);
+  puma_hdr.redn.FreqCent = get_centre_frequency(datafile, verbose);
   double chanbw;
-  if(get_channelbw(datafile, 0, 0, &chanbw, verbose) == 0) {
+  if(get_channelbandwidth(datafile, &chanbw, verbose) == 0) {
     printerror(verbose.debug, "ERROR writeWSRTHeader (%s): Cannot obtain channel bandwidth.", datafile.filename);
     return 0;
   }
@@ -1237,6 +1253,18 @@ int writeWSRTHeader(datafile_definition datafile, verbose_definition verbose)
     puma_hdr.redn.OV = TRUE;
     puma_hdr.redn.OTheta = TRUE;
     puma_hdr.redn.Op = TRUE;
+    puma_hdr.redn.OU = FALSE;
+    puma_hdr.redn.OX = FALSE;
+    puma_hdr.redn.OY = FALSE;
+  }else if(datafile.NrPols == 8 && datafile.poltype == POLTYPE_ILVPAdPATEldEl) {
+    puma_hdr.redn.OI = TRUE;
+    puma_hdr.redn.OP = TRUE;
+    puma_hdr.redn.OV = TRUE;
+    puma_hdr.redn.OTheta = TRUE;
+    puma_hdr.redn.Op = TRUE;
+    puma_hdr.redn.OU = TRUE;
+    puma_hdr.redn.OX = TRUE;
+    puma_hdr.redn.OY = TRUE;
   }else {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writeWSRTHeader: Cannot write out %ld polarization channels", datafile.NrPols);

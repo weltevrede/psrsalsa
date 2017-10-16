@@ -181,7 +181,7 @@ int getMachinename(char *hostname, int size, verbose_definition verbose)
 }
 char * pickWordFromString(char *string, int n, int *nrwords, int replacetabs, char separator, verbose_definition verbose)
 {
-  char *ptr, *ret, field[1001], *string_mod;
+  char *ptr, *ret, *field, *string_mod, *format;
   int nrchars;
   if(n <= 0) {
     fflush(stdout);
@@ -191,13 +191,10 @@ char * pickWordFromString(char *string, int n, int *nrwords, int replacetabs, ch
     }
     exit(0);
   }
-  if(separator != ' ' && separator != ',' && separator != ':') {
-    fflush(stdout);
-    fprintf(stderr, "ERROR pickWordFromString: This particular separator (ascii code %d) is not supported", separator);
-    exit(0);
-  }
   string_mod = malloc(strlen(string)+1);
-  if(string_mod == NULL) {
+  field = malloc(MaxPickWordFromString_WordLength+1);
+  format = malloc(20);
+  if(string_mod == NULL || field == NULL || format == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR pickWordFromString: Memory allocation error");
     exit(0);
@@ -228,12 +225,8 @@ char * pickWordFromString(char *string, int n, int *nrwords, int replacetabs, ch
     if(*ptr == 0)
       break;
     nrchars = 0;
-    if(separator == ' ')
-      sscanf(ptr, "%100[^ ]%n", field, &nrchars);
-    else if(separator == ',')
-      sscanf(ptr, "%100[^,]%n", field, &nrchars);
-    else if(separator == ':')
-      sscanf(ptr, "%100[^:]%n", field, &nrchars);
+    sprintf(format, "%%%d[^%c]%%n", MaxPickWordFromString_WordLength, separator);
+    sscanf(ptr, format, field, &nrchars);
     (*nrwords) ++;
     if(*nrwords == n)
       ret = ptr;
@@ -246,6 +239,8 @@ char * pickWordFromString(char *string, int n, int *nrwords, int replacetabs, ch
   if(ret != NULL)
     ret = ret-string_mod+string;
   free(string_mod);
+  free(field);
+  free(format);
   return ret;
 }
 int change_filename_extension(char *inputname, char *outputname, char *extension, int outputnamelength, verbose_definition verbose)

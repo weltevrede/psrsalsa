@@ -31,7 +31,7 @@ psrsalsaApplication application;
 
 int main(int argc, char **argv)
 {
-  int index, c_index, nrwords, iformat_initial_value, didhistory, didweights, nohead, noweights, show_linenumber;
+  int index, c_index, nrwords, iformat_initial_value, didhistory, didweights, didfreqlist, nohead, noweights, show_linenumber;
   int maxfilenamelength, maxobservatorylength, maxgentypelength, maxscanidlength, maxinstrumentlength, maxfileformatlength, j;
   int showfootnotes, footnote_length, footnote_length2, footnote_search, footnote_parang, precision;
   long i;
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 
   if(argc < 2) {
     printf("Program to show the header information of pulsar data. Usage:\n\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("-c            Specify things to show (or run in verbose to show all)\n");
     printf("              Example: -c \"nbin nfreq\".\n");
     printf("-H            show list of things that can be specified with -c\n");
@@ -80,9 +80,8 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-nofootnotes") == 0) {
  showfootnotes = 0;
       }else if(strcmp(argv[i], "-precision") == 0) {
- j = sscanf(argv[i+1], "%d", &precision);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "pheader: Error parsing option '%s'", argv[i]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &precision, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pheader: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -98,6 +97,7 @@ int main(int argc, char **argv)
  printf("dt            Time interval per phase bin\n");
  printf("format        Format identifier of the observation\n");
  printf("freq          Centre frequency\n");
+ printf("freqlist      Show the (weighted) frequency for each channel/subint\n");
  printf("gentype       Identifies the type of data stored in file.\n");
  printf("hist          Show history (if supported in file)\n");
  printf("lat           Latitude of the telescope (GRS80 derived from ITRF)\n");
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-  if(numberInApplicationFilenameList(application, argv, application.verbose_state) == 0) {
+  if(numberInApplicationFilenameList(&application, argv, application.verbose_state) == 0) {
     printerror(application.verbose_state.verbose, "pheader: No files specified");
     return 0;
   }
@@ -156,6 +156,7 @@ int main(int argc, char **argv)
       sscanf(pickWordFromString(argv[c_index], i+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
       if(strcasecmp(cmd, "p0") == 0 || strcasecmp(cmd, "period") == 0) {
       }else if(strcasecmp(cmd, "freq") == 0) {
+      }else if(strcasecmp(cmd, "freqlist") == 0) {
       }else if(strcasecmp(cmd, "reffreq") == 0) {
       }else if(strcasecmp(cmd, "npulses") == 0 || strcasecmp(cmd, "nsub") == 0 || strcasecmp(cmd, "nsubint") == 0) {
       }else if(strcasecmp(cmd, "nbin") == 0 || strcasecmp(cmd, "nbins") == 0) {
@@ -196,7 +197,7 @@ int main(int argc, char **argv)
     }
   }
 
-  datain = malloc(numberInApplicationFilenameList(application, argv, application.verbose_state)*sizeof(datafile_definition));
+  datain = malloc(numberInApplicationFilenameList(&application, argv, application.verbose_state)*sizeof(datafile_definition));
   if(datain == NULL) {
     printerror(application.verbose_state.verbose, "pheader: Cannot allocate memory");
     return 0;
@@ -205,7 +206,7 @@ int main(int argc, char **argv)
   iformat_initial_value = application.iformat;
   i = 0;
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
-    cleanPSRData(&datain[i], application.verbose_state);
+
 
     application.iformat = iformat_initial_value;
     if(application.iformat <= 0)
@@ -249,6 +250,7 @@ int main(int argc, char **argv)
 
 
       didweights = 0;
+      didfreqlist = 0;
       pickWordFromString(argv[c_index], 1, &nrwords, 0, ' ', application.verbose_state);
       for(j = 0; j < nrwords; j++) {
  sscanf(pickWordFromString(argv[c_index], j+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
@@ -260,11 +262,20 @@ int main(int argc, char **argv)
      long nsub, nfreq;
      for(nsub = 0; nsub < datain[i].NrSubints; nsub++) {
        for(nfreq = 0; nfreq < datain[i].NrFreqChan; nfreq++) {
-  printf("  subint %04ld channel %04ld = %lf MHz: %f\n", nsub, nfreq, get_channel_freq(datain[i], nfreq, application.verbose_state), datain[i].weights[nsub*datain[i].NrFreqChan+nfreq]);
+  printf("  subint %04ld channel %04ld = %lf MHz: %f\n", nsub, nfreq, get_weighted_channel_freq(datain[i], nsub, nfreq, application.verbose_state), datain[i].weights[nsub*datain[i].NrFreqChan+nfreq]);
        }
      }
    }
    didweights = 1;
+ }else if(strcasecmp(cmd, "freqlist") == 0) {
+   printf("Frequencies for %s\n", filename_ptr);
+   long nsub, nfreq;
+   for(nsub = 0; nsub < datain[i].NrSubints; nsub++) {
+     for(nfreq = 0; nfreq < datain[i].NrFreqChan; nfreq++) {
+       printf("  subint %04ld channel %04ld = %lf MHz\n", nsub, nfreq, get_weighted_channel_freq(datain[i], nsub, nfreq, application.verbose_state));
+     }
+   }
+   didfreqlist = 1;
  }
       }
 
@@ -286,14 +297,25 @@ int main(int argc, char **argv)
 
     }
 
-    closePSRData(&datain[i], application.verbose_state);
+    closePSRData(&datain[i], 1, application.verbose_state);
     i++;
   }
 
-  if(c_index == 0)
+  if(c_index == 0) {
+    for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
+      closePSRData(&datain[i], 0, application.verbose_state);
+    }
+    free(datain);
+    terminateApplication(&application);
     return 0;
+  }
 
-  if(nrwords == didhistory + didweights) {
+  if(nrwords == didhistory + didweights + didfreqlist) {
+    for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
+      closePSRData(&datain[i], 0, application.verbose_state);
+    }
+    free(datain);
+    terminateApplication(&application);
     return 0;
   }
 
@@ -310,32 +332,32 @@ int main(int argc, char **argv)
 
 
   maxfilenamelength = strlen("filename");
-  for(index = 0; index < numberInApplicationFilenameList(application, argv, application.verbose_state); index++) {
+  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
     if(strlen(datain[index].filename) > maxfilenamelength)
       maxfilenamelength = strlen(datain[index].filename);
   }
   maxobservatorylength = strlen("observatory");
-  for(index = 0; index < numberInApplicationFilenameList(application, argv, application.verbose_state); index++) {
+  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
     if(strlen(datain[index].observatory) > maxobservatorylength)
       maxobservatorylength = strlen(datain[index].observatory);
   }
   maxgentypelength = strlen("gentype");
-  for(index = 0; index < numberInApplicationFilenameList(application, argv, application.verbose_state); index++) {
+  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
     if(strlen(returnGenType_str(datain[index].gentype)) > maxgentypelength)
       maxgentypelength = strlen(returnGenType_str(datain[index].gentype));
   }
   maxfileformatlength = strlen("form.");
-  for(index = 0; index < numberInApplicationFilenameList(application, argv, application.verbose_state); index++) {
+  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
     if(strlen(returnFileFormat_str(datain[index].format)) > maxfileformatlength)
       maxfileformatlength = strlen(returnFileFormat_str(datain[index].format));
   }
   maxinstrumentlength = strlen("backend");
-  for(index = 0; index < numberInApplicationFilenameList(application, argv, application.verbose_state); index++) {
+  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
     if(strlen(datain[index].instrument) > maxinstrumentlength)
       maxinstrumentlength = strlen(datain[index].instrument);
   }
   maxscanidlength = strlen("scanid");
-  for(index = 0; index < numberInApplicationFilenameList(application, argv, application.verbose_state); index++) {
+  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
     if(strlen(datain[index].scanID) > maxscanidlength)
       maxscanidlength = strlen(datain[index].scanID);
   }
@@ -420,6 +442,7 @@ int main(int argc, char **argv)
  printf(" depar");
       }else if(strcasecmp(cmd, "hist") == 0) {
       }else if(strcasecmp(cmd, "weights") == 0) {
+      }else if(strcasecmp(cmd, "freqlist") == 0) {
       }else if(strcasecmp(cmd, "observatory") == 0) {
  printf(" observatory");
  for(j = 0; j < maxobservatorylength - strlen("observatory"); j++)
@@ -469,7 +492,7 @@ int main(int argc, char **argv)
 
 
 
-  for(index = 0; index < numberInApplicationFilenameList(application, argv, application.verbose_state); index++) {
+  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
 
     if(show_linenumber)
       printf("%-4d ", index+1);
@@ -496,7 +519,7 @@ int main(int argc, char **argv)
      footnote_search = 1;
    }
  }else if(strcasecmp(cmd, "freq") == 0) {
-   printf(" %*.*lf", 9+precision, 4+precision, get_centre_freq(datain[index], application.verbose_state));
+   printf(" %*.*lf", 9+precision, 4+precision, get_centre_frequency(datain[index], application.verbose_state));
  }else if(strcasecmp(cmd, "reffreq") == 0) {
    printf(" %*.*lf", 9+precision, 4+precision, datain[index].freq_ref);
  }else if(strcasecmp(cmd, "npulses") == 0 || strcasecmp(cmd, "nsub") == 0 || strcasecmp(cmd, "nsubint") == 0) {
@@ -513,10 +536,10 @@ int main(int argc, char **argv)
 
    printf(" %*.*lf", 9+precision, 6+precision, get_tsamp(datain[index], 0, application.verbose_state));
  }else if(strcasecmp(cmd, "bw") == 0) {
-   printf(" %*.*lf", 7+precision, 1+precision, get_bw(datain[index], application.verbose_state));
+   printf(" %*.*lf", 7+precision, 1+precision, get_bandwidth(datain[index], application.verbose_state));
  }else if(strcasecmp(cmd, "chbw") == 0 || strcasecmp(cmd, "chanbw") == 0) {
    double chanbw;
-   if(get_channelbw(datain[index], 0, 0, &chanbw, application.verbose_state) == 0) {
+   if(get_channelbandwidth(datain[index], &chanbw, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR pheader (%s): Cannot obtain channel bandwidth.", datain[index].filename);
      return 0;
    }
@@ -588,6 +611,7 @@ int main(int argc, char **argv)
    printf(" %5d", datain[index].isDePar);
  }else if(strcasecmp(cmd, "hist") == 0) {
  }else if(strcasecmp(cmd, "weights") == 0) {
+ }else if(strcasecmp(cmd, "freqlist") == 0) {
  }else {
    printerror(application.verbose_state.verbose, "\nERROR pheader: Unknown header parameter (%s), specify -H for a list", cmd);
    return 0;
@@ -617,5 +641,10 @@ int main(int argc, char **argv)
     }
   }
 
+  for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
+    closePSRData(&datain[i], 0, application.verbose_state);
+  }
+  free(datain);
+  terminateApplication(&application);
   return 0;
 }

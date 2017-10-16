@@ -43,7 +43,10 @@ int main(int argc, char **argv)
   FILE *fout_ascii;
   long k;
   datafile_definition clone, subpulseTrackProfile, subpulseTrackProfileErr, subpulseAmpProfile;
-  verbose_definition verbose, noverbose;
+  verbose_definition noverbose;
+  psrsalsaApplication application;
+
+  initApplication(&application, "pspecFig", "");
 
 
 
@@ -51,7 +54,7 @@ int main(int argc, char **argv)
 
   type_of_plots = 0;
   file_number = 1;
-  cleanVerboseState(&verbose);
+
   scaleFig_x = 1;
   scaleFig_y = 1;
   do_phase_slope = 0;
@@ -155,6 +158,7 @@ int main(int argc, char **argv)
     printf("More information about bootstrap/subpulse phase track & amplitude can be found in:\n");
     printf(" - Weltevrede et al. 2012, MNRAS, 424, 843\n\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }
 
@@ -209,19 +213,11 @@ int main(int argc, char **argv)
   nointegrateNumbers = 1;
   usephase = 0;
 
-  cleanPSRData(&twodfs, verbose);
-  cleanPSRData(&lrfs, verbose);
-  cleanPSRData(&AverageProfile, verbose);
-  cleanPSRData(&VarianceProfile, verbose);
-  cleanPSRData(&VarianceProfileErr, verbose);
-  cleanPSRData(&ModProfile, verbose);
-  cleanPSRData(&subpulseTrackProfile, verbose);
-  cleanPSRData(&subpulseTrackProfileErr, verbose);
-  cleanPSRData(&subpulseAmpProfile, verbose);
 
   for(i = 1; i < argc; i++) {
     if(strcmp(argv[i], "-headerlist") == 0) {
       printHeaderCommandlineOptions(stdout);
+      terminateApplication(&application);
       return 0;
     }
   }
@@ -234,13 +230,13 @@ int main(int argc, char **argv)
       strcpy(PlotDevice, argv[i+1]);
       i++;
     }else if(strcmp(argv[i], "-v") == 0) {
-      verbose.verbose = 1;
+      application.verbose_state.verbose = 1;
     }else if(strcmp(argv[i], "-phaseplot") == 0) {
       type_of_plots = 1;
     }else if(strcmp(argv[i], "-debug") == 0) {
-      verbose.debug = 1;
+      application.verbose_state.debug = 1;
     }else if(strcmp(argv[i], "-nocounters") == 0) {
-      verbose.nocounters = 1;
+      application.verbose_state.nocounters = 1;
     }else if(strcmp(argv[i], "-xlabel") == 0
       ) {
       plot_xlabel = 1;
@@ -300,69 +296,60 @@ int main(int argc, char **argv)
     }else if(strcmp(argv[i], "-phase") == 0) {
       usephase = 1;
     }else if(strcmp(argv[i], "-linestyle") == 0) {
-      ret = sscanf(argv[i+1], "%d", &lineStyle);
-      if(ret != 1) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need one value.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &lineStyle, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       i++;
     }else if(strcmp(argv[i], "-linecolor") == 0 || strcmp(argv[i], "-linecolour") == 0) {
-      ret = sscanf(argv[i+1], "%d", &lineColour);
-      if(ret != 1) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need one value.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &lineColour, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       i++;
     }else if(strcmp(argv[i], "-scalep") == 0
       ) {
-      ret = sscanf(argv[i+1], "%f", &profilescale);
-      if(ret != 1) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need one value.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &profilescale, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       i++;
     }else if(strcmp(argv[i], "-dl") == 0) {
-      ret = sscanf(argv[i+1], "%lf", &dl);
-      if(ret != 1) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need one value.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &dl, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       i++;
     }else if(strcmp(argv[i], "-labelscale") == 0) {
-      ret = sscanf(argv[i+1], "%f", &labelscale);
-      if(ret != 1) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need one value.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &labelscale, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       i++;
     }else if(strcmp(argv[i], "-Imax") == 0) {
-      ret = sscanf(argv[i+1], "%f", &ImaxValue);
-      if(ret != 1) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need one value.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &ImaxValue, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       ImaxSet = 1;
       i++;
     }else if(strcmp(argv[i], "-Imin") == 0) {
-      ret = sscanf(argv[i+1], "%f", &IminValue);
-      if(ret != 1) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need one value.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &IminValue, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       IminSet = 1;
       i++;
     }else if(strcmp(argv[i], "-spmax") == 0) {
-      ret = sscanf(argv[i+1], "%lf", &maxSubpulsePhase);
-      if(ret != 1) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need one value.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &maxSubpulsePhase, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       maxSubpulsePhaseSet = 1;
       i++;
     }else if(strcmp(argv[i], "-spmin") == 0) {
-      ret = sscanf(argv[i+1], "%lf", &minSubpulsePhase);
-      if(ret != 1) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need one value.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &minSubpulsePhase, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       minSubpulsePhaseSet = 1;
@@ -374,74 +361,97 @@ int main(int argc, char **argv)
       i++;
     }else if(strcmp(argv[i], "-p3") == 0) {
       SelectP3Region = 1;
-      ret = sscanf(argv[i+1], "%lf %lf", &P3RegionLow, &P3RegionHigh);
-      if(ret != 2) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need two values.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &P3RegionLow, &P3RegionHigh, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       i++;
     }else if(strcmp(argv[i], "-p2") == 0) {
       if(SelectP2Region == 0) {
  SelectP2Region = 1;
- ret = sscanf(argv[i+1], "%lf %lf", &P2RegionLow, &P2RegionHigh);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &P2RegionLow, &P2RegionHigh, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  P2RegionLow2 = P2RegionLow;
  P2RegionHigh2 = P2RegionHigh;
       }else {
- ret = sscanf(argv[i+1], "%lf %lf", &P2RegionLow2, &P2RegionHigh2);
-      }
-      if(ret != 2) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need two values.", argv[i]);
- return 0;
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &P2RegionLow2, &P2RegionHigh2, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
       }
       i++;
     }else if(strcmp(argv[i], "-l") == 0) {
       SelectLRegion = 1;
-      ret = sscanf(argv[i+1], "%lf %lf", &LRegionLow, &LRegionHigh);
-      if(ret != 2) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need two values.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &LRegionLow, &LRegionHigh, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       i++;
     }else if(strcmp(argv[i], "-phaseslope") == 0) {
-      ret = sscanf(argv[i+1], "%f %f", &phase_slope_g, &phase_slope_o);
-      if(ret != 2) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need two values.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f", &phase_slope_g, &phase_slope_o, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       do_phase_slope = 1;
       i++;
     }else if(strcmp(argv[i], "-scalel") == 0
       ) {
-      oversaturizel = atof(argv[i+1]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &oversaturizel, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+ return 0;
+      }
       i++;
     }else if(strcmp(argv[i], "-scale2") == 0
       ) {
       if(NrSelectedOverSaturize == 0) {
- oversaturize = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &oversaturize, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  oversaturize2 = oversaturize;
  NrSelectedOverSaturize = 1;
       }else {
- oversaturize2 = atof(argv[i+1]);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &oversaturize2, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
       }
       i++;
     }else if(strcmp(argv[i], "-modsigma") == 0
       ) {
-      maxsigma_mod = atof(argv[i+1]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0,-1, "%f", &maxsigma_mod, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+ return 0;
+      }
       i++;
     }else if(strcmp(argv[i], "-stddevsigma") == 0
       ) {
-      maxsigma_stddev = atof(argv[i+1]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &maxsigma_stddev, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+ return 0;
+      }
       i++;
     }else if(strcmp(argv[i], "-modmax") == 0
       ) {
-      maxvalue_mod = atof(argv[i+1]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &maxvalue_mod, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+ return 0;
+      }
       i++;
     }else if(strcmp(argv[i], "-stddevmax") == 0
       ) {
-      maxvalue_stddev = atof(argv[i+1]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &maxvalue_stddev, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+ return 0;
+      }
       i++;
     }else if(strcmp(argv[i], "-s") == 0) {
-      ExtraVerticalMaximaSkip = atoi(argv[i+1]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &ExtraVerticalMaximaSkip, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+ return 0;
+      }
       i++;
     }else if(strcmp(argv[i], "-title") == 0
       ) {
@@ -452,9 +462,8 @@ int main(int argc, char **argv)
       sprintf(title2, "%s", argv[i+1]);
       i++;
     }else if(strcmp(argv[i], "-2dfsnr") == 0) {
-      j = sscanf(argv[i+1], "%d", &file_number);
-      if(j != 1) {
- printerror(verbose.debug, "Cannot parse option '%s'", argv[i+1]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &file_number, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       i++;
@@ -462,41 +471,53 @@ int main(int argc, char **argv)
       ) {
       if(SelectP3Integrate == 0) {
  SelectP3Integrate = 1;
- ret = sscanf(argv[i+1], "%lf %lf", &P3IntegrateLow, &P3IntegrateHigh);
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &P3IntegrateLow, &P3IntegrateHigh, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  P3IntegrateLow2 = P3IntegrateLow;
  P3IntegrateHigh2 = P3IntegrateHigh;
       }else {
  SelectP3Integrate = 2;
- ret = sscanf(argv[i+1], "%lf %lf", &P3IntegrateLow2, &P3IntegrateHigh2);
-      }
-      if(ret != 2) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need two values.", argv[i]);
- return 0;
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &P3IntegrateLow2, &P3IntegrateHigh2, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
       }
       i++;
     }else if(strcmp(argv[i], "-ytop") == 0
       ) {
       plot_ylabeltop = 1;
     }else if(strcmp(argv[i], "-scalefig") == 0) {
-      ret = sscanf(argv[i+1], "%lf %lf", &scaleFig_x, &scaleFig_y);
-      if(ret != 2) {
- printerror(verbose.debug, "pspecFig: Error parsing option '%s'. Need two values.", argv[i]);
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &scaleFig_x, &scaleFig_y, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
       i++;
     }else {
-      printerror(verbose.debug, "Unknown option: %s\nRun pspecFig without command line options for a help", argv[i]);
+      printerror(application.verbose_state.debug, "Unknown option: %s\nRun pspecFig without command line options for a help", argv[i]);
+      terminateApplication(&application);
       return 0;
     }
   }
+  cleanPSRData(&twodfs, application.verbose_state);
+  cleanPSRData(&lrfs, application.verbose_state);
+  cleanPSRData(&AverageProfile, application.verbose_state);
+  cleanPSRData(&VarianceProfile, application.verbose_state);
+  cleanPSRData(&VarianceProfileErr, application.verbose_state);
+  cleanPSRData(&ModProfile, application.verbose_state);
+  cleanPSRData(&subpulseTrackProfile, application.verbose_state);
+  cleanPSRData(&subpulseTrackProfileErr, application.verbose_state);
+  cleanPSRData(&subpulseAmpProfile, application.verbose_state);
   if(type_of_plots == 0) {
     sprintf(txt, "lrfs");
-    if(change_filename_extension(argv[argc-1], filename, txt, 1000, verbose) == 0) {
+    if(change_filename_extension(argv[argc-1], filename, txt, 1000, application.verbose_state) == 0) {
       return 0;
     }
-    if(verbose.verbose)
+    if(application.verbose_state.verbose)
       printf("Reading %s\n", filename);
-    if(!openPSRData(&lrfs, filename, 0, 0, 1, 0, verbose))
+    closePSRData(&lrfs, 0, application.verbose_state);
+    if(!openPSRData(&lrfs, filename, 0, 0, 1, 0, application.verbose_state))
       return 0;
     long i;
     double max;
@@ -510,65 +531,66 @@ int main(int argc, char **argv)
  lrfs.data[i] /= 0.999*max;
       }
     }
-    if(PSRDataHeader_parse_commandline(&lrfs, argc, argv, verbose) == 0)
+    if(PSRDataHeader_parse_commandline(&lrfs, argc, argv, application.verbose_state) == 0)
       return 0;
     double period;
     int ret;
-    ret = get_period(lrfs, 0, &period, verbose);
+    ret = get_period(lrfs, 0, &period, application.verbose_state);
     if(ret == 2) {
-      printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", lrfs.filename);
+      printerror(application.verbose_state.debug, "ERROR pspecFig (%s): Cannot obtain period", lrfs.filename);
       return 0;
     }
     if(period < 0.001) {
-      printerror(verbose.debug, "The period does not appear to be set in the header. Consider using the -header option.");
+      printerror(application.verbose_state.debug, "The period does not appear to be set in the header. Consider using the -header option.");
       return 0;
     }
-    if(get_tsamp(lrfs, 0, verbose) < 0.0000001) {
-      printerror(verbose.debug, "The sampling time does not appear to be set in the header. Consider using the -header option.");
+    if(get_tsamp(lrfs, 0, application.verbose_state) < 0.0000001) {
+      printerror(application.verbose_state.debug, "The sampling time does not appear to be set in the header. Consider using the -header option.");
       return 0;
     }
-    if(verbose.verbose)
+    if(application.verbose_state.verbose)
       printf("%ldx%ld points read from lrfs\n", lrfs.NrBins, lrfs.NrSubints);
     if(lrfs.NrPols > 1) {
-      if(preprocess_polselect(lrfs, &clone, 0, verbose) == 0) {
- printerror(verbose.debug, "ERROR pspecFig: Error selecting polarization channel 0.");
+      if(preprocess_polselect(lrfs, &clone, 0, application.verbose_state) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Error selecting polarization channel 0.");
  return 0;
       }
-      swap_orig_clone(&lrfs, &clone, verbose);
+      swap_orig_clone(&lrfs, &clone, application.verbose_state);
     }
   }
-  copyVerboseState(verbose, &noverbose);
+  copyVerboseState(application.verbose_state, &noverbose);
   noverbose.verbose = 0;
-  if(verbose.verbose)
+  if(application.verbose_state.verbose)
     printf("Reading %s\n", argv[argc-1]);
-  if(!openPSRData(&AverageProfile, argv[argc-1], 0, 0, 0, 0, verbose))
+  closePSRData(&AverageProfile, 0, application.verbose_state);
+  if(!openPSRData(&AverageProfile, argv[argc-1], 0, 0, 0, 0, application.verbose_state))
     return 0;
-  if(!readHeaderPSRData(&AverageProfile, 0, 0, verbose))
+  if(!readHeaderPSRData(&AverageProfile, 0, 0, application.verbose_state))
     return 0;
-  if(PSRDataHeader_parse_commandline(&AverageProfile, argc, argv, verbose) == 0)
+  if(PSRDataHeader_parse_commandline(&AverageProfile, argc, argv, application.verbose_state) == 0)
     return 0;
   if(type_of_plots == 0) {
     if(AverageProfile.NrBins != lrfs.NrBins) {
-      printwarning(verbose.debug, "WARNING: It looks like data is rebinned? Check the units.");
+      printwarning(application.verbose_state.debug, "WARNING: It looks like data is rebinned? Check the units.");
       AverageProfile.fixedtsamp *= AverageProfile.NrBins/(double)lrfs.NrBins;
       AverageProfile.tsampMode = TSAMPMODE_FIXEDTSAMP;
       AverageProfile.NrBins = lrfs.NrBins;
-      printwarning(verbose.debug, "WARNING: Assuming the number of bins = %ld and the sampling time = %lf s.", AverageProfile.NrBins, AverageProfile.fixedtsamp);
+      printwarning(application.verbose_state.debug, "WARNING: Assuming the number of bins = %ld and the sampling time = %lf s.", AverageProfile.NrBins, AverageProfile.fixedtsamp);
     }
   }
   double period;
   int ret_prd;
-  ret_prd = get_period(AverageProfile, 0, &period, verbose);
+  ret_prd = get_period(AverageProfile, 0, &period, application.verbose_state);
   if(ret_prd == 2) {
-    printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
+    printerror(application.verbose_state.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
     return 0;
   }
   if(period < 0.001) {
-    printerror(verbose.debug, "The period does not appear to be set in the header. Consider using the -header option.");
+    printerror(application.verbose_state.debug, "The period does not appear to be set in the header. Consider using the -header option.");
     return 0;
   }
-  if(get_tsamp(AverageProfile, 0, verbose) < 0.0000001) {
-    printerror(verbose.debug, "The sampling time does not appear to be set in the header. Consider using the -header option.");
+  if(get_tsamp(AverageProfile, 0, application.verbose_state) < 0.0000001) {
+    printerror(application.verbose_state.debug, "The sampling time does not appear to be set in the header. Consider using the -header option.");
     return 0;
   }
   AverageProfile.format = MEMORY_format;
@@ -577,49 +599,49 @@ int main(int argc, char **argv)
   AverageProfile.NrPols = 1;
   AverageProfile.data = malloc(AverageProfile.NrBins*sizeof(float));
   if(AverageProfile.data == NULL) {
-    printerror(verbose.debug, "Memory allocation error");
+    printerror(application.verbose_state.debug, "Memory allocation error");
     return 0;
   }
-  if(change_filename_extension(argv[argc-1], filename, "profile", 1000, verbose) == 0)
+  if(change_filename_extension(argv[argc-1], filename, "profile", 1000, application.verbose_state) == 0)
     return 0;
   if(altProf > 0) {
     strncpy(filename, argv[altProf], 1000);
   }
-  if(set_filename_PSRData(&AverageProfile, filename, verbose) == 0) {
+  if(set_filename_PSRData(&AverageProfile, filename, application.verbose_state) == 0) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR psecFig: Setting file name failed.");
+    printerror(application.verbose_state.debug, "ERROR psecFig: Setting file name failed.");
     return 0;
   }
   if(type_of_plots == 0) {
-    copy_params_PSRData(AverageProfile, &VarianceProfile, verbose);
-    copy_params_PSRData(AverageProfile, &ModProfile, verbose);
-    copy_params_PSRData(AverageProfile, &VarianceProfileErr, verbose);
-    copy_params_PSRData(AverageProfile, &ModProfileErr, verbose);
+    copy_params_PSRData(AverageProfile, &VarianceProfile, application.verbose_state);
+    copy_params_PSRData(AverageProfile, &ModProfile, application.verbose_state);
+    copy_params_PSRData(AverageProfile, &VarianceProfileErr, application.verbose_state);
+    copy_params_PSRData(AverageProfile, &ModProfileErr, application.verbose_state);
     VarianceProfile.data = malloc(AverageProfile.NrBins*sizeof(float));
     ModProfile.data = malloc(AverageProfile.NrBins*sizeof(float));
     VarianceProfileErr.data = malloc(AverageProfile.NrBins*sizeof(float));
     ModProfileErr.data = malloc(AverageProfile.NrBins*sizeof(float));
     if(VarianceProfile.data == NULL || ModProfile.data == NULL || VarianceProfileErr.data == NULL || ModProfileErr.data == NULL) {
-      printerror(verbose.debug, "Memory allocation error");
+      printerror(application.verbose_state.debug, "Memory allocation error");
       return 0;
     }
   }else {
-    copy_params_PSRData(AverageProfile, &subpulseTrackProfile, verbose);
-    copy_params_PSRData(AverageProfile, &subpulseTrackProfileErr, verbose);
-    copy_params_PSRData(AverageProfile, &subpulseAmpProfile, verbose);
+    copy_params_PSRData(AverageProfile, &subpulseTrackProfile, application.verbose_state);
+    copy_params_PSRData(AverageProfile, &subpulseTrackProfileErr, application.verbose_state);
+    copy_params_PSRData(AverageProfile, &subpulseAmpProfile, application.verbose_state);
     subpulseTrackProfile.data = malloc(AverageProfile.NrBins*sizeof(float));
     subpulseTrackProfileErr.data = malloc(AverageProfile.NrBins*sizeof(float));
     subpulseAmpProfile.data = malloc(AverageProfile.NrBins*sizeof(float));
     if(subpulseTrackProfile.data == NULL || subpulseTrackProfileErr.data == NULL || subpulseAmpProfile.data == NULL) {
-      printerror(verbose.debug, "Memory allocation error");
+      printerror(application.verbose_state.debug, "Memory allocation error");
       return 0;
     }
   }
-  if(verbose.verbose)
+  if(application.verbose_state.verbose)
     printf("Reading %s\n", filename);
   fout_ascii = fopen(filename, "r");
   if(fout_ascii == NULL) {
-    printerror(verbose.debug, "ERROR pspecFig: Unable to open %s.", filename);
+    printerror(application.verbose_state.debug, "ERROR pspecFig: Unable to open %s.", filename);
     return 0;
   }
   for(i = 0; i < AverageProfile.NrBins; i++) {
@@ -631,97 +653,98 @@ int main(int argc, char **argv)
     }
     if(j != 6) {
       if(type_of_plots == 0) {
- printerror(verbose.debug, "Unexpected end of file (bin %d). Resolution in profile doesn't match resolution in lrfs?", i+1);
+ printerror(application.verbose_state.debug, "Unexpected end of file (bin %d). Resolution in profile doesn't match resolution in lrfs?", i+1);
  return 0;
       }else {
- printwarning(verbose.debug, "WARNING: It looks like data is rebinned? Check the units.");
+ printwarning(application.verbose_state.debug, "WARNING: It looks like data is rebinned? Check the units.");
  AverageProfile.fixedtsamp *= AverageProfile.NrBins/(double)(i);
  AverageProfile.tsampMode = TSAMPMODE_FIXEDTSAMP;
  AverageProfile.NrBins = i;
- printwarning(verbose.debug, "WARNING: Assuming the number of bins = %ld and the sampling time = %lf s.", AverageProfile.NrBins, AverageProfile.fixedtsamp);
- copy_params_PSRData(AverageProfile, &subpulseTrackProfile, verbose);
- copy_params_PSRData(AverageProfile, &subpulseTrackProfileErr, verbose);
- copy_params_PSRData(AverageProfile, &subpulseAmpProfile, verbose);
+ printwarning(application.verbose_state.debug, "WARNING: Assuming the number of bins = %ld and the sampling time = %lf s.", AverageProfile.NrBins, AverageProfile.fixedtsamp);
+ copy_params_PSRData(AverageProfile, &subpulseTrackProfile, application.verbose_state);
+ copy_params_PSRData(AverageProfile, &subpulseTrackProfileErr, application.verbose_state);
+ copy_params_PSRData(AverageProfile, &subpulseAmpProfile, application.verbose_state);
  break;
       }
     }
     if(k != i) {
-      printerror(verbose.debug, "Unexpected bin number");
+      printerror(application.verbose_state.debug, "Unexpected bin number");
       return 0;
     }
   }
   fclose(fout_ascii);
-  if(verbose.verbose)
+  if(application.verbose_state.verbose)
     printf("%ld points read from %s\n", AverageProfile.NrBins, filename);
-  ret = get_period(AverageProfile, 0, &period, verbose);
+  ret = get_period(AverageProfile, 0, &period, application.verbose_state);
   if(ret == 2) {
-    printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
+    printerror(application.verbose_state.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
     return 0;
   }
   fl_min = 0 + dl;
-  fl_max = 360*(AverageProfile.NrBins-1)*get_tsamp(AverageProfile, 0, verbose)/period + dl;
+  fl_max = 360*(AverageProfile.NrBins-1)*get_tsamp(AverageProfile, 0, application.verbose_state)/period + dl;
   if(usephase) {
     fl_min /= 360.0;
     fl_max /= 360.0;
   }
   if(type_of_plots == 1) {
-    if(change_filename_extension(argv[argc-1], filename, "amplitude", 1000, verbose) == 0)
+    if(change_filename_extension(argv[argc-1], filename, "amplitude", 1000, application.verbose_state) == 0)
       return 0;
-    if(verbose.verbose)
+    if(application.verbose_state.verbose)
       printf("Reading %s\n", filename);
     fout_ascii = fopen(filename, "r");
     if(fout_ascii == NULL) {
-      printerror(verbose.debug, "ERROR pspecFig: Unable to open %s.", filename);
+      printerror(application.verbose_state.debug, "ERROR pspecFig: Unable to open %s.", filename);
       return 0;
     }
     for(i = 0; i < AverageProfile.NrBins; i++) {
       j = fscanf(fout_ascii, "%ld %f", &k, &subpulseAmpProfile.data[i]);
       if(j != 2) {
- printerror(verbose.debug, "Unexpected end of file (bin %d). Resolution in subpulse phase track doesn't match resolution in profile file?", i+1);
+ printerror(application.verbose_state.debug, "Unexpected end of file (bin %d). Resolution in subpulse phase track doesn't match resolution in profile file?", i+1);
  return 0;
       }
       if(k != i) {
- printerror(verbose.debug, "Unexpected bin number");
+ printerror(application.verbose_state.debug, "Unexpected bin number");
  return 0;
       }
     }
     fclose(fout_ascii);
-    if(verbose.verbose)
+    if(application.verbose_state.verbose)
       printf("%ld points read from %s\n", AverageProfile.NrBins, filename);
   }
   if(type_of_plots == 1) {
-    if(change_filename_extension(argv[argc-1], filename, "track", 1000, verbose) == 0)
+    if(change_filename_extension(argv[argc-1], filename, "track", 1000, application.verbose_state) == 0)
       return 0;
-    if(verbose.verbose)
+    if(application.verbose_state.verbose)
       printf("Reading %s\n", filename);
     fout_ascii = fopen(filename, "r");
     if(fout_ascii == NULL) {
-      printerror(verbose.debug, "ERROR pspecFig: Unable to open %s.", filename);
+      printerror(application.verbose_state.debug, "ERROR pspecFig: Unable to open %s.", filename);
       return 0;
     }
     for(i = 0; i < AverageProfile.NrBins; i++) {
       j = fscanf(fout_ascii, "%ld %f %f", &k, &subpulseTrackProfile.data[i], &subpulseTrackProfileErr.data[i]);
       if(j != 3) {
- printerror(verbose.debug, "Unexpected end of file (bin %d). Resolution in subpulse phase track doesn't match resolution in profile file?", i+1);
+ printerror(application.verbose_state.debug, "Unexpected end of file (bin %d). Resolution in subpulse phase track doesn't match resolution in profile file?", i+1);
  return 0;
       }
       if(k != i) {
- printerror(verbose.debug, "Unexpected bin number");
+ printerror(application.verbose_state.debug, "Unexpected bin number");
  return 0;
       }
     }
     fclose(fout_ascii);
-    if(verbose.verbose)
+    if(application.verbose_state.verbose)
       printf("%ld points read from %s\n", AverageProfile.NrBins, filename);
   }
   if(type_of_plots == 0) {
     sprintf(txt, "%d.2dfs", file_number);
-    if(change_filename_extension(argv[argc-1], filename, txt, 1000, verbose) == 0) {
+    if(change_filename_extension(argv[argc-1], filename, txt, 1000, application.verbose_state) == 0) {
       return 0;
     }
-    if(verbose.verbose)
+    if(application.verbose_state.verbose)
       printf("Reading %s\n", filename);
-    if(!openPSRData(&twodfs, filename, 0, 0, 1, 0, verbose))
+    closePSRData(&twodfs, 0, application.verbose_state);
+    if(!openPSRData(&twodfs, filename, 0, 0, 1, 0, application.verbose_state))
       return 0;
     long i;
     double max;
@@ -735,16 +758,16 @@ int main(int argc, char **argv)
  twodfs.data[i] /= 0.999*max;
       }
     }
-    if(PSRDataHeader_parse_commandline(&twodfs, argc, argv, verbose) == 0)
+    if(PSRDataHeader_parse_commandline(&twodfs, argc, argv, application.verbose_state) == 0)
       return 0;
-    if(verbose.verbose)
+    if(application.verbose_state.verbose)
       printf("%ldx%ld points read from 2dfs\n", twodfs.NrBins, twodfs.NrSubints);
     if(twodfs.NrPols > 1) {
-      if(preprocess_polselect(twodfs, &clone, 0, verbose) == 0) {
- printerror(verbose.debug, "ERROR pspecFig: Error selecting polarization channel 0.");
+      if(preprocess_polselect(twodfs, &clone, 0, application.verbose_state) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Error selecting polarization channel 0.");
  return 0;
       }
-      swap_orig_clone(&twodfs, &clone, verbose);
+      swap_orig_clone(&twodfs, &clone, application.verbose_state);
     }
     f2_min = -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
     f2_max = +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
@@ -754,12 +777,12 @@ int main(int argc, char **argv)
       P3IntegrateHigh = f3_max;
     if(LoadTwo != 0) {
       sprintf(txt, "%d.2dfs", file_number+1);
-      if(change_filename_extension(argv[argc-1], filename, txt, 1000, verbose) == 0) {
+      if(change_filename_extension(argv[argc-1], filename, txt, 1000, application.verbose_state) == 0) {
  return 0;
       }
-      if(verbose.verbose)
+      if(application.verbose_state.verbose)
  printf("Reading %s\n", filename);
-      if(!openPSRData(&twodfs2, filename, 0, 0, 1, 0, verbose))
+      if(!openPSRData(&twodfs2, filename, 0, 0, 1, 0, application.verbose_state))
  return 0;
       long i;
       double max;
@@ -773,16 +796,16 @@ int main(int argc, char **argv)
    twodfs2.data[i] /= 0.999*max;
  }
       }
-      if(PSRDataHeader_parse_commandline(&twodfs2, argc, argv, verbose) == 0)
+      if(PSRDataHeader_parse_commandline(&twodfs2, argc, argv, application.verbose_state) == 0)
  return 0;
-      if(verbose.verbose)
+      if(application.verbose_state.verbose)
  printf("%ldx%ld points read from 2dfs\n", twodfs2.NrBins, twodfs2.NrSubints);
       if(twodfs2.NrPols > 1) {
- if(preprocess_polselect(twodfs2, &clone, 0, verbose) == 0) {
-   printerror(verbose.debug, "ERROR pspecFig: Error selecting polarization channel 0.");
+ if(preprocess_polselect(twodfs2, &clone, 0, application.verbose_state) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pspecFig: Error selecting polarization channel 0.");
    return 0;
  }
- swap_orig_clone(&twodfs2, &clone, verbose);
+ swap_orig_clone(&twodfs2, &clone, application.verbose_state);
       }
       f2_min2 = -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins;
       f2_max2 = +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins;
@@ -828,14 +851,14 @@ int main(int argc, char **argv)
     ppgsch(0.38*labelscale);
     Imin = 0;
     Imax = 0;
-    ret = get_period(AverageProfile, 0, &period, verbose);
+    ret = get_period(AverageProfile, 0, &period, application.verbose_state);
     if(ret == 2) {
-      printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
+      printerror(application.verbose_state.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
       return 0;
     }
     for(xi=0; xi < AverageProfile.NrBins; xi++) {
       double xpos;
-      xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      xpos = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
       if(usephase)
  xpos /= 360.0;
       if(xpos >= fl_min && xpos <= fl_max) {
@@ -853,7 +876,7 @@ int main(int argc, char **argv)
     if(type_of_plots == 0) {
       for(xi=0; xi < ModProfile.NrBins; xi++) {
  double xpos;
- xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+ xpos = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
  if(usephase)
    xpos /= 360.0;
  if(xpos+dl >= fl_min && xpos+dl <= fl_max) {
@@ -873,7 +896,7 @@ int main(int argc, char **argv)
       }
       for(xi=0; xi < VarianceProfile.NrBins; xi++) {
  double xpos;
- xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+ xpos = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
  if(usephase)
    xpos /= 360.0;
  if(xpos + dl >= fl_min && xpos + dl <= fl_max) {
@@ -887,7 +910,7 @@ int main(int argc, char **argv)
     }else {
       for(xi=0; xi < subpulseAmpProfile.NrBins; xi++) {
  double xpos;
- xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+ xpos = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
  if(usephase)
    xpos /= 360.0;
  if(xpos + dl >= fl_min && xpos + dl <= fl_max) {
@@ -949,7 +972,7 @@ int main(int argc, char **argv)
     i = 0;
     for(xi=0; xi < AverageProfile.NrBins; xi++) {
       double xpos;
-      xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      xpos = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
       if(usephase)
  xpos /= 360.0;
       if(xpos+dl >= fl_min && xpos+dl <= fl_max) {
@@ -971,7 +994,7 @@ int main(int argc, char **argv)
  ppgscr(20, 0.5, 0.5, 0.5);
  ppgsci(20);
  for(xi=0; xi < AverageProfile.NrBins; xi++) {
-   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+   x = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
    if(usephase)
      x /= 360.0;
    x += dl;
@@ -1005,7 +1028,7 @@ int main(int argc, char **argv)
  ppgsls(1);
  ppgslw(1);
  for(xi=0; xi < ModProfile.NrBins; xi++) {
-   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+   x = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
    if(usephase)
      x /= 360.0;
    x += dl;
@@ -1032,7 +1055,7 @@ int main(int argc, char **argv)
  ppgsls(1);
  ppgslw(1);
  for(xi=0; xi < ModProfile.NrBins; xi++) {
-   x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+   x = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
    if(usephase)
      x /= 360.0;
    x += dl;
@@ -1055,7 +1078,7 @@ int main(int argc, char **argv)
       ppgsls(4);
       ppgslw(1);
       for(xi=0; xi < AverageProfile.NrBins; xi++) {
- x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+ x = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
  if(usephase)
    x /= 360.0;
  x += dl;
@@ -1086,25 +1109,25 @@ int main(int argc, char **argv)
   if(type_of_plots == 0) {
     if(Load2dfs != 0 && LoadLRFS == 0) {
       if(title_index > 0 && notop && LoadLRFS == 0) {
- Plot2dfsOnly(0, plot_xlabel, plot_ylabel, noside, nomain, showwedge, argv[title_index], scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, verbose);
+ Plot2dfsOnly(0, plot_xlabel, plot_ylabel, noside, nomain, showwedge, argv[title_index], scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, application.verbose_state);
       }else {
- Plot2dfsOnly(0, plot_xlabel, plot_ylabel, noside, nomain, showwedge, NULL, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, verbose);
+ Plot2dfsOnly(0, plot_xlabel, plot_ylabel, noside, nomain, showwedge, NULL, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, application.verbose_state);
       }
       if (LoadTwo != 0)
- Plot2dfsOnly(1, plot_xlabel, plot_ylabel, noside, nomain, showwedge, NULL, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, verbose);
+ Plot2dfsOnly(1, plot_xlabel, plot_ylabel, noside, nomain, showwedge, NULL, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, application.verbose_state);
     }
     else {
       if(LoadLRFS != 0) {
  if(title_index > 0 && notop) {
-   PlotLRFS(plot_xlabel, plot_ylabel, noside, plot_ylabeltop, lineColour, showwedge, argv[title_index], scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, usephase, verbose);
+   PlotLRFS(plot_xlabel, plot_ylabel, noside, plot_ylabeltop, lineColour, showwedge, argv[title_index], scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, usephase, application.verbose_state);
  }else {
-   PlotLRFS(plot_xlabel, plot_ylabel, noside, plot_ylabeltop, lineColour, showwedge, NULL, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, usephase, verbose);
+   PlotLRFS(plot_xlabel, plot_ylabel, noside, plot_ylabeltop, lineColour, showwedge, NULL, scaleFig_x, scaleFig_y, normaliseSide, nointegrateNumbers, usephase, application.verbose_state);
  }
       }
       if(Load2dfs != 0)
- Plot2dfs(0, plot_xlabel, plot_ylabel, noside, plot_ylabeltop, nomain, scaleFig_x, scaleFig_y, showwedge, normaliseSide, nointegrateNumbers, verbose);
+ Plot2dfs(0, plot_xlabel, plot_ylabel, noside, plot_ylabeltop, nomain, scaleFig_x, scaleFig_y, showwedge, normaliseSide, nointegrateNumbers, application.verbose_state);
       if(LoadTwo != 0)
- Plot2dfs(1, plot_xlabel, plot_ylabel, noside, plot_ylabeltop, nomain, scaleFig_x, scaleFig_y, showwedge, normaliseSide, nointegrateNumbers, verbose);
+ Plot2dfs(1, plot_xlabel, plot_ylabel, noside, plot_ylabeltop, nomain, scaleFig_x, scaleFig_y, showwedge, normaliseSide, nointegrateNumbers, application.verbose_state);
     }
   }else {
     ppgsvp(0.2, 0.2+0.11*scaleFig_x, 0.95-0.3*scaleFig_y, 0.95-0.15*scaleFig_y);
@@ -1115,7 +1138,7 @@ int main(int argc, char **argv)
     Imax = 0;
     for(xi=0; xi < subpulseTrackProfile.NrBins; xi++) {
       double xpos;
-      xpos = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      xpos = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
       if(usephase)
  xpos /= 360.0;
       if(xpos+dl >= fl_min && xpos+dl <= fl_max) {
@@ -1196,7 +1219,7 @@ int main(int argc, char **argv)
     ppgsls(1);
     ppgslw(1);
     for(xi=0; xi < subpulseTrackProfile.NrBins; xi++) {
-      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      x = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
       if(usephase)
  x /= 360.0;
       x += dl;
@@ -1212,7 +1235,7 @@ int main(int argc, char **argv)
     ppgsci(1);
     ppgslw(3);
     for(xi=0; xi < subpulseTrackProfile.NrBins; xi++) {
-      x = xi*get_tsamp(AverageProfile, 0, verbose)*360.0/period;
+      x = xi*get_tsamp(AverageProfile, 0, application.verbose_state)*360.0/period;
       if(usephase)
  x /= 360.0;
       x += dl;
@@ -1244,70 +1267,68 @@ int main(int argc, char **argv)
     }
   }
   if(preprocess_checknan(AverageProfile, 1, noverbose)) {
-    printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+    printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
   }
   if(preprocess_checkinf(AverageProfile, 1, noverbose)) {
-    printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+    printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
   }
   if(type_of_plots == 0) {
     if(preprocess_checknan(VarianceProfile, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checkinf(VarianceProfile, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checknan(ModProfile, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checkinf(ModProfile, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checknan(VarianceProfileErr, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checkinf(VarianceProfileErr, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checknan(ModProfileErr, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checkinf(ModProfileErr, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
     }
   }else {
     if(preprocess_checknan(subpulseTrackProfile, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checkinf(subpulseTrackProfile, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checknan(subpulseTrackProfileErr, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checkinf(subpulseTrackProfileErr, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checknan(subpulseAmpProfile, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have NAN's in them. Artifacts can be expected in the plot.");
     }
     if(preprocess_checkinf(subpulseAmpProfile, 1, noverbose)) {
-      printwarning(verbose.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
+      printwarning(application.verbose_state.debug, "WARNING: The profile data appears to have INF's in them. Artifacts can be expected in the plot.");
     }
   }
   ppgend();
-  closePSRData(&AverageProfile, verbose);
-  if(type_of_plots == 0) {
-    closePSRData(&twodfs, verbose);
-    closePSRData(&lrfs, verbose);
-    closePSRData(&VarianceProfile, verbose);
-    closePSRData(&ModProfile, verbose);
-    closePSRData(&VarianceProfileErr, verbose);
-    closePSRData(&ModProfileErr, verbose);
-  }else {
-    closePSRData(&subpulseTrackProfile, verbose);
-    closePSRData(&subpulseTrackProfileErr, verbose);
-    closePSRData(&subpulseAmpProfile, verbose);
-  }
+  closePSRData(&AverageProfile, 0, application.verbose_state);
+    closePSRData(&twodfs, 0, application.verbose_state);
+    closePSRData(&lrfs, 0, application.verbose_state);
+    closePSRData(&VarianceProfile, 0, application.verbose_state);
+    closePSRData(&ModProfile, 0, application.verbose_state);
+    closePSRData(&VarianceProfileErr, 0, application.verbose_state);
+    closePSRData(&ModProfileErr, 0, application.verbose_state);
+    closePSRData(&subpulseTrackProfile, 0, application.verbose_state);
+    closePSRData(&subpulseTrackProfileErr, 0, application.verbose_state);
+    closePSRData(&subpulseAmpProfile, 0, application.verbose_state);
+  terminateApplication(&application);
   return 0;
 }
 void GetExtremesSubset(float *Imin, float *Imax)
@@ -1620,14 +1641,12 @@ void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, 
     }
     ppgsch(0.38*labelscale);
   }
-  pgplot_viewport_def viewport;
-  pgplot_box_def pgplotbox;
-  clear_pgplot_box(&pgplotbox);
-  pgplotbox.box_labelsize = 0.3*labelscale;
-  pgplot_clear_viewport_def(&viewport);
-  viewport.dontopen = 1;
-  viewport.dontclose = 1;
-  viewport.noclear = 1;
+  pgplot_options_definition pgplot_options;
+  pgplot_clear_options(&pgplot_options);
+  pgplot_options.box.box_labelsize = 0.3*labelscale;
+  pgplot_options.viewport.dontopen = 1;
+  pgplot_options.viewport.dontclose = 1;
+  pgplot_options.viewport.noclear = 1;
   double period;
   int ret;
   ret = get_period(lrfs, 0, &period, verbose);
@@ -1639,7 +1658,7 @@ void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, 
   xright = 360*(lrfs.NrBins-1)*get_tsamp(lrfs, 0, verbose)/period;
   if(usephase)
     xright /= 360.0;
-  pgplotMap(viewport, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0+dl, xright+dl, fl_min, fl_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturizel, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
+  pgplotMap(&pgplot_options, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0+dl, xright+dl, fl_min, fl_max, 0, 0.5, f3_min, f3_max, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturizel, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
   ret = get_period(AverageProfile, 0, &period, verbose);
   if(ret == 2) {
     printerror(verbose.debug, "ERROR pspecFig (%s): Cannot obtain period", AverageProfile.filename);
@@ -1863,26 +1882,24 @@ void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot
     }
     ppgsch(0.38*labelscale);
   }
-  pgplot_viewport_def viewport;
-  pgplot_box_def pgplotbox;
-  clear_pgplot_box(&pgplotbox);
-  pgplotbox.box_labelsize = 0.3*labelscale;
-  pgplot_clear_viewport_def(&viewport);
-  viewport.noclear = 1;
-  viewport.dontopen = 1;
-  viewport.dontclose = 1;
+  pgplot_options_definition pgplot_options;
+  pgplot_clear_options(&pgplot_options);
+  pgplot_options.box.box_labelsize = 0.3*labelscale;
+  pgplot_options.viewport.noclear = 1;
+  pgplot_options.viewport.dontopen = 1;
+  pgplot_options.viewport.dontclose = 1;
   if(!nomain) {
     if(Number == 0) {
       if(doFlip) {
- pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
+ pgplotMap(&pgplot_options, twodfs.data, twodfs.NrBins, twodfs.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       }else {
- pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
+ pgplotMap(&pgplot_options, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       }
     }else {
       if(doFlip)
- pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
+ pgplotMap(&pgplot_options, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       else
- pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
+ pgplotMap(&pgplot_options, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
     }
     ppgsch(0.38*labelscale);
     if(noside) {
@@ -1990,25 +2007,23 @@ void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int 
     }
     ppgsch(0.38*labelscale);
   }
-  pgplot_viewport_def viewport;
-  pgplot_box_def pgplotbox;
-  clear_pgplot_box(&pgplotbox);
-  pgplotbox.box_labelsize = 0.3*labelscale;
-  pgplot_clear_viewport_def(&viewport);
-  viewport.noclear = 1;
-  viewport.dontopen = 1;
-  viewport.dontclose = 1;
+  pgplot_options_definition pgplot_options;
+  pgplot_clear_options(&pgplot_options);
+  pgplot_options.box.box_labelsize = 0.3*labelscale;
+  pgplot_options.viewport.noclear = 1;
+  pgplot_options.viewport.dontopen = 1;
+  pgplot_options.viewport.dontclose = 1;
   if(!nomain) {
     if(Number == 0) {
       if(doFlip)
- pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
+ pgplotMap(&pgplot_options, twodfs.data, twodfs.NrBins, twodfs.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       else
- pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
+ pgplotMap(&pgplot_options, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
     }else {
       if(doFlip)
- pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
+ pgplotMap(&pgplot_options, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, +AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, -AverageProfile.NrBins/2.0+0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
       else
- pgplotMap(viewport, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, pgplotbox, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
+ pgplotMap(&pgplot_options, twodfs2.data, twodfs2.NrBins, twodfs2.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs2.NrBins, f2_min2, f2_max2, 0, 0.5, f3_min2, f3_max2, PPGPLOT_GRAYSCALE, 0, 0, 0, NULL, 0, 0, oversaturize2, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, showwedge, 0, 0, verbose);
     }
     ppgsch(0.38*labelscale);
     if(noside) {

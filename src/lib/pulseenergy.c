@@ -33,7 +33,7 @@ float integratePulseEnergy(float *pulse, int bin1, int bin2, float baseline, int
   }
   return E;
 }
-void offpulseStats(float *pulse, int nrBins, float *baseline, float *rms, regions_definition *onpulse, int nodebase, verbose_definition verbose)
+void offpulseStats(float *pulse, int nrBins, float *baseline, float *rms, pulselongitude_regions_definition *onpulse, int nodebase, verbose_definition verbose)
 {
   int i, NrOffpulseBins;
   float E;
@@ -97,12 +97,15 @@ void boxcarFindpeak_core(int width, float *pulse, int nrBins, int *bin, int *pul
       printf("%ld trials (not necessarily independent).\n", nrtrials);
   }
 }
-int boxcarFindpeak(float *pulse, int nrBins, regions_definition *onpulse, int *bin, int *pulsewidth, float *snrbest, float *E_best, int squared, int posOrNeg, int allwidths, int refine, int maxwidth, int only_onpulse, int nodebase, verbose_definition verbose)
+int boxcarFindpeak(float *pulse, int nrBins, pulselongitude_regions_definition *onpulse, int *bin, int *pulsewidth, float *snrbest, float *E_best, int squared, int posOrNeg, int allwidths, int refine, int maxwidth, int only_onpulse, int nodebase, verbose_definition verbose)
 {
   float baseline, rms;
   int w, w1, w2, dw, width, NrWidths, firsttime, *allowedWidths, b, b2;
-  regions_definition onpulse_search;
-  clearRegion(&onpulse_search);
+  pulselongitude_regions_definition onpulse_search;
+  if(initPulselongitudeRegion(&onpulse_search, verbose) == 0) {
+    printerror(verbose.debug, "ERROR boxcarFindpeak: Initialising onpulse region failed.");
+    return 0;
+  }
   offpulseStats(pulse, nrBins, &baseline, &rms, onpulse, nodebase, verbose);
   *snrbest = 0;
   firsttime = 1;
@@ -116,7 +119,7 @@ int boxcarFindpeak(float *pulse, int nrBins, regions_definition *onpulse, int *b
   onpulse_search.right_bin[0] = nrBins-1;
   onpulse_search.bins_defined[0] = 1;
   if(onpulse != NULL) {
-    memcpy(&onpulse_search, onpulse, sizeof(regions_definition));
+    copyPulselongitudeRegion(*onpulse, &onpulse_search);
     if(only_onpulse == 0) {
       onpulse_search.nrRegions = 1;
       onpulse_search.left_bin[0] = 0;
@@ -128,7 +131,7 @@ int boxcarFindpeak(float *pulse, int nrBins, regions_definition *onpulse, int *b
   }else {
     if(only_onpulse != 0) {
       fflush(stdout);
-      printerror(verbose.debug, "boxcarFindpeak: should define onpulse region when limiting search range.");
+      printerror(verbose.debug, "ERROR boxcarFindpeak: should define onpulse region when limiting search range.");
       return 0;
     }
   }
@@ -191,6 +194,7 @@ int boxcarFindpeak(float *pulse, int nrBins, regions_definition *onpulse, int *b
       }
     }
   }
+  freePulselongitudeRegion(&onpulse_search);
   free(allowedWidths);
   return 1;
 }

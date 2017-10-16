@@ -23,7 +23,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 
 
-int readVonMisesModel(char *filename, vonMises_def *components, verbose_definition verbose)
+int readVonMisesModel(char *filename, vonMises_collection_definition *components, verbose_definition verbose)
 {
   int i;
   FILE *fin;
@@ -62,14 +62,14 @@ double calcVonMisesFunction2(double centre, double concentration, double height,
 
 
 
-double calcVonMisesFunction(vonMises_def components, double phase, double shift)
+double calcVonMisesFunction(vonMises_collection_definition *components, double phase, double shift)
 {
   int n;
   double y;
   y = 0;
-  if(components.nrcomponents > 0) {
-    for(n = 0; n < components.nrcomponents; n++) {
-      y += calcVonMisesFunction2(components.centre[n], components.concentration[n], components.height[n], phase, shift);
+  if(components->nrcomponents > 0) {
+    for(n = 0; n < components->nrcomponents; n++) {
+      y += calcVonMisesFunction2(components->centre[n], components->concentration[n], components->height[n], phase, shift);
     }
   }
   return y;
@@ -77,7 +77,7 @@ double calcVonMisesFunction(vonMises_def components, double phase, double shift)
 
 
 
-void calcVonMisesProfile(vonMises_def components, int nrbins, float *profile, double shift, int normalize)
+void calcVonMisesProfile(vonMises_collection_definition *components, int nrbins, float *profile, double shift, int normalize)
 {
   int i;
   double x, Imax = -1;
@@ -103,7 +103,7 @@ void calcVonMisesProfile(vonMises_def components, int nrbins, float *profile, do
 
 
 
-float correlateVonMisesFunction(vonMises_def components, int nrbins, float *profile, verbose_definition verbose)
+float correlateVonMisesFunction(vonMises_collection_definition *components, int nrbins, float *profile, verbose_definition verbose)
 {
   float correl_max, *profile2;
   int i;

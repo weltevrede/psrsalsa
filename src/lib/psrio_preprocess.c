@@ -37,7 +37,7 @@ int preprocess_rebin(datafile_definition original, datafile_definition *clone, l
     printerror(verbose.debug, "ERROR preprocess_rebin: Rebinning only works if data is loaded into memory.");
     return 0;
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_rebin: Cannot handle PA data.");
     return 0;
@@ -197,7 +197,7 @@ int preprocess_fftshift(datafile_definition original, float shiftPhase, int adds
     printerror(verbose.debug, "ERROR preprocess_fftshift: only works if data is loaded into memory.");
     return 0;
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_fftshift: Cannot handle PA data.");
     return 0;
@@ -249,7 +249,7 @@ int preprocess_channelselect(datafile_definition original, datafile_definition *
     printerror(verbose.debug, "ERROR preprocess_chanelselect: only works if data is loaded into memory.");
     return 0;
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_chanelselect: Cannot handle PA data.");
     return 0;
@@ -259,17 +259,36 @@ int preprocess_channelselect(datafile_definition original, datafile_definition *
     printerror(verbose.debug, "ERROR preprocess_chanelselect: Invalid frequency chanel number.");
     return 0;
   }
+  if(original.NrSubints > 1 && original.freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_chanelselect: Selecting single frequency channels from a multi-subint dataset is only implemented when the frequency channels are uniformely separated.");
+    return 0;
+  }
   cleanPSRData(clone, verbose);
   copy_params_PSRData(original, clone, verbose);
   clone->NrFreqChan = 1;
-  clone->uniform_bw = get_bw(original, verbose);
-  clone->uniform_freq_cent = get_channel_freq(original, chanelnr, verbose);
   clone->freqMode = FREQMODE_UNIFORM;
+  if(clone->freqlabel_list != NULL) {
+    free(clone->freqlabel_list);
+    clone->freqlabel_list = NULL;
+  }
   clone->data = (float *)malloc((clone->NrBins)*(clone->NrPols)*(clone->NrFreqChan)*(clone->NrSubints)*sizeof(float));
   pulse = (float *)malloc((clone->NrBins)*sizeof(float));
   if(clone->data == NULL || pulse == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_chanelselect: Memory allocation error.");
+    return 0;
+  }
+  set_centre_frequency(clone, get_weighted_channel_freq(original, 0, chanelnr, verbose), verbose);
+  double bw;
+  if(get_channelbandwidth(original, &bw, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_chanelselect: Gatting bandwidth failed.");
+    return 0;
+  }
+  if(set_bandwidth(clone, bw, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_chanelselect: Bandwidth changing failed.");
     return 0;
   }
   for(p = 0; p < clone->NrPols; p++) {
@@ -368,7 +387,7 @@ int preprocess_pulsesselect(datafile_definition original, datafile_definition *c
     printerror(verbose.debug, "ERROR preprocess_pulsesselect: only works if data is loaded into memory.");
     return 0;
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_pulsesselect: Cannot handle PA data.");
     return 0;
@@ -381,6 +400,11 @@ int preprocess_pulsesselect(datafile_definition original, datafile_definition *c
   if(nread < 0 || nskip+nread > original.NrSubints) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_pulsesselect: Invalid nread.");
+    return 0;
+  }
+  if(original.freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_pulsesselect: Frequency channels are not necessarily uniformly separated.");
     return 0;
   }
   cleanPSRData(clone, verbose);
@@ -431,6 +455,70 @@ int preprocess_blocksize(datafile_definition original, datafile_definition *clon
   copyVerboseState(verbose, &verbose2);
   verbose2.indent = verbose.indent + 2;
   return preprocess_pulsesselect(original, clone, 0, nread*blocksize, verbose2);
+}
+int preprocess_invertFX(datafile_definition original, datafile_definition *clone, verbose_definition verbose)
+{
+  long p, f, n, b;
+  int i;
+  float *pulse;
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("Inverting frequency channels/bins\n");
+  }
+  if(original.format != MEMORY_format) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_invertFX: only works if data is loaded into memory.");
+    return 0;
+  }
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
+    if((original.gentype != GENTYPE_PADIST && original.gentype != GENTYPE_ELLDIST) || original.NrPols != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_invertFX: Cannot handle PA data.");
+      return 0;
+    }
+  }
+  if(original.freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_invertFX: Frequency channels are not necessarily uniformly separated.");
+    return 0;
+  }
+  cleanPSRData(clone, verbose);
+  copy_params_PSRData(original, clone, verbose);
+  clone->NrBins = original.NrFreqChan;
+  clone->NrFreqChan = original.NrBins;
+  clone->data = (float *)malloc((clone->NrBins)*(clone->NrPols)*(clone->NrFreqChan)*(clone->NrSubints)*sizeof(float));
+  pulse = (float *)malloc((original.NrBins)*sizeof(float));
+  if(clone->data == NULL || pulse == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_invertFX: Memory allocation error.");
+    return 0;
+  }
+  for(p = 0; p < original.NrPols; p++) {
+    for(f = 0; f < original.NrFreqChan; f++) {
+      for(n = 0; n < original.NrSubints; n++) {
+ if(readPulsePSRData(&original, n, p, f, 0, original.NrBins, pulse, verbose) != 1) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR preprocess_invertFX: Error reading pulse.");
+   return 0;
+ }
+ for(b = 0; b < original.NrBins; b++) {
+   if(writePulsePSRData(clone, n, p, b, f, 1, &pulse[b], verbose) != 1) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR preprocess_invertFX: Error writing pulse.");
+     return 0;
+   }
+ }
+      }
+    }
+  }
+  free(pulse);
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("  done        \n");
+  }
+  return 1;
 }
 int preprocess_transposeRawFBdata(datafile_definition original, datafile_definition *clone, verbose_definition verbose)
 {
@@ -495,7 +583,7 @@ int preprocess_addsuccessivepulses(datafile_definition original, datafile_defini
     else
       printf("Write out each subint %ld times\n", -nrpulses);
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_addsuccessivepulses: Cannot handle position angle data when adding subints. Add subints using Stokes parameter data.");
     return 0;
@@ -503,6 +591,11 @@ int preprocess_addsuccessivepulses(datafile_definition original, datafile_defini
   if(nrpulses > original.NrSubints || nrpulses == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_addsuccessivepulses: Invalid number of subints to add.");
+    return 0;
+  }
+  if(original.freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_addsuccessivepulses: Frequency channels are not necessarily uniformly separated.");
     return 0;
   }
   if(original.NrPols == 4 && original.isDePar == -1) {
@@ -637,7 +730,7 @@ int preprocess_addsuccessivepulses(datafile_definition original, datafile_defini
   free(pulse);
   free(addedpulse);
   if(use_depar) {
-    closePSRData(&clone_depar, verbose);
+    closePSRData(&clone_depar, 0, verbose);
   }
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
@@ -659,7 +752,7 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
     else
       printf("Write out each frequency channel %ld times\n", -nrfreq);
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_addsuccessiveFreqChans: Cannot handle position angle data when adding frequency channels. Add subints using Stokes parameter data.");
     return 0;
@@ -689,9 +782,23 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
     printerror(verbose.debug, "ERROR preprocess_addsuccessiveFreqChans: Memory allocation error.");
     return 0;
   }
+  if(original.freqMode == FREQMODE_FREQTABLE) {
+    if(clone->freqlabel_list != NULL)
+      free(clone->freqlabel_list);
+    clone->freqlabel_list = malloc((clone->NrFreqChan)*(clone->NrSubints)*sizeof(double));
+    if(clone->freqlabel_list == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_addsuccessiveFreqChans: Memory allocation error.");
+      return 0;
+    }
+  }
+  double newfreq;
+  long newfreq_nradded;
   for(p = 0; p < clone->NrPols; p++) {
     for(n = 0; n < clone->NrSubints; n++) {
       for(f = 0; f < clone->NrFreqChan; f++) {
+ newfreq = 0;
+ newfreq_nradded = 0;
  if(nrfreq > 0) {
    for(b = 0; b < original.NrBins; b++)
      addedpulse[b] = 0;
@@ -708,10 +815,15 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
   printerror(verbose.debug, "ERROR preprocess_addsuccessiveFreqChans: Error reading pulse.");
   return 0;
        }
+       if(original.freqMode == FREQMODE_FREQTABLE) {
+  newfreq += get_weighted_channel_freq(original, n, f*nrfreq+n2, verbose);
+  newfreq_nradded++;
+       }
        for(b = 0; b < original.NrBins; b++)
   addedpulse[b] += pulse[b];
      }
    }
+   newfreq /= (double)newfreq_nradded;
  }else {
    ok = 1;
    if(fzapMask != NULL) {
@@ -728,6 +840,16 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
    }else {
      for(b = 0; b < original.NrBins; b++)
        addedpulse[b] = 0;
+   }
+   if(original.freqMode == FREQMODE_FREQTABLE) {
+     newfreq = get_weighted_channel_freq(original, n, f/(-nrfreq), verbose);
+   }
+ }
+ if(original.freqMode == FREQMODE_FREQTABLE) {
+   if(set_weighted_channel_freq(clone, n, f, newfreq, verbose) == 0) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR preprocess_addsuccessiveFreqChans: Setting frequency labeling failed.");
+     return 0;
    }
  }
  if(writePulsePSRData(clone, n, p, f, 0, clone->NrBins, addedpulse, verbose) != 1) {
@@ -759,7 +881,7 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
   }
   return 1;
 }
-int preprocess_debase(datafile_definition *original, regions_definition onpulse, verbose_definition verbose)
+int preprocess_debase(datafile_definition *original, pulselongitude_regions_definition onpulse, verbose_definition verbose)
 {
   long p, f, n, j, nrOffpulseBins;
   int i;
@@ -775,7 +897,7 @@ int preprocess_debase(datafile_definition *original, regions_definition onpulse,
     printerror(verbose.debug, "ERROR preprocess_debase: only works if data is loaded into memory.");
     return 0;
   }
-  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA) {
+  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA || original->poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_debase: Cannot handle PA data.");
     return 0;
@@ -854,7 +976,7 @@ int preprocess_addNoise(datafile_definition original, datafile_definition *clone
     printerror(verbose.debug, "ERROR preprocess_addNoise: Adding noise only works if data is loaded into memory.");
     return 0;
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     if(original.NrPols == 1) {
       fflush(stdout);
       printwarning(verbose.debug, "WARNING preprocess_addNoise: The polarization state suggests this is not necessarily a Stokes parameter, hence the error distribution is not necessarily Gaussian, which is assumed to be the case. This might be a problem.");
@@ -930,6 +1052,11 @@ int preprocess_shuffle(datafile_definition original, datafile_definition *clone,
     printerror(verbose.debug, "ERROR preprocess_shuffle: Memory allocation error.");
     return 0;
   }
+  if(original.freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_shuffle: Frequency channels are not necessarily uniformly separated.");
+    return 0;
+  }
   if(preprocess_shuffle_random_nr_generater_initialized == 0) {
     long idnum;
     gsl_rng_env_setup();
@@ -959,6 +1086,7 @@ int preprocess_shuffle(datafile_definition original, datafile_definition *clone,
  if(readPulsePSRData(&original, n, p, f, 0, clone->NrBins, &(clone->data[clone->NrBins*(p+clone->NrPols*(f+subintlist[n]*clone->NrFreqChan))]), verbose) != 1) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR preprocess_shuffle: Read error.");
+   free(subintlist);
    return 0;
  }
  if(verbose.verbose && verbose.nocounters == 0) {
@@ -981,6 +1109,7 @@ int preprocess_shuffle(datafile_definition original, datafile_definition *clone,
       printf(" ");
     if(verbose.verbose) printf("done                              \n");
   }
+  free(subintlist);
   return 1;
 }
 int preprocess_rotateStokes(datafile_definition *original, datafile_definition *clone, int inplace, int subint, float angle, float *angle_array, int stokes1, int stokes2, verbose_definition verbose)
@@ -1023,7 +1152,7 @@ int preprocess_rotateStokes(datafile_definition *original, datafile_definition *
     printerror(verbose.debug, "ERROR preprocess_rotateStokes: Rotating Stokes parameters only works if data is loaded into memory.");
     return 0;
   }
-  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA) {
+  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA || original->poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_rotateStokes: Cannot handle PA data.");
     return 0;
@@ -1110,14 +1239,18 @@ int preprocess_rotateStokes(datafile_definition *original, datafile_definition *
   }
   return 1;
 }
-int preprocess_norm(datafile_definition original, float normvalue, regions_definition *onpulse, int global, verbose_definition verbose)
+int preprocess_norm(datafile_definition original, float normvalue, pulselongitude_regions_definition *onpulse, int global, verbose_definition verbose)
 {
   int ok, first, itt;
   long p, f, n, b, i;
   float max, fac, globalmax;
-  regions_definition onpulse_converted;
+  pulselongitude_regions_definition onpulse_converted;
   if(onpulse != NULL) {
-    memcpy(&onpulse_converted, onpulse, sizeof(regions_definition));
+    if(initPulselongitudeRegion(&onpulse_converted, verbose) == 0) {
+      printerror(verbose.debug, "ERROR preprocess_norm: Initialising onpulse region failed.");
+      return 0;
+    }
+    copyPulselongitudeRegion(*onpulse, &onpulse_converted);
     region_frac_to_int(&onpulse_converted, original.NrBins, 0);
   }
   if(verbose.verbose) {
@@ -1133,7 +1266,7 @@ int preprocess_norm(datafile_definition original, float normvalue, regions_defin
     printerror(verbose.debug, "ERROR preprocess_norm: only works if data is loaded into memory.");
     return 0;
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_norm: Cannot handle PA data.");
     return 0;
@@ -1211,6 +1344,9 @@ int preprocess_norm(datafile_definition original, float normvalue, regions_defin
       printf(" ");
     printf("  done                              \n");
   }
+  if(onpulse != NULL) {
+    freePulselongitudeRegion(&onpulse_converted);
+  }
   return 1;
 }
 int preprocess_clip(datafile_definition original, float clipvalue, verbose_definition verbose)
@@ -1227,7 +1363,7 @@ int preprocess_clip(datafile_definition original, float clipvalue, verbose_defin
     printerror(verbose.debug, "ERROR preprocess_clip: only works if data is loaded into memory.");
     return 0;
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printwarning(verbose.debug, "WARNING preprocess_clip: Clipping of data that represents PA values and error-bars might not be what you want.");
   }
@@ -1312,7 +1448,7 @@ int preprocess_stokes(datafile_definition *original, verbose_definition verbose)
     else if(basis == 2)
       printf("  Using a circular basis\n");
   }
-  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA) {
+  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA || original->poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_stokes: Cannot handle PA data.");
     return 0;
@@ -1392,7 +1528,7 @@ int preprocess_coherency(datafile_definition *original, verbose_definition verbo
     else if(basis == 2)
       printf("  Using a circular basis\n");
   }
-  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA) {
+  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA || original->poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_stokes: Cannot handle PA data.");
     return 0;
@@ -1444,7 +1580,7 @@ int preprocess_scale(datafile_definition original, float factor, float offset, v
     printerror(verbose.debug, "ERROR preprocess_scale: only works if data is loaded into memory.");
     return 0;
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_scale: Cannot handle PA data.");
     return 0;
@@ -1549,7 +1685,7 @@ int preprocess_dedisperse(datafile_definition *original, int update, double freq
   }
   dt_samples = 0;
   if(update) {
-    freq = get_channel_freq(*original, 0, verbose);
+    freq = get_weighted_channel_freq(*original, 0, 0, verbose);
     dt = -calcDMDelay(freq, freq_ref, inffreq_old, original->dm);
     dt += calcDMDelay(freq, original->freq_ref, inffreq, original->dm);
     dt_samples = dt/get_tsamp(*original, 0, verbose);
@@ -1563,18 +1699,18 @@ int preprocess_dedisperse(datafile_definition *original, int update, double freq
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
     f = original->NrFreqChan/2;
-    freq = get_channel_freq(*original, f, verbose);
+    freq = get_weighted_channel_freq(*original, 0, f, verbose);
     if(update == 0)
-      printf("  Rotating central frequency channel (%lf MHz) by %Lf phase\n", freq, calcDMDelay(freq, original->freq_ref, inffreq, original->dm)/(original->NrBins*get_tsamp(*original, 0, verbose)));
+      printf("  Rotating central frequency channel of first subint (%lf MHz) by %Lf phase\n", freq, calcDMDelay(freq, original->freq_ref, inffreq, original->dm)/(original->NrBins*get_tsamp(*original, 0, verbose)));
     else
-      printf("  Rotating central frequency channel (%lf MHz) by %Lf phase\n", freq, dt_samples/(double)(original->NrBins));
+      printf("  Rotating central frequency channel of first subint (%lf MHz) by %Lf phase\n", freq, dt_samples/(double)(original->NrBins));
   }
   if(original->format != MEMORY_format) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_dedisperse (%s): only works if data is loaded into memory.", original->filename);
     return 0;
   }
-  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA) {
+  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA || original->poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_dedisperse (%s): Cannot handle PA data.", original->filename);
     return 0;
@@ -1583,7 +1719,7 @@ int preprocess_dedisperse(datafile_definition *original, int update, double freq
     for(f = 0; f < original->NrFreqChan; f++) {
       for(n = 0; n < original->NrSubints; n++) {
  if(update == 0) {
-   dt = calcDMDelay(get_channel_freq(*original, f, verbose), original->freq_ref, inffreq, original->dm);
+   dt = calcDMDelay(get_weighted_channel_freq(*original, n, f, verbose), original->freq_ref, inffreq, original->dm);
    dt /= get_tsamp(*original, 0, verbose);
  }else {
    dt = dt_samples;
@@ -1697,7 +1833,7 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
     }
     return 1;
   }
-  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA) {
+  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA || original->poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_deFaraday (%s): Remove Faraday rotation from data which still contains the four Stokes parameters.", original->filename);
     return 0;
@@ -1724,7 +1860,7 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
     printerror(verbose.debug, "ERROR preprocess_deFaraday (%s): only works if data is loaded into memory.", original->filename);
     return 0;
   }
-  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA) {
+  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA || original->poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_deFaraday (%s): Cannot handle PA data.", original->filename);
     return 0;
@@ -1744,7 +1880,7 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
   dphi = 0;
   if(update) {
     double freq;
-    freq = get_channel_freq(*original, 0, verbose);
+    freq = get_weighted_channel_freq(*original, 0, 0, verbose);
     dphi = -calcRMAngle(freq, freq_ref, inffreq_old, original->rm);
     dphi += calcRMAngle(freq, original->freq_ref, inffreq, original->rm);
   }
@@ -1752,8 +1888,8 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
     if(update == 0)
-      dphi = calcRMAngle(get_channel_freq(*original, original->NrFreqChan/2, verbose), original->freq_ref, inffreq, original->rm);
-    printf("  Rotating Q&U of central frequency channel (%f MHz) by %f rad = %f deg\n", get_channel_freq(*original, original->NrFreqChan/2, verbose), 2.0*dphi, 2.0*dphi*180.0/M_PI);
+      dphi = calcRMAngle(get_weighted_channel_freq(*original, 0, original->NrFreqChan/2, verbose), original->freq_ref, inffreq, original->rm);
+    printf("  Rotating Q&U of central frequency channel of first subint (%f MHz) by %f rad = %f deg\n", get_weighted_channel_freq(*original, 0, original->NrFreqChan/2, verbose), 2.0*dphi, 2.0*dphi*180.0/M_PI);
   }
   pulseQ = (float *)malloc(original->NrBins*sizeof(float));
   pulseU = (float *)malloc(original->NrBins*sizeof(float));
@@ -1763,12 +1899,12 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
     return 0;
   }
   for(f = 0; f < original->NrFreqChan; f++) {
-    if(update == 0) {
-      dphi = calcRMAngle(get_channel_freq(*original, f, verbose), original->freq_ref, inffreq, original->rm);
-      if(undo)
- dphi *= -1.0;
-    }
     for(n = 0; n < original->NrSubints; n++) {
+      if(update == 0) {
+ dphi = calcRMAngle(get_weighted_channel_freq(*original, n, f, verbose), original->freq_ref, inffreq, original->rm);
+ if(undo)
+   dphi *= -1.0;
+      }
       if(readPulsePSRData(original, n, 1, f, 0, original->NrBins, pulseQ, verbose) != 1) {
  fflush(stdout);
  printerror(verbose.debug, "ERROR preprocess_deFaraday (%s): Read error.", original->filename);
@@ -2011,7 +2147,7 @@ int preprocess_make_profile(datafile_definition original, datafile_definition *p
     printerror(verbose.debug, "ERROR preprocess_make_profile: summing subints failed, cannot construct profile");
     return 0;
   }
-  closePSRData(&clone, verbose);
+  closePSRData(&clone, 0, verbose);
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");

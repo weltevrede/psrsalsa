@@ -36,8 +36,8 @@ int main(int argc, char **argv)
   int output2file, suppressNotFiniteS2Nwarnings;
   char *oname, *filename_ptr, output_suffix[100];
   datafile_definition datain, opfile, pulse_profile;
-  pgplot_viewport_def viewport;
   psrsalsaApplication application;
+  pgplot_options_definition pgplot_options;
 
   int index;
   int guessing_format;
@@ -85,10 +85,11 @@ int main(int argc, char **argv)
   posOrNeg = 0;
   only_onpulse = 0;
   nodebase = 1;
+  pgplot_clear_options(&pgplot_options);
 
   if(argc < 2) {
     printf("Program for calculating pulse energy statistics. Use pdist to make distributions. The program can be run in two modes:\n\n1) Without the -burst option: Calculate burst statistics using the first selected on-pulse region. The not selected regions are used as the off-pulse regions only used for S/N determinations. When -debase is used, the baseline is determined from the off-pulse region as well. Unless specified otherwise, an ascii file will be generated.\n\n2) With the burst option: By default this program tries a fixed number of widths as a matched filter to search for bursts in the signal. Unless -only_onpulse or -only_onpulse1 is specified, the off-pulse region is only used to get the rms of the noise.\n\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("Action options mode 1:\n\n");
     printf("-dynspec           Output a PSRFITS file (change format with -oformat) with over\n");
     printf("                   onpulse region integrated energies rather than an ascii file.\n");
@@ -120,6 +121,7 @@ int main(int argc, char **argv)
     printf("More information about using pulse energy distributions can be found in:\n");
     printf(" - Weltevrede et al. 2006, A&A, 458, 269\n\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }else {
     for(i = 1; i < argc; i++) {
@@ -138,6 +140,10 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-b") == 0) {
  individual_bin_mode = 1;
       }else if(strcmp(argv[i], "-ext") == 0) {
+ if(strlen(argv[i+1]) > 99) {
+   printerror(application.verbose_state.debug, "ERROR penergy: Error parsing option '%s' - string too long", argv[i]);
+   return 0;
+ }
  strcpy(output_suffix, argv[i+1]);
  i++;
       }else if(strcmp(argv[i], "-pol") == 0) {
@@ -155,30 +161,26 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-burst_onpulse1") == 0) {
  only_onpulse = 2;
       }else if(strcmp(argv[i], "-burst_snr") == 0 || strcmp(argv[i], "-burst_s2n") == 0) {
- j = sscanf(argv[i+1], "%f", &snrTresh);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "ERROR penergy: Expected 1 number with -burst_snr option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &snrTresh, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR penergy: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-burst_maxbin") == 0) {
- j = sscanf(argv[i+1], "%f", &maxbin);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "ERROR penergy: Expected 1 number with -maxbin option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &maxbin, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR penergy: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-burst_maxbin2") == 0) {
- j = sscanf(argv[i+1], "%f", &maxbin2);
- if(j != 1) {
-   printerror(application.verbose_state.debug, "ERROR penergy: Expected 1 number with -maxbin2 option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &maxbin2, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR penergy: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
       }else if(strcmp(argv[i], "-freq") == 0) {
- j = sscanf(argv[i+1], "%ld %ld", &freq1, &freq2);
- if(j != 2) {
-   printerror(application.verbose_state.debug, "ERROR penergy: Expected 2 numbers with -freq option");
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld %ld", &freq1, &freq2, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR penergy: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
  i++;
@@ -186,6 +188,7 @@ int main(int argc, char **argv)
 
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "ERROR penergy: Unknown option: %s\n\nRun penergy without command line arguments to show help", argv[i]);
+   terminateApplication(&application);
    return 0;
  }else {
    if(applicationAddFilename(i, application.verbose_state) == 0)
@@ -198,7 +201,7 @@ int main(int argc, char **argv)
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-  if(numberInApplicationFilenameList(application, argv, application.verbose_state) == 0) {
+  if(numberInApplicationFilenameList(&application, argv, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR penergy: No input file(s) specified");
     return 0;
   }
@@ -217,7 +220,7 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR penergy: Memory allocation error.\n");
       return 0;
     }
-    cleanPSRData(&datain, application.verbose_state);
+
 
     if(guessing_format) {
       application.iformat = -1;
@@ -274,19 +277,16 @@ int main(int argc, char **argv)
 
     if(application.onpulse.nrRegions == 0
        ) {
-      pgplot_clear_viewport_def(&viewport);
-      strcpy(viewport.plotDevice, application.pgplotdevice);
-      pgplot_box_def pgplotbox;
-      clear_pgplot_box(&pgplotbox);
-      strcpy(pgplotbox.xlabel, "Bin");
-      strcpy(pgplotbox.ylabel, "Intensity");
-      sprintf(pgplotbox.title, "Select on-pulse region of %s (%s)", datain.psrname, datain.filename);
+      strcpy(pgplot_options.viewport.plotDevice, application.pgplotdevice);
+      strcpy(pgplot_options.box.xlabel, "Bin");
+      strcpy(pgplot_options.box.ylabel, "Intensity");
+      sprintf(pgplot_options.box.title, "Select on-pulse region of %s (%s)", datain.psrname, datain.filename);
       if(burstmode == 0) {
  printwarning(application.verbose_state.debug, "\nYou can select multiple onpulse regions, but only the first is used to calculate onpulse statistics. Non-selected regions are used for the off-pulse statistics.\n\n");
       }else if (only_onpulse == 0) {
  printwarning(application.verbose_state.debug, "\nThe non-selected regions are only used for the off-pulse statistics, unless -burst_onpulse or -burst_onpulse1 is used.\n\n");
       }
-      selectRegions(pulse_profile.data, datain.NrBins, viewport, pgplotbox, 0, 0, 0, &(application.onpulse), application.verbose_state);
+      selectRegions(pulse_profile.data, datain.NrBins, &pgplot_options, 0, 0, 0, &(application.onpulse), application.verbose_state);
       regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
     }
 
@@ -351,6 +351,7 @@ int main(int argc, char **argv)
    }
      cleanPSRData(&opfile, application.verbose_state);
      copy_params_PSRData(datain, &opfile, application.verbose_state);
+
      opfile.fptr_hdr = ofile;
      opfile.NrBins = datain.NrSubints;
      opfile.NrSubints = datain.NrPols;
@@ -505,8 +506,11 @@ int main(int argc, char **argv)
        printf("Writing done, see end of file for explanation of the columns.\n");
      }
    fclose(ofile);
- }else if(output2file > 1) {
-   closePSRData(&opfile, application.verbose_state);
+ }
+ if(output2file > 1 || (output2file == 1
+          )) {
+
+   closePSRData(&opfile, 0, application.verbose_state);
  }
 
  if(individual_bin_mode == 0)
@@ -569,12 +573,16 @@ int main(int argc, char **argv)
     fclose(ofile);
   }
     }
-    closePSRData(&datain, application.verbose_state);
+    closePSRData(&datain, 0, application.verbose_state);
+    free(Ipulse);
+    if(burstmode == 0)
+      free(output_values);
     free(oname);
 
 
     application.onpulse.nrRegions = init_nrRegions;
   }
 
+  terminateApplication(&application);
   return 0;
 }

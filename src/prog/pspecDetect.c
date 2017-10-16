@@ -64,6 +64,10 @@ int main(int argc, char **argv)
   cleanPSRData(&lrfs, application.verbose_state);
   cleanPSRData(&AverageProfile, application.verbose_state);
   cleanPSRData(&noise, application.verbose_state);
+  closePSRData(&twodfs, 0, application.verbose_state);
+  closePSRData(&lrfs, 0, application.verbose_state);
+  closePSRData(&AverageProfile, 0, application.verbose_state);
+  closePSRData(&noise, 0, application.verbose_state);
 
   SelectedPlot = 0;
   sigma_noise = 0;
@@ -75,13 +79,14 @@ int main(int argc, char **argv)
 
   if(argc < 2) {
     printf("Interactive program designed to analyse features in the 2DFS to obtain\ncentroid P2 and P3 values and corresponding error-bars.\n\n");
-    printApplicationHelp(application);
+    printApplicationHelp(&application);
     printf("\n");
     printf("Please use the appropriate citation when using results of this software in your publications:\n\n");
     printf("More information about the how to use the centroid information can be found in:\n");
     printf(" - Weltevrede et al. 2006, A&A, 445, 243\n");
     printf(" - Weltevrede et al. 2007, A&A, 469, 607.\n\n");
     printCitationInfo();
+    terminateApplication(&application);
     return 0;
   }else {
     for(i = 1; i < argc; i++) {
@@ -92,6 +97,7 @@ int main(int argc, char **argv)
 
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "pspecDetect: Unknown option: %s\n\nRun pspecDetect without command line arguments to show help", argv[i]);
+   terminateApplication(&application);
    return 0;
  }else {
    if(applicationAddFilename(i, application.verbose_state) == 0)
@@ -105,7 +111,7 @@ int main(int argc, char **argv)
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-  if(numberInApplicationFilenameList(application, argv, application.verbose_state) == 0) {
+  if(numberInApplicationFilenameList(&application, argv, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR pspecDetect: No files specified");
     return 0;
   }
@@ -256,7 +262,7 @@ int main(int argc, char **argv)
       fl_min = 0;
       fl_max = lrfs.NrBins-1;
       if(noise.opened_flag)
-        closePSRData(&noise, application.verbose_state);
+        closePSRData(&noise, 0, application.verbose_state);
       cleanPSRData(&noise, application.verbose_state);
       if(preprocess_polselect(twodfs, &noise, 0, application.verbose_state) != 1)
         exit(0);
@@ -292,7 +298,7 @@ int main(int argc, char **argv)
       }
       if(application.verbose_state.verbose)
  printf("Reading %s\n", filename);
-      if(closePSRData(&twodfs, application.verbose_state)) {
+      if(closePSRData(&twodfs, 0, application.verbose_state)) {
  printerror(0, "Closing file failed\n");
  return 0;
       }
@@ -325,7 +331,7 @@ int main(int argc, char **argv)
       f3n_min = 0;
       f3_max = f3n_max = 0.5;
       if(noise.opened_flag)
-        closePSRData(&noise, application.verbose_state);
+        closePSRData(&noise, 0, application.verbose_state);
       cleanPSRData(&noise, application.verbose_state);
       if(preprocess_polselect(twodfs, &noise, 0, application.verbose_state) != 1)
         exit(0);
@@ -366,11 +372,12 @@ int main(int argc, char **argv)
   }while(KeyCode != 27
   );
   ppgend();
-  closePSRData(&twodfs, application.verbose_state);
-  closePSRData(&lrfs, application.verbose_state);
-  closePSRData(&AverageProfile, application.verbose_state);
+  closePSRData(&twodfs, 0, application.verbose_state);
+  closePSRData(&lrfs, 0, application.verbose_state);
+  closePSRData(&AverageProfile, 0, application.verbose_state);
   if(noise.opened_flag)
-    closePSRData(&noise, application.verbose_state);
+    closePSRData(&noise, 0, application.verbose_state);
+  terminateApplication(&application);
   return 0;
 }
 void SelectRegion()
@@ -404,16 +411,14 @@ void PlotWindow(verbose_definition verbose)
       ppgsvp(0.1, 0.9, 0.1, 0.9);
       ppgswin(f2_min,f2_max,f3_min,f3_max);
       sprintf(txt, "2dfs feature component %d", SelectedComponent);
-      pgplot_viewport_def viewport;
-      pgplot_box_def pgplotbox;
-      clear_pgplot_box(&pgplotbox);
-      pgplot_clear_viewport_def(&viewport);
-      viewport.dontopen = 1;
-      viewport.dontclose = 1;
-      strcpy(pgplotbox.xlabel, "Fluctuation frequency (cycles/period)");
-      strcpy(pgplotbox.ylabel, "Fluctuation frequency (cycles/period)");
-      strcpy(pgplotbox.title, txt);
-      pgplotMap(viewport, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, verbose);
+      pgplot_options_definition pgplot_options;
+      pgplot_clear_options(&pgplot_options);
+      pgplot_options.viewport.dontopen = 1;
+      pgplot_options.viewport.dontclose = 1;
+      strcpy(pgplot_options.box.xlabel, "Fluctuation frequency (cycles/period)");
+      strcpy(pgplot_options.box.ylabel, "Fluctuation frequency (cycles/period)");
+      strcpy(pgplot_options.box.title, txt);
+      pgplotMap(&pgplot_options, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, verbose);
       if(centroid_calculated) {
  ppgsci(2);
  ppgslw(1);
@@ -431,16 +436,14 @@ void PlotWindow(verbose_definition verbose)
     }else if(SelectedPlot == 1) {
       ppgsvp(0.1, 0.9, 0.1, 0.9);
       ppgswin(fl_min,fl_max,f3_min,f3_max);
-      pgplot_viewport_def viewport;
-      pgplot_box_def pgplotbox;
-      clear_pgplot_box(&pgplotbox);
-      pgplot_clear_viewport_def(&viewport);
-      viewport.dontopen = 1;
-      viewport.dontclose = 1;
-      strcpy(pgplotbox.xlabel, "bins");
-      strcpy(pgplotbox.ylabel, "Fluctuation frequency (cycles/period)");
-      strcpy(pgplotbox.title, "lrfs feature");
-      pgplotMap(viewport, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0, lrfs.NrBins-1, fl_min, fl_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, verbose);
+      pgplot_options_definition pgplot_options;
+      pgplot_clear_options(&pgplot_options);
+      pgplot_options.viewport.dontopen = 1;
+      pgplot_options.viewport.dontclose = 1;
+      strcpy(pgplot_options.box.xlabel, "bins");
+      strcpy(pgplot_options.box.ylabel, "Fluctuation frequency (cycles/period)");
+      strcpy(pgplot_options.box.title, "lrfs feature");
+      pgplotMap(&pgplot_options, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0, lrfs.NrBins-1, fl_min, fl_max, 0, 0.5, f3_min, f3_max, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, verbose);
       if(PlotAvrgProfile != 0) {
         i = 0;
  Imax = AverageProfile.data[0];
@@ -479,17 +482,15 @@ void PlotWindow(verbose_definition verbose)
             noise.data[yi*noise.NrBins+xi] = 0;
         }
       }
-      pgplot_viewport_def viewport;
-      pgplot_box_def pgplotbox;
-      clear_pgplot_box(&pgplotbox);
-      pgplot_clear_viewport_def(&viewport);
-      viewport.dontopen = 1;
-      viewport.dontclose = 1;
-      strcpy(pgplotbox.xlabel, "Fluctuation frequency (cycles/period)");
-      strcpy(pgplotbox.ylabel, "Fluctuation frequency (cycles/period)");
-      strcpy(pgplotbox.title, "For noise calulation: All signal should be flagged in this 2dfs plot");
-      pgplotMap(viewport, noise.data, noise.NrBins, noise.NrSubints,
-  -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)noise.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)noise.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, pgplotbox, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, verbose);
+      pgplot_options_definition pgplot_options;
+      pgplot_clear_options(&pgplot_options);
+      pgplot_options.viewport.dontopen = 1;
+      pgplot_options.viewport.dontclose = 1;
+      strcpy(pgplot_options.box.xlabel, "Fluctuation frequency (cycles/period)");
+      strcpy(pgplot_options.box.ylabel, "Fluctuation frequency (cycles/period)");
+      strcpy(pgplot_options.box.title, "For noise calulation: All signal should be flagged in this 2dfs plot");
+      pgplotMap(&pgplot_options, noise.data, noise.NrBins, noise.NrSubints,
+  -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)noise.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)noise.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, verbose);
       SelectRegion();
     }
 }

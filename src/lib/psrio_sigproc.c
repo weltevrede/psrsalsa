@@ -69,6 +69,8 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
   datafile->foldMode = FOLDMODE_UNKNOWN;
   datafile->fixedPeriod = -1;
   datafile->tsubMode = TSUBMODE_FIXEDTSUB;
+  if(datafile->tsub_list != NULL)
+    free(datafile->tsub_list);
   datafile->tsub_list = (double *)malloc(sizeof(double));
   if(datafile->tsub_list == NULL) {
     printerror(verbose.debug,"ERROR readSigprocHeader: Memory allocation error");
@@ -321,6 +323,7 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
       return 0;
     }
   }while(strcmp(id, "HEADER_END") != 0);
+  free(id);
 
   if(datafile->NrFreqChan <= 0) {
 
@@ -341,16 +344,44 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
 
   if(freq_chan1 > 0) {
     datafile->freqMode = FREQMODE_UNIFORM;
-    datafile->uniform_bw = datafile->NrFreqChan*freq_chanbw;
-    datafile->uniform_freq_cent = freq_chan1;
-    datafile->uniform_freq_cent += 0.5*datafile->uniform_bw;
+    if(datafile->freqlabel_list != NULL) {
+      free(datafile->freqlabel_list);
+      datafile->freqlabel_list = NULL;
+    }
+
+
+
+
+
+
+    if(set_bandwidth(datafile, datafile->NrFreqChan*freq_chanbw, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readSigprocHeader: Bandwidth changing failed.");
+      return 0;
+    }
+    set_centre_frequency(datafile, freq_chan1+0.5*(datafile->NrFreqChan*freq_chanbw), verbose);
   }else {
     printwarning(verbose.debug, "WARNING readSigprocHeader: The frequency of the observation does not appear to be defined.");
     if(datafile->freq_ref > 0) {
 
       printwarning(verbose.debug, "WARNING readSigprocHeader: It is assumed that the frequency of the observationdefines the reference frequency.");
       datafile->freqMode = FREQMODE_UNIFORM;
-      datafile->uniform_freq_cent = datafile->freq_ref;
+      if(datafile->freqlabel_list != NULL) {
+ free(datafile->freqlabel_list);
+ datafile->freqlabel_list = NULL;
+      }
+
+
+
+
+
+
+      if(set_bandwidth(datafile, 0.0, verbose) == 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readSigprocHeader: Bandwidth changing failed.");
+ return 0;
+      }
+      set_centre_frequency(datafile, datafile->freq_ref, verbose);
     }
   }
 
@@ -457,6 +488,69 @@ int readSigprocfile(datafile_definition datafile, float *data, verbose_definitio
   if(verbose.verbose) printf("Reading is done.                           \n");
   return 1;
 }
+int readPulseSigprocData(datafile_definition datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose)
+{
+  long i;
+  float *sample_f;
+  unsigned char *sample_b;
+  int ret;
+  off_t offset;
+  if(datafile.NrPols > 1) {
+    printerror(verbose.debug, "readPulseSigprocData: Data should have just one polarization");
+    return 0;
+  }
+  if(datafile.NrBits != 32 && datafile.NrBits != 8) {
+    printerror(verbose.debug, "ERROR readPulseSigprocData: Can only handle 32-bit or 8-bit data. Got %d bit data.", datafile.NrBits);
+    return 0;
+  }
+  if(datafile.NrBits == 32) {
+    sample_f = malloc(datafile.NrFreqChan*sizeof(float));
+    if(sample_f == NULL) {
+      printerror(verbose.debug, "readPulseSigprocData: Memory allocation error");
+      return 0;
+    }
+  }else if(datafile.NrBits == 8) {
+    sample_b = malloc(datafile.NrFreqChan);
+    if(sample_b == NULL) {
+      printerror(verbose.debug, "readPulseSigprocData: Memory allocation error");
+      return 0;
+    }
+  }
+  offset = (pulsenr*datafile.NrBins+binnr)*datafile.NrFreqChan+freq;
+  if(datafile.NrBits == 32) {
+    offset *= 4;
+  }
+  offset += (pulsenr+1)*datafile.datastart;
+  fseeko(datafile.fptr, offset, SEEK_SET);
+  for(i = 0; i < nrSamples; i++) {
+    if(datafile.NrBits == 32) {
+      ret = fread(sample_f, sizeof(float), 1, datafile.fptr);
+      pulse[i] = *sample_f;
+    }else if(datafile.NrBits == 8) {
+      ret = fread(sample_b, 1, 1, datafile.fptr);
+      pulse[i] = *sample_b;
+    }
+    if(ret != 1) {
+      printerror(verbose.debug, "ERROR readPulseSigprocData: Cannot read data.");
+      return 0;
+    }
+    if(datafile.NrFreqChan > 1) {
+      if(i < nrSamples-1) {
+ if(datafile.NrBits == 32) {
+   fseeko(datafile.fptr, (datafile.NrFreqChan-1)*sizeof(float), SEEK_CUR);
+ }else {
+   fseeko(datafile.fptr, (datafile.NrFreqChan-1), SEEK_CUR);
+ }
+      }
+    }
+  }
+  if(datafile.NrBits == 32) {
+    free(sample_f);
+  }else if(datafile.NrBits == 8) {
+    free(sample_b);
+  }
+  return 1;
+}
 int readSigprocASCIIHeader(datafile_definition *datafile, verbose_definition verbose)
 {
   int j, c;
@@ -466,12 +560,18 @@ int readSigprocASCIIHeader(datafile_definition *datafile, verbose_definition ver
   char tmp2[1000];
   char tmp3[1000];
   char tmp4[1000];
+  char tmp5[1000];
   char *txtptr;
   long pos;
-  j = fscanf(datafile->fptr_hdr, "%s %Lf %lf %lf %s %lf %lf %ld %s %s %s", tmp1, &mjd, &sec, &(datafile->fixedPeriod), tmp2, &freq, &(datafile->dm), &(datafile->NrBins), tmp4, tmp3, &(datafile->psrname[0]));
+  j = fscanf(datafile->fptr_hdr, "%s %Lf %lf %lf %s %lf %lf %ld %s %s %s", tmp1, &mjd, &sec, &(datafile->fixedPeriod), tmp2, &freq, &(datafile->dm), &(datafile->NrBins), tmp4, tmp3, tmp5);
+  if(set_psrname_PSRData(datafile, tmp5, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readSigprocASCIIHeader: Setting pulsar name failed.");
+    return 0;
+  }
   if(j != 11) {
     printerror(verbose.debug,"ERROR readSigprocASCIIHeader: Error reading first line (%d != 11).", j);
-    exit(-1);
+    return 0;
   }
   datafile->isFolded = 1;
   datafile->foldMode = FOLDMODE_FIXEDPERIOD;
@@ -497,6 +597,8 @@ int readSigprocASCIIHeader(datafile_definition *datafile, verbose_definition ver
   datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
   datafile->fixedtsamp = 0;
   datafile->tsubMode = TSUBMODE_FIXEDTSUB;
+  if(datafile->tsub_list != NULL)
+    free(datafile->tsub_list);
   datafile->tsub_list = (double *)malloc(sizeof(double));
   if(datafile->tsub_list == NULL) {
     printerror(verbose.debug,"ERROR readSigprocASCIIHeader: Memory allocation error");
@@ -504,7 +606,16 @@ int readSigprocASCIIHeader(datafile_definition *datafile, verbose_definition ver
   }
   datafile->tsub_list[0] = 0;
   datafile->freqMode = FREQMODE_UNIFORM;
-  datafile->uniform_freq_cent = freq;
+  if(datafile->freqlabel_list != NULL) {
+    free(datafile->freqlabel_list);
+    datafile->freqlabel_list = NULL;
+  }
+  if(set_bandwidth(datafile, 0.0, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readSigprocASCIIHeader: Bandwidth changing failed.");
+    return 0;
+  }
+  set_centre_frequency(datafile, freq, verbose);
   printwarning(verbose.debug, "WARNING readSigprocASCIIHeader: Assuming there is only one polarization channel in the data");
   datafile->NrPols = 1;
   pos = ftell(datafile->fptr_hdr);
@@ -543,11 +654,16 @@ int writeSigprocASCIIHeader(datafile_definition datafile, verbose_definition ver
 {
   int int_mjd;
   double sec, freq;
+  if(datafile.freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writeSigprocASCIIHeader: Writing out this data format is only implemented when the frequency channels are uniformely separated.");
+    return 0;
+  }
   int_mjd = datafile.mjd_start;
   sec = datafile.mjd_start;
   sec -= int_mjd;
   sec *= (24.0*60.0*60.0);
-  freq = get_centre_freq(datafile, verbose);
+  freq = get_centre_frequency(datafile, verbose);
   fprintf(datafile.fptr_hdr, "# %d %lf %f %d %lf %f %ld %s %d %s", int_mjd, sec, datafile.fixedPeriod, 1, freq, datafile.dm, datafile.NrBins, datafile.observatory, 1, datafile.psrname);
     fprintf(datafile.fptr_hdr, "\n");
   return 1;

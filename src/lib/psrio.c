@@ -44,6 +44,8 @@ int writeEPNfile(datafile_definition datafile, float *data, verbose_definition v
 int readEPNfile(datafile_definition *datafile, float *data, verbose_definition verbose, long request_only_one_pulse);
 int readEPNsubHeader(datafile_definition *datafile, float *scale, float *offset, verbose_definition verbose);
 int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose);
+
+int readPulseSigprocData(datafile_definition datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose);
 int readPPOLHeader(datafile_definition *datafile, int extended, verbose_definition verbose);
 int writePPOLHeader(datafile_definition datafile, int argc, char **argv, verbose_definition verbose);
 int readHistoryFITS(datafile_definition *datafile, verbose_definition verbose);
@@ -174,6 +176,7 @@ void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
   datafile->dumpOnClose = 0;
 
   datafile->filename = malloc(1);
+
   if(datafile->filename == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR cleanPSRData: Memory allocation error.");
@@ -198,11 +201,13 @@ void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
     printerror(verbose.debug, "ERROR cleanPSRData: Memory allocation error.");
     exit(0);
   }
+
   datafile->tsub_list[0] = 0;
   datafile->freq_ref = -2;
   datafile->freqMode = FREQMODE_UNKNOWN;
-  datafile->uniform_freq_cent = 0;
-  datafile->uniform_bw = 0;
+  datafile->freqlabel_list = NULL;
+  datafile->bandwidth = 0;
+  datafile->centrefreq = 0;
   datafile->ra = 0;
   datafile->dec = 0;
   datafile->dm = 0;
@@ -258,6 +263,7 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
   datafile_dest->scales = NULL;
   datafile_dest->offsets = NULL;
   datafile_dest->weights = NULL;
+  datafile_dest->offpulse_rms = NULL;
   datafile_dest->format = datafile_source.format;
   datafile_dest->version = datafile_source.version;
   datafile_dest->NrSubints = datafile_source.NrSubints;
@@ -282,6 +288,9 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
   }
   datafile_dest->fixedtsamp = datafile_source.fixedtsamp;
   datafile_dest->tsubMode = datafile_source.tsubMode;
+  if(datafile_dest->tsub_list != NULL) {
+    free(datafile_dest->tsub_list);
+  }
   if(datafile_source.tsubMode == TSUBMODE_TSUBLIST) {
     datafile_dest->tsub_list = (double *)malloc(datafile_source.NrSubints*sizeof(double));
     if(datafile_dest->tsub_list == NULL) {
@@ -301,8 +310,23 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
   }
   datafile_dest->freq_ref = datafile_source.freq_ref;
   datafile_dest->freqMode = datafile_source.freqMode;
-  datafile_dest->uniform_freq_cent = datafile_source.uniform_freq_cent;
-  datafile_dest->uniform_bw = datafile_source.uniform_bw;
+  if(datafile_dest->freqlabel_list != NULL) {
+    free(datafile_dest->freqlabel_list);
+    datafile_dest->freqlabel_list = NULL;
+  }
+  datafile_dest->bandwidth = datafile_source.bandwidth;
+  datafile_dest->centrefreq = datafile_source.centrefreq;
+  if(datafile_source.freqMode == FREQMODE_FREQTABLE) {
+    datafile_dest->freqlabel_list = (double *)malloc(datafile_source.NrFreqChan*datafile_source.NrSubints*sizeof(double));
+    if(datafile_dest->freqlabel_list == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR copy_paramsPSRData: Memory allocation error.");
+      return 0;
+    }
+    memcpy(datafile_dest->freqlabel_list, datafile_source.freqlabel_list, datafile_source.NrFreqChan*datafile_source.NrSubints*sizeof(double));
+  }else {
+    datafile_dest->freqlabel_list = NULL;
+  }
   datafile_dest->ra = datafile_source.ra;
   datafile_dest->dec = datafile_source.dec;
   datafile_dest->dm = datafile_source.dm;
@@ -707,16 +731,28 @@ int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbos
     printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
     return 0;
   }
-  ret = fwrite(&(datafile->uniform_freq_cent), sizeof(double), 1, datafile->fptr_hdr);
+  ret = fwrite(&(datafile->centrefreq), sizeof(double), 1, datafile->fptr_hdr);
   if(ret != 1) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
     return 0;
   }
-  ret = fwrite(&(datafile->uniform_bw), sizeof(double), 1, datafile->fptr_hdr);
+  ret = fwrite(&(datafile->bandwidth), sizeof(double), 1, datafile->fptr_hdr);
   if(ret != 1) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(datafile->freqMode == FREQMODE_FREQTABLE) {
+    ret = fwrite(datafile->freqlabel_list, sizeof(double), datafile->NrSubints*datafile->NrFreqChan, datafile->fptr_hdr);
+    if(ret != datafile->NrSubints*datafile->NrFreqChan) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }else if(datafile->freqMode != FREQMODE_UNKNOWN && datafile->freqMode != FREQMODE_UNIFORM) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Frequency mode is not implemented");
     return 0;
   }
   ret = fwrite(&(datafile->gentype), sizeof(int), 1, datafile->fptr_hdr);
@@ -909,6 +945,9 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
     fflush(stdout);
     printerror(verbose.debug, "ERROR readPSRSALSAHeader: File %s is in an unsupported version number (%d)", datafile->filename, version);
     return 0;
+  }
+  if(verbose.debug) {
+    printf("  PSRSALSA file is version %d\n", version);
   }
   ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
   if(ret != 1) {
@@ -1253,17 +1292,34 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
     printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
     return 0;
   }
-  ret = fread(&(datafile->uniform_freq_cent), sizeof(double), 1, datafile->fptr_hdr);
+  ret = fread(&(datafile->centrefreq), sizeof(double), 1, datafile->fptr_hdr);
   if(ret != 1) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
     return 0;
   }
-  ret = fread(&(datafile->uniform_bw), sizeof(double), 1, datafile->fptr_hdr);
+  ret = fread(&(datafile->bandwidth), sizeof(double), 1, datafile->fptr_hdr);
   if(ret != 1) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
     return 0;
+  }
+  if(datafile->freqMode == FREQMODE_FREQTABLE) {
+    if(datafile->freqlabel_list != NULL) {
+      free(datafile->freqlabel_list);
+    }
+    datafile->freqlabel_list = malloc(datafile->NrSubints*datafile->NrFreqChan*sizeof(double));
+    if(datafile->freqlabel_list == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error");
+      return 0;
+    }
+    ret = fread(datafile->freqlabel_list, sizeof(double), datafile->NrSubints*datafile->NrFreqChan, datafile->fptr_hdr);
+    if(ret != datafile->NrSubints*datafile->NrFreqChan) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
   }
   ret = fread(&(datafile->gentype), sizeof(int), 1, datafile->fptr_hdr);
   if(ret != 1) {
@@ -1531,7 +1587,7 @@ int writePSRSALSAfile(datafile_definition datafile, float *data, verbose_definit
 int set_string_PSRData(char **dest, char *source, verbose_definition verbose)
 {
   int i;
-  if(dest != NULL) {
+  if(*dest != NULL) {
     free(*dest);
     *dest = NULL;
   }
@@ -1985,35 +2041,41 @@ int openPSRData(datafile_definition *datafile, char *filename, int format, int e
  if(datafile->data == NULL) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR openPSRData: Cannot allocate memory (data=%ld bytes=%.3fGB).", datasize, datasize/1073741824.0);
-   closePSRData(datafile, verbose2);
+   closePSRData(datafile, 0, verbose2);
    return 0;
  }
       }
       if(readPSRData(datafile, datafile->data, verbose2)) {
- closePSRData(datafile, verbose2);
+ closePSRData(datafile, 2, verbose2);
  datafile->format = MEMORY_format;
  datafile->opened_flag = 1;
       }else {
  fflush(stdout);
  printerror(verbose.debug, "ERROR openPSRData: Cannot read data.");
- closePSRData(datafile, verbose2);
+ closePSRData(datafile, 0, verbose2);
  return 0;
       }
     }else {
       fflush(stdout);
       printerror(verbose.debug, "ERROR openPSRData: Cannot read header.");
-      closePSRData(datafile, verbose2);
+      closePSRData(datafile, 0, verbose2);
       return 0;
     }
   }
   return datafile->opened_flag;
 }
-int closePSRData(datafile_definition *datafile, verbose_definition verbose)
+int closePSRData(datafile_definition *datafile, int perserve_info, verbose_definition verbose)
 {
   int indent;
   int status = 0;
+  if(verbose.debug) {
+    printf("Closing file '%s'\n", datafile->filename);
+  }
   if(datafile->opened_flag) {
     if(datafile->dumpOnClose) {
+      if(verbose.debug) {
+ printf("  - Dumping data to file before closing\n");
+      }
       if(verbose.verbose) {
  for(indent = 0; indent < verbose.indent; indent++)
    printf(" ");
@@ -2029,37 +2091,102 @@ int closePSRData(datafile_definition *datafile, verbose_definition verbose)
  printerror(verbose.debug, "ERROR closePSRData: Writing of buffered data failed.");
  return 1;
       }
-      free(datafile->data);
-      datafile->data = NULL;
     }
     if(datafile->format == FITS_format) {
+      if(verbose.debug) {
+ printf("  - Releasing FITS file pointer\n");
+      }
       fits_close_file(datafile->fits_fptr, &status);
       if(status) {
  fflush(stdout);
  fits_report_error(stderr, status);
       }
+      if(verbose.debug) {
+ printf("  - Releasing memory related to scales/offsets/weights\n");
+      }
       free(datafile->scales);
       free(datafile->offsets);
       free(datafile->weights);
     }else if(datafile->format != MEMORY_format){
+      if(verbose.debug) {
+ printf("  - Releasing file pointer\n");
+      }
       fclose(datafile->fptr);
     }
-    if(datafile->format == MEMORY_format) {
-      if(datafile->tsamp_list != NULL) {
- free(datafile->tsamp_list);
-      }
-      if(datafile->data != NULL) {
- free(datafile->data);
-      }
-      if(datafile->offpulse_rms != NULL) {
- free(datafile->offpulse_rms);
-      }
-    }
     datafile->opened_flag = 0;
-    return status;
-  }else {
-    return 0;
   }
+  if(perserve_info != 2) {
+    if(datafile->data != NULL) {
+      if(verbose.debug) {
+ printf("  - Releasing memory containing data\n");
+      }
+      free(datafile->data);
+      datafile->data = NULL;
+    }
+  }
+  if(perserve_info == 0) {
+    if(verbose.debug) {
+      printf("  - Releasing header related memory\n");
+    }
+    free(datafile->filename);
+    datafile->filename = NULL;
+    free(datafile->psrname);
+    datafile->psrname = NULL;
+    free(datafile->observatory);
+    datafile->observatory = NULL;
+    free(datafile->institute);
+    datafile->institute = NULL;
+    free(datafile->instrument);
+    datafile->instrument = NULL;
+    free(datafile->scanID);
+    datafile->scanID = NULL;
+    if(datafile->tsamp_list != NULL) {
+      free(datafile->tsamp_list);
+      datafile->tsamp_list = NULL;
+    }
+    if(datafile->tsub_list != NULL) {
+      free(datafile->tsub_list);
+      datafile->tsub_list = NULL;
+    }
+    if(datafile->freqlabel_list != NULL) {
+      free(datafile->freqlabel_list);
+      datafile->freqlabel_list = NULL;
+    }
+    if(datafile->offpulse_rms != NULL) {
+      free(datafile->offpulse_rms);
+      datafile->offpulse_rms = NULL;
+    }
+    datafile_history_entry_definition *history_ptr, *history_ptr_next;
+    int firsthistoryline;
+    history_ptr = &(datafile->history);
+    firsthistoryline = 1;
+    do {
+      if(history_ptr->timestamp != NULL) {
+ free(history_ptr->timestamp);
+ history_ptr->timestamp = NULL;
+      }
+      if(history_ptr->cmd != NULL) {
+ free(history_ptr->cmd);
+ history_ptr->cmd = NULL;
+      }
+      if(history_ptr->user != NULL) {
+ free(history_ptr->user);
+ history_ptr->user = NULL;
+      }
+      if(history_ptr->hostname != NULL) {
+ free(history_ptr->hostname);
+ history_ptr->hostname = NULL;
+      }
+      history_ptr_next = history_ptr->nextEntry;
+      if(firsthistoryline == 1) {
+ firsthistoryline = 0;
+      }else {
+ free(history_ptr);
+      }
+      history_ptr = history_ptr_next;
+    }while(history_ptr_next != NULL);
+  }
+  return status;
 }
 static char * internal_gentype_string_undefined = "Not set";
 static char * internal_gentype_string_profile = "Profile";
@@ -2077,6 +2204,7 @@ static char * internal_gentype_string_p3fold = "P3 fold";
 static char * internal_gentype_string_lrcc = "LRCC";
 static char * internal_gentype_string_lrac = "LRAC";
 static char * internal_gentype_string_padist = "PA distr.";
+static char * internal_gentype_string_elldist = "Ell distr.";
 static char * internal_gentype_string_recmodel = "Receiver model";
 static char * internal_gentype_string_recmodel2 = "Receiver model with chi^2";
 static char * internal_gentype_string_rmmap = "RM map";
@@ -2103,6 +2231,7 @@ char *returnGenType_str(int gentype)
   case GENTYPE_LRCC: return internal_gentype_string_lrcc; break;
   case GENTYPE_LRAC: return internal_gentype_string_lrac; break;
   case GENTYPE_PADIST: return internal_gentype_string_padist; break;
+  case GENTYPE_ELLDIST: return internal_gentype_string_elldist; break;
   case GENTYPE_RECEIVERMODEL: return internal_gentype_string_recmodel; break;
   case GENTYPE_RECEIVERMODEL2: return internal_gentype_string_recmodel2; break;
   case GENTYPE_RMMAP: return internal_gentype_string_rmmap; break;
@@ -2254,15 +2383,17 @@ void printHeaderPSRData(datafile_definition datafile, int update, verbose_defini
   if(datafile.freqMode == FREQMODE_UNKNOWN) {
     printwarning(verbose.debug, "OBSERVING FREQUENCY IS NOT SET");
   }else {
-    double chanbw;
-    if(get_channelbw(datafile, 0, 0, &chanbw, verbose) == 0) {
+    double bw, chanbw, freq_cent;
+    bw = get_bandwidth(datafile, verbose);
+    if(get_channelbandwidth(datafile, &chanbw, verbose) == 0) {
       printerror(verbose.debug, "ERROR printHeaderPSRData: Cannot obtain channel bandwidth");
       exit(0);
     }
+    freq_cent = get_centre_frequency(datafile, verbose);
     if(verbose.debug == 0)
-      printf("freq_cent=%f MHz bw=%f MHz channelbw=%f MHz\n", get_centre_freq(datafile, verbose), get_bw(datafile, verbose), chanbw);
+      printf("freq_cent=%f MHz bw=%f MHz channelbw=%f MHz\n", freq_cent, bw, chanbw);
     else
-      printf("freq_cent=%.9e MHz bw=%.9e MHz channelbw=%.9e MHz\n", get_centre_freq(datafile, verbose), get_bw(datafile, verbose), chanbw);
+      printf("freq_cent=%.9e MHz bw=%.9e MHz channelbw=%.9e MHz\n", freq_cent, bw, chanbw);
   }
   for(i = 0; i < verbose.indent; i++) printf(" ");
   if(verbose.debug) {
@@ -2300,6 +2431,8 @@ void printHeaderPSRData(datafile_definition datafile, int update, verbose_defini
     printf("(coherency)\n");
   }else if(datafile.poltype == POLTYPE_ILVPAdPA) {
     printf("(I,L,V,Pa and error)\n");
+  }else if(datafile.poltype == POLTYPE_ILVPAdPATEldEl) {
+    printf("(I,L,V,Pa+error,tot pol,ell+error)\n");
   }else if(datafile.poltype == POLTYPE_PAdPA) {
     printf("(Pa and error)\n");
   }else {
@@ -2777,6 +2910,11 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
     datafile->datastart = ftell(datafile->fptr);
   }else
     datafile->datastart = 0;
+  if(convert_if_uniform_frequency_spacing(datafile, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR readHeaderPSRData (%s): Attempt to convert dataset in an equally spaced frequency channel format failed.", datafile->filename);
+    return 0;
+  }
   if(fabs(datafile->telescope_X) < 1e-6 && fabs(datafile->telescope_Y) < 1e-6 && fabs(datafile->telescope_Z) < 1e-6) {
     fflush(stdout);
     if(strlen(datafile->observatory) == 0) {
@@ -3003,6 +3141,8 @@ int readPulsePSRData(datafile_definition *datafile, long pulsenr, int polarizati
     return readPSRCHIVE_ASCIIfilepulse(*datafile, pulsenr, polarization, freq, binnr, nrSamples, pulse, verbose);
   else if(datafile->format == EPN_format)
     return readPulseEPNData(datafile, pulsenr, polarization, freq, binnr, nrSamples, pulse, verbose);
+  else if(datafile->format == SIGPROC_format)
+    return readPulseSigprocData(*datafile, pulsenr, polarization, freq, binnr, nrSamples, pulse, verbose);
   else if(datafile->format == MEMORY_format) {
     memcpy(pulse, &datafile->data[datafile->NrBins*(polarization+datafile->NrPols*(freq+pulsenr*datafile->NrFreqChan))+binnr], sizeof(float)*nrSamples);
     return 1;
@@ -3032,7 +3172,7 @@ int writePulsePSRData(datafile_definition *datafile, long pulsenr, int polarizat
  if(verbose.debug == 0)
    verbose2.verbose = 0;
  verbose2.nocounters = 1;
- closePSRData(datafile, verbose2);
+ closePSRData(datafile, 0, verbose2);
  return 0;
       }else if(verbose.debug) {
  printf("DEBUG: Allocated %ld bytes of memory for memory buffering.\n", datasize);
@@ -3146,7 +3286,7 @@ int read_partprofilePSRData(datafile_definition datafile, float *profileI, int *
   free(data);
   return 1;
 }
-int read_rmsPSRData(datafile_definition datafile, float *rms, float *avrg, int *zapMask, regions_definition *regions, int invert, int polchan, int freqchan, verbose_definition verbose)
+int read_rmsPSRData(datafile_definition datafile, float *rms, float *avrg, int *zapMask, pulselongitude_regions_definition *regions, int invert, int polchan, int freqchan, verbose_definition verbose)
 {
   long i, j, k, l, freq0, freq1;
   float *data;
@@ -3257,21 +3397,25 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
      printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Centre frequency can only be changed in the header if the data has uniformly distributed channels.");
        return 0;
    }else {
-     psrdata->uniform_freq_cent = atof(value);
-     if(verbose.verbose) printf("  hdr.freq_cent = %f MHz\n", psrdata->uniform_freq_cent);
+     double freq;
+     sscanf(value, "%lf", &freq);
+     set_centre_frequency(psrdata, freq, verbose);
+     if(verbose.verbose) printf("  hdr.freq_cent = %lf MHz\n", freq);
    }
  }else if(strcasecmp(identifier, "bw") == 0) {
    if(psrdata->freqMode != FREQMODE_UNIFORM) {
      printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Bandwidth can only be changed in the header if the data has uniformly distributed channels.");
        return 0;
    }else {
-     psrdata->uniform_bw = atof(value);
-     if(verbose.verbose) printf("  hdr.bw = %f MHz\n", get_bw(*psrdata, verbose));
-     double chanbw;
-     if(get_channelbw(*psrdata, 0, 0, &chanbw, verbose) == 0) {
-       printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Cannot obtain channel bandwidth.");
+     double bw;
+     sscanf(value, "%lf", &bw);
+     if(set_bandwidth(psrdata, bw, verbose) == 0) {
+       printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Bandwidth changing failed.");
        return 0;
      }
+     if(verbose.verbose) printf("  hdr.bw = %f MHz\n", bw);
+     double chanbw;
+     chanbw = bw/(double)psrdata->NrFreqChan;
      if(verbose.verbose) printf("  hdr.channelbw = %f MHz\n", chanbw);
    }
  }else if(strcasecmp(identifier,"chbw") == 0 || strcasecmp(identifier,"chanbw") == 0 || strcasecmp(identifier,"channelbw") == 0) {
@@ -3279,13 +3423,15 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
      printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Bandwidth can only be changed in the header if the data has uniformly distributed samples.");
        return 0;
    }else {
-     psrdata->uniform_bw = atof(value)*(psrdata->NrFreqChan);
      double chanbw;
-     if(get_channelbw(*psrdata, 0, 0, &chanbw, verbose) == 0) {
-       printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Cannot obtain channel bandwidth.");
+     sscanf(value, "%lf", &chanbw);
+     double bw;
+     bw = chanbw*psrdata->NrFreqChan;
+     if(set_bandwidth(psrdata, bw, verbose) == 0) {
+       printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Bandwidth changing failed.");
        return 0;
      }
-     if(verbose.verbose) printf("  hdr.bw = %f MHz\n", get_bw(*psrdata, verbose));
+     if(verbose.verbose) printf("  hdr.bw = %f MHz\n", bw);
      if(verbose.verbose) printf("  hdr.channelbw = %f MHz\n", chanbw);
    }
  }else if(strcasecmp(identifier, "freqref") == 0 || strcasecmp(identifier, "freq_ref") == 0 || strcasecmp(identifier, "ref_freq") == 0 || strcasecmp(identifier, "reffreq") == 0) {
@@ -3581,7 +3727,7 @@ void printHeaderCommandlineOptions(FILE *printdevice)
   fprintf(printdevice, "  observatory  Change the telescope (name only, not location).\n");
   fprintf(printdevice, "  p0           Period.\n");
   fprintf(printdevice, "  poltype      Polarization type (%d = undefined, %d=Stokes, %d=Coherency,\n", POLTYPE_UNKNOWN, POLTYPE_STOKES, POLTYPE_COHERENCY);
-  fprintf(printdevice, "               %d=I,L,V,Pa+error, %d=Pa+error).\n", POLTYPE_ILVPAdPA, POLTYPE_PAdPA);
+  fprintf(printdevice, "               %d=I,L,V,Pa+error, %d=Pa+error, %d=I,L,V,Pa+error,tot pol,ell+error).\n", POLTYPE_ILVPAdPA, POLTYPE_PAdPA, POLTYPE_ILVPAdPATEldEl);
   fprintf(printdevice, "  ra           Right ascension (single number, in degrees).\n");
   fprintf(printdevice, "  reffreq      Reference frequency (for dedispersion/de Faraday rotation).\n");
   fprintf(printdevice, "               -1=Infinite freq -2=Unknown\n");
@@ -3614,6 +3760,7 @@ void printHeaderGentypeOptions(FILE *printdevice)
   fprintf(printdevice, "  %3d           LRCC.\n", GENTYPE_LRCC);
   fprintf(printdevice, "  %3d           RM map.\n", GENTYPE_RMMAP);
   fprintf(printdevice, "  %3d           Position angle distribution.\n", GENTYPE_PADIST);
+  fprintf(printdevice, "  %3d           Ellipticity angle distribution.\n", GENTYPE_ELLDIST);
   fprintf(printdevice, "  %3d           Receiver model.\n", GENTYPE_RECEIVERMODEL);
   fprintf(printdevice, "  %3d           Receiver model with chi^2 and nfree.\n", GENTYPE_RECEIVERMODEL2);
 }
@@ -3653,7 +3800,7 @@ void swap_orig_clone(datafile_definition *original, datafile_definition *clone, 
   copyVerboseState(verbose, &verbose2);
   verbose2.verbose = 0;
   verbose2.nocounters = 1;
-  closePSRData(original, verbose);
+  closePSRData(original, 0, verbose);
   memmove(original, clone, sizeof(datafile_definition));
 }
 int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, int cmdOnly, verbose_definition verbose)
@@ -3879,10 +4026,9 @@ char *str_replace_header_params(datafile_definition data, char *text, verbose_de
   }
   free(newtext);
   newtext = newtext2;
-  if(data.freqMode == FREQMODE_UNKNOWN)
-    strcpy(headerparam, "?");
-  else
-    sprintf(headerparam, "%lf", get_centre_freq(data, verbose));
+  if(data.freqMode != FREQMODE_UNKNOWN) {
+    sprintf(headerparam, "%lf", get_centre_frequency(data, verbose));
+  }
   newtext2 = str_replace(newtext, "%FREQ", headerparam, verbose);
   if(newtext2 == NULL) {
     fflush(stdout);
@@ -3906,10 +4052,9 @@ char *str_replace_header_params(datafile_definition data, char *text, verbose_de
   }
   free(newtext);
   newtext = newtext2;
-  if(data.freqMode == FREQMODE_UNKNOWN)
-    strcpy(headerparam, "?");
-  else
-    sprintf(headerparam, "%lf", get_bw(data, verbose));
+  if(data.freqMode != FREQMODE_UNKNOWN) {
+    sprintf(headerparam, "%lf", get_bandwidth(data, verbose));
+  }
   newtext2 = str_replace(newtext, "%BW", headerparam, verbose);
   if(newtext2 == NULL) {
     fflush(stdout);
@@ -4040,4 +4185,92 @@ void copyVerboseState(verbose_definition verbose_state_src, verbose_definition *
   verbose_state_dst->debug = verbose_state_src.debug;
   verbose_state_dst->nocounters = verbose_state_src.nocounters;
   verbose_state_dst->indent = verbose_state_src.indent;
+}
+int convert_if_uniform_frequency_spacing(datafile_definition *datafile, verbose_definition verbose)
+{
+  long subint, freqchan;
+  double freq, freq_first, freq_prev, df_expected, actual_centre_freq;
+  if(verbose.debug) {
+    printf("Check if data has uniformly distributed channels\n");
+  }
+  if(datafile->freqMode != FREQMODE_FREQTABLE) {
+    if(verbose.debug) {
+      printf("  Data does not have frequency defined for separate channels, so nothing is done\n");
+    }
+    return 1;
+  }
+  freq_first = df_expected = actual_centre_freq = 0.0;
+  for(subint = 0; subint < datafile->NrSubints; subint++) {
+    freq_prev = 0.0;
+    for(freqchan = 0; freqchan < datafile->NrFreqChan; freqchan++) {
+      freq = get_weighted_channel_freq(*datafile, subint, freqchan, verbose);
+      if(subint == 0)
+ actual_centre_freq += freq;
+      if(subint == 0 && freqchan == 0) {
+ freq_first = freq;
+ df_expected = -freq;
+      }else if(subint == 0 && freqchan == 1) {
+ df_expected += freq;
+ freq_prev = freq;
+      }else if(freqchan == 0 && subint != 0) {
+ if(fabs(freq - freq_first) > 1e-6) {
+   printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf != %lf for first channels of subint 0 and %ld). You can expect problems. Warnings for other channels are suppressed.", datafile->filename, freq, freq_first, subint);
+   return 2;
+ }
+ freq_prev = freq;
+      }else {
+ if(fabs(freq-freq_prev - df_expected) > 1e-6) {
+   printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf - %lf != %lf for channel %ld and subint %ld). You can expect problems. Warnings for other channels are suppressed.", datafile->filename, freq, freq_prev, df_expected, freqchan, subint);
+   return 2;
+ }
+ freq_prev = freq;
+      }
+    }
+  }
+  if(verbose.debug) {
+    printf("  The frequency channels appear to be uniformly separated, so convert in data-set described by only a bandwidth and a centre frequency.\n");
+  }
+  actual_centre_freq /= (double)datafile->NrFreqChan;
+  double hdr_freq_cent;
+  hdr_freq_cent = get_centre_frequency(*datafile, verbose);
+  if(fabs(actual_centre_freq-hdr_freq_cent) > 1e-6) {
+    if(hdr_freq_cent > 0 && (hdr_freq_cent < 0.99e10 || hdr_freq_cent > 1.01e10)) {
+      double chanbw;
+      if(get_channelbandwidth(*datafile, &chanbw, verbose) == 0) {
+ printerror(verbose.debug, "ERROR (%s): Cannot obtain channel bandwidth.", datafile->filename);
+ return 0;
+      }
+      if(fabs(hdr_freq_cent-actual_centre_freq-0.5*fabs(chanbw)) < 1e-6) {
+ if(verbose.debug) {
+   printf("  (%s): Updating centre frequency from %lf to %lf MHz as suggested by the frequency list in the fits table, corresponding to an offset expected from a dropped DC channel.\n", datafile->filename, hdr_freq_cent, actual_centre_freq);
+ }
+      }else {
+ printwarning(verbose.debug, "WARNING (%s): Updating centre frequency from %lf to %lf MHz as suggested by the frequency list in the data.", datafile->filename, hdr_freq_cent, actual_centre_freq);
+      }
+    }else {
+      if(verbose.debug)
+ printf("  %s: Use subint frequency table frequency as centre frequency = %f MHz.\n", datafile->filename, actual_centre_freq);
+    }
+    set_centre_frequency(datafile, actual_centre_freq, verbose);
+  }
+  datafile->freqMode = FREQMODE_UNIFORM;
+  free(datafile->freqlabel_list);
+  datafile->freqlabel_list = NULL;
+  if(datafile->NrFreqChan > 1) {
+    df_expected = (freq_prev-freq_first)/(double)(datafile->NrFreqChan-1);
+    double chanbw;
+    if(get_channelbandwidth(*datafile, &chanbw, verbose) == 0) {
+      printerror(verbose.debug, "ERROR (%s): Cannot obtain channel bandwidth.", datafile->filename);
+      return 0;
+    }
+    if(fabs(df_expected-chanbw) > 1e-6) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING (%s): Updating channel bandwidth from %lf to %lf MHz suggested by the frequency list in the subint table.", datafile->filename, chanbw, df_expected);
+      if(set_bandwidth(datafile, df_expected*datafile->NrFreqChan, verbose) == 0) {
+ printerror(verbose.debug, "ERROR (%s): Bandwidth changing failed.", datafile->filename);
+ return 0;
+      }
+    }
+  }
+  return 3;
 }
