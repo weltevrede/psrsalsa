@@ -2789,6 +2789,16 @@ int setITRFlocation_by_name(datafile_definition *datafile, char *observatory, ve
     datafile->telescope_X = 5109943.1050;
     datafile->telescope_Y = 2003650.7359;
     datafile->telescope_Z = -3239908.3195;
+  }else if(strcasecmp(observatory, "MEERKAT") == 0) {
+    if(verbose.verbose) {
+      for(indent = 0; indent < verbose.indent; indent++)
+ printf(" ");
+      fflush(stdout);
+      printwarning(verbose.debug, "setITRFlocation_by_name: Guessing this is MeerKAT data");
+    }
+    datafile->telescope_X = 5109318.8410;
+    datafile->telescope_Y = 2006836.3673;
+    datafile->telescope_Z = -3238921.7749;
   }else if(strcasecmp(observatory, "LWA") == 0 || strcasecmp(observatory, "LWA1") == 0) {
     if(verbose.verbose) {
       for(indent = 0; indent < verbose.indent; indent++)
