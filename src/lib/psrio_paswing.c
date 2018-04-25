@@ -20,10 +20,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <gsl/gsl_statistics_float.h>
 #include <gsl/gsl_integration.h>
 #include "psrsalsa.h"
-
-
-
-
 int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
 {
   int dPa_polnr;
@@ -51,15 +47,11 @@ int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
     printerror(verbose.debug, "ERROR filterPApoints: Expected pulse longitudes to be defined.");
     return 0;
   }
-
   if(datafile->poltype == POLTYPE_ILVPAdPA || datafile->poltype == POLTYPE_ILVPAdPATEldEl) {
     dPa_polnr = 4;
   }else if(datafile->poltype == POLTYPE_PAdPA) {
     dPa_polnr = 1;
   }
-
-
-
   nrpoints = 0;
   for(i = 0; i < datafile->NrBins; i++) {
     if(datafile->data[i+dPa_polnr*datafile->NrBins] > 0) {
@@ -68,16 +60,12 @@ int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
   }
   if(verbose.verbose)
     printf("Keeping %ld significant PA points\n", nrpoints);
-
   olddata = datafile->data;
   datafile->data = (float *)malloc(nrpoints*datafile->NrPols*sizeof(float));
   if(datafile->data == NULL) {
     printerror(verbose.debug, "ERROR filterPApoints: Memory allocation error.");
     return 0;
   }
-
-
-
   j = 0;
   for(i = 0; i < datafile->NrBins; i++) {
     if(olddata[i+dPa_polnr*datafile->NrBins] > 0) {
@@ -108,16 +96,23 @@ int filterPApoints(datafile_definition *datafile, verbose_definition verbose)
   datafile->NrBins = nrpoints;
   return datafile->NrBins;
 }
-int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselongitude_regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, float paoffset, verbose_definition verbose)
+int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselongitude_regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, float paoffset, datafile_definition *rms_file, float rebin_factor, verbose_definition verbose)
 {
-  int indent;
+  int indent, rms_file_specified;
   long i, j, NrOffpulseBins, pulsenr, freqnr, output_nr_pols;
-  float ymax, I, RMSQ, RMSU, RMSP, *Loffpulse, *Poffpulse, medianL, medianP, *newdata;
+  float ymax, baseline_intensity, RMSQ, RMSU, *Loffpulse, *Poffpulse, medianL, medianP, *newdata, *newdata_rms;
+  rms_file_specified = 1;
+  if(rms_file == NULL) {
+    rms_file = datafile;
+    rms_file_specified = 0;
+  }
   if(verbose.verbose) {
     for(indent = 0; indent < verbose.indent; indent++) printf(" ");
     printf("Constructing PA and degree of linear polarization");
     if(extended)
       printf(", total polarization and ellipticity");
+    if(rms_file_specified)
+      printf(" (using a seperate file to determine the off-pulse rms)");
     printf("\n");
     for(indent = 0; indent < verbose.indent; indent++) printf(" ");
     printf("  Reference frequency for PA is ");
@@ -155,7 +150,7 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
       printwarning(verbose.debug, "WARNING make_paswing_fromIQUV: Total polarization is computed, and the median off-pulse value is subtracted (probably not a very good idea).");
     }
   }
-  if(datafile->NrPols != 4) {
+  if(datafile->NrPols != 4 || rms_file->NrPols != 4) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Expected 4 input polarizations.");
     return 0;
@@ -166,6 +161,16 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
     }else {
       printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Convert data into Stokes parameters first.");
       return 0;
+    }
+  }
+  if(rms_file_specified) {
+    if(rms_file->poltype != POLTYPE_STOKES) {
+      if(rms_file->poltype == POLTYPE_UNKNOWN) {
+ printwarning(verbose.debug, "WARNING make_paswing_fromIQUV: Polarization state of the data to be used to determine the off-pulse rms is unknown, it is assumed the data are Stokes parameters.");
+      }else {
+ printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Convert data to be used to determine the off-pulse rms into Stokes parameters first.");
+ return 0;
+      }
     }
   }
   if(datafile->tsampMode != TSAMPMODE_FIXEDTSAMP) {
@@ -191,19 +196,52 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
     fflush(stdout);
     printwarning(verbose.debug, "WARNING make_paswing_fromIQUV: Unknown baseline state. It is assumed the baseline has already removed from the data.");
   }
+  if(rms_file_specified) {
+    if(rms_file->isDebase == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Please remove baseline first, i.e. use pmod -debase.");
+      return 0;
+    }else if(rms_file->isDebase != 1) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING make_paswing_fromIQUV: Unknown baseline state. It is assumed the baseline has already removed from the data.");
+    }
+  }
+  if(rms_file_specified) {
+    if(datafile->NrSubints != rms_file->NrSubints) {
+      printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Number of subintegrations is different in the data to be used to determine the off-pulse rms.");
+ return 0;
+    }
+    if(datafile->NrFreqChan != rms_file->NrFreqChan) {
+      printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Number of frequency channels is different in the data to be used to determine the off-pulse rms (%ld != %ld).", rms_file->NrFreqChan, datafile->NrFreqChan);
+ return 0;
+    }
+    if(correctLbias == 0) {
+      printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Subtracting the median of L is not supported when a separate file is used for the offpulse statistics.");
+      return 0;
+    }
+    if(extended) {
+      printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Subtracting the median of P is not supported when a separate file is used for the offpulse statistics.");
+      return 0;
+    }
+  }
   if(datafile->offpulse_rms != NULL) {
     free(datafile->offpulse_rms);
   }
-  Loffpulse = (float *)malloc((datafile->NrBins)*sizeof(float));
-  Poffpulse = (float *)malloc((datafile->NrBins)*sizeof(float));
+  Loffpulse = (float *)malloc((rms_file->NrBins)*sizeof(float));
+  Poffpulse = (float *)malloc((rms_file->NrBins)*sizeof(float));
   if(extended) {
     output_nr_pols = 8;
   }else {
     output_nr_pols = 5;
   }
   newdata = (float *)malloc(datafile->NrBins*datafile->NrSubints*datafile->NrFreqChan*output_nr_pols*sizeof(float));
+  if(rms_file_specified) {
+    newdata_rms = (float *)malloc(rms_file->NrBins*rms_file->NrSubints*rms_file->NrFreqChan*output_nr_pols*sizeof(float));
+  }else {
+    newdata_rms = newdata;
+  }
   datafile->offpulse_rms = (float *)malloc(datafile->NrSubints*datafile->NrFreqChan*output_nr_pols*sizeof(float));
-  if(Loffpulse == NULL || Poffpulse == NULL || newdata == NULL || datafile->offpulse_rms == NULL) {
+  if(Loffpulse == NULL || Poffpulse == NULL || newdata == NULL || datafile->offpulse_rms == NULL || newdata_rms == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR make_paswing_fromIQUV: Memory allocation error.");
     return 0;
@@ -224,7 +262,7 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
     fflush(stdout);
     printwarning(verbose.debug, "WARNING make_paswing_fromIQUV: Normalization will cause all subintegrations/frequency channels to be normalised individually. This may not be desired.");
   }
-  long sindex_I, sindex_Q, sindex_U, sindex_V, newindex_I, newindex_L, newindex_V, newindex_Pa, newindex_dPa, newindex_T, newindex_Ell, newindex_dEll;
+  long sindex_I, sindex_Q, sindex_U, sindex_V, sindex_I_rms, sindex_Q_rms, sindex_U_rms, sindex_V_rms, newindex_I, newindex_L, newindex_V, newindex_Pa, newindex_dPa, newindex_T, newindex_Ell, newindex_dEll, newindex_L_rms, newindex_T_rms;
   for(pulsenr = 0; pulsenr < datafile->NrSubints; pulsenr++) {
     for(freqnr = 0; freqnr < datafile->NrFreqChan; freqnr++) {
       sindex_I = datafile->NrBins*(0+datafile->NrPols*(freqnr+pulsenr*datafile->NrFreqChan));
@@ -240,6 +278,25 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
  newindex_T = datafile->NrBins*(5+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
  newindex_Ell = datafile->NrBins*(6+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
  newindex_dEll = datafile->NrBins*(7+output_nr_pols*(freqnr+datafile->NrFreqChan*pulsenr));
+      }
+      if(rms_file_specified) {
+ sindex_I_rms = rms_file->NrBins*(0+rms_file->NrPols*(freqnr+pulsenr*rms_file->NrFreqChan));
+ sindex_Q_rms = rms_file->NrBins*(1+rms_file->NrPols*(freqnr+pulsenr*rms_file->NrFreqChan));
+ sindex_U_rms = rms_file->NrBins*(2+rms_file->NrPols*(freqnr+pulsenr*rms_file->NrFreqChan));
+ sindex_V_rms = rms_file->NrBins*(3+rms_file->NrPols*(freqnr+pulsenr*rms_file->NrFreqChan));
+ newindex_L_rms = rms_file->NrBins*(1+output_nr_pols*(freqnr+rms_file->NrFreqChan*pulsenr));
+ if(extended) {
+   newindex_T_rms = rms_file->NrBins*(5+output_nr_pols*(freqnr+rms_file->NrFreqChan*pulsenr));
+ }
+      }else {
+ sindex_I_rms = sindex_I;
+ sindex_Q_rms = sindex_Q;
+ sindex_U_rms = sindex_U;
+ sindex_V_rms = sindex_V;
+ newindex_L_rms = newindex_L;
+ if(extended) {
+   newindex_T_rms = newindex_T;
+ }
       }
       if(normalize == 0) {
  ymax = 1;
@@ -262,6 +319,18 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
    newdata[j+newindex_T] = sqrt(newdata[j+newindex_L]*newdata[j+newindex_L]+datafile->data[sindex_V+j]*datafile->data[sindex_V+j]);
  }
       }
+      if(rms_file_specified) {
+ for(j = 0; j < (rms_file->NrBins); j++) {
+   rms_file->data[sindex_I_rms + j] /= ymax;
+   rms_file->data[sindex_Q_rms + j] /= correctQV*ymax;
+   rms_file->data[sindex_U_rms + j] /= ymax;
+   rms_file->data[sindex_V_rms + j] /= correctV*correctQV*ymax;
+   newdata_rms[j+newindex_L_rms] = sqrt((rms_file->data[sindex_Q_rms+j])*(rms_file->data[sindex_Q_rms+j])+(rms_file->data[sindex_U_rms+j])*(rms_file->data[sindex_U_rms+j]));
+   if(extended) {
+     newdata_rms[j+newindex_T_rms] = sqrt(newdata[j+newindex_L_rms]*newdata[j+newindex_L_rms]+rms_file->data[sindex_V_rms+j]*rms_file->data[sindex_V_rms+j]);
+   }
+ }
+      }
       datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
       datafile->offpulse_rms[1+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
       datafile->offpulse_rms[2+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = 0;
@@ -272,30 +341,29 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
  datafile->offpulse_rms[6+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = -1;
  datafile->offpulse_rms[7+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = -1;
       }
-      I = 0;
+      baseline_intensity = 0;
       RMSQ = 0;
       RMSU = 0;
-      RMSP = 0;
       NrOffpulseBins = 0;
-      for(i = 0; i < (datafile->NrBins); i++) {
+      for(i = 0; i < (rms_file->NrBins); i++) {
  Loffpulse[i] = 0;
  if(checkRegions(i, &onpulse, 0, verbose) == 0) {
    NrOffpulseBins++;
-   I += datafile->data[sindex_I+i];
-   RMSQ += (datafile->data[sindex_Q+i])*(datafile->data[sindex_Q+i]);
-   RMSU += (datafile->data[sindex_U+i])*(datafile->data[sindex_U+i]);
-   datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (datafile->data[sindex_I+i])*(datafile->data[sindex_I+i]);
-   datafile->offpulse_rms[1+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (newdata[i+newindex_L])*(newdata[i+newindex_L]);
-   datafile->offpulse_rms[2+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (datafile->data[sindex_V+i])*(datafile->data[sindex_V+i]);
+   baseline_intensity += rms_file->data[sindex_I_rms+i];
+   RMSQ += (rms_file->data[sindex_Q_rms+i])*(rms_file->data[sindex_Q_rms+i]);
+   RMSU += (rms_file->data[sindex_U_rms+i])*(rms_file->data[sindex_U_rms+i]);
+   datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (rms_file->data[sindex_I_rms+i])*(rms_file->data[sindex_I_rms+i]);
+   datafile->offpulse_rms[1+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (newdata_rms[i+newindex_L_rms])*(newdata_rms[i+newindex_L_rms]);
+   datafile->offpulse_rms[2+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (rms_file->data[sindex_V_rms+i])*(rms_file->data[sindex_V_rms+i]);
    if(extended) {
-     datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (newdata[i+newindex_L])*(newdata[i+newindex_L]) + (datafile->data[sindex_V+i])*(datafile->data[sindex_V+i]);
+     datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] += (newdata_rms[i+newindex_L_rms])*(newdata_rms[i+newindex_L_rms]) + (rms_file->data[sindex_V_rms+i])*(rms_file->data[sindex_V_rms+i]);
    }
-   Loffpulse[NrOffpulseBins-1] = newdata[i+newindex_L];
+   Loffpulse[NrOffpulseBins-1] = newdata_rms[i+newindex_L_rms];
    if(extended)
-     Poffpulse[NrOffpulseBins-1] = newdata[i+newindex_T];
+     Poffpulse[NrOffpulseBins-1] = newdata_rms[i+newindex_T_rms];
  }
       }
-      I /= (float)NrOffpulseBins;
+      baseline_intensity /= (float)NrOffpulseBins;
       RMSQ = sqrt(RMSQ/(float)NrOffpulseBins);
       RMSU = sqrt(RMSU/(float)NrOffpulseBins);
       datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = sqrt(datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]/(float)NrOffpulseBins);
@@ -304,12 +372,23 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
       if(extended) {
  datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] = sqrt(datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]/(float)NrOffpulseBins);
       }
+      if(rms_file_specified) {
+ float scale = 1.0/sqrt(rebin_factor);
+ RMSQ *= scale;
+ RMSU *= scale;
+ datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] *= scale;
+ datafile->offpulse_rms[1+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] *= scale;
+ datafile->offpulse_rms[2+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] *= scale;
+ if(extended) {
+   datafile->offpulse_rms[5+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)] *= scale;
+ }
+      }
       if(verbose.verbose) {
  if((freqnr == 0 && pulsenr == 0) || verbose.debug) {
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
    fprintf(stdout, "  PA conversion output for subint %ld frequency channel %ld:\n", pulsenr, freqnr);
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
-   fprintf(stdout, "    Averige baseline Stokes I: %f\n", I);
+   fprintf(stdout, "    Average baseline Stokes I: %f\n", baseline_intensity);
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
    fprintf(stdout, "    RMS I:                  %f\n", datafile->offpulse_rms[0+output_nr_pols*(freqnr + datafile->NrFreqChan*pulsenr)]);
    for(indent = 0; indent < verbose.indent; indent++) printf(" ");
@@ -381,6 +460,9 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
   }
   free(datafile->data);
   datafile->data = newdata;
+  if(rms_file_specified) {
+    free(newdata_rms);
+  }
   if(nolongitudes == 0) {
     datafile->tsampMode = TSAMPMODE_LONGITUDELIST;
   }

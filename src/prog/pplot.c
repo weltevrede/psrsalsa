@@ -18,11 +18,9 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include <unistd.h>
 #include "psrsalsa.h"
-
 #define max_nr_zap 10250
 #define max_nr_stack 1000
 #define MaxNrPointsInPolygon 20
-
 enum xUnitsSwitch_values {
   XUNIT_BINS,
   XUNIT_DEG,
@@ -30,24 +28,17 @@ enum xUnitsSwitch_values {
   XUNIT_TIME,
   XUNIT_ENDOFLIST
 };
-
 float ypos(float *stackI, int bin, long PulseNr, float scale, int NrBins, long pulse_bottom, long pulse_top, long subint_start, float yUnitCmdLine, float dyshift);
 int setBaselineParams(datafile_definition fin, float *baseline, float *dxshift, int *xUnitsSwitch, verbose_definition verbose);
 int zapVectors(int nrZappedVectors, int *zappedVectors, long subint_start, datafile_definition fin, float *dataSubset, int onlysinglechannel, verbose_definition verbose);
 int zapSubints(int nrZappedSubints, int *zappedSubints, long subint_start, int didtranspose_orig_nrbin, datafile_definition fin, float *dataSubset, int onlysinglesubint, verbose_definition verbose);
-
-
-
-
 void yvec2unit(datafile_definition fin, int yUnitsSwitch, int vectorMinMaxSpecified, float vectorMin, float vectorMax, int didtranspose_orig_nrbin, int type, float valuein, float *valueout, int mapmode, int inverse, verbose_definition verbose);
-
 typedef struct {
   long subint_start, subint_end;
   long x1, x2;
   int grayscalemode;
   int nrZappedVectors, nrZappedSubints;
 }plot_state_def;
-
 void copystackstate(plot_state_def state1, plot_state_def *state2)
 {
   state2->subint_start = state1.subint_start;
@@ -58,13 +49,11 @@ void copystackstate(plot_state_def state1, plot_state_def *state2)
   state2->nrZappedVectors = state1.nrZappedVectors;
   state2->nrZappedSubints = state1.nrZappedSubints;
 }
-
 typedef struct {
   float characterheight;
   int linewidth;
   int font;
 }pgplot_text_state_def;
-
 int main(int argc, char **argv)
 {
   long subint_start, subint_end, subint_range_defined;
@@ -84,7 +73,6 @@ int main(int argc, char **argv)
   int fixverticalscale_flag;
   int current_polnr;
   int interactive_flag;
-
   int *zappedVectors, *zappedSubints;
   char *inputfilename;
   int viewportOptionsSet;
@@ -125,7 +113,6 @@ int main(int argc, char **argv)
   float xmax_oscil, xmin_oscil, scalerange_min, scalerange_max;
   psrsalsaApplication application;
   datafile_definition fin;
-
   initApplication(&application, "pplot", "[options] inputfile(s)");
   application.switch_verbose = 1;
   application.switch_debug = 1;
@@ -145,6 +132,8 @@ int main(int argc, char **argv)
   application.switch_formatlist = 1;
   application.switch_iformat = 1;
   application.switch_noweights = 1;
+  application.switch_useweights = 1;
+  application.switch_uniformweights = 1;
   application.switch_polselect = 1;
   application.switch_nocounters = 1;
   application.switch_conshift= 1;
@@ -171,9 +160,7 @@ int main(int argc, char **argv)
   application.switch_template = 1;
   application.switch_libversions = 1;
   application.cmap = PPGPLOT_INVERTED_HEAT;
-
   strcpy(application.pgplotdevice, "/xs");
-
   interactive_flag = 0;
   dxshift_start = 0;
   dyshift = 0;
@@ -244,14 +231,12 @@ int main(int argc, char **argv)
   yUnitsMHz = 0;
   clear_pgplot_frame(&pgplot_frame);
   scalerange = 0;
-
   if(argc < 2) {
     printf("Program to plot pulsar data in various ways.\n");
     printApplicationHelp(&application);
     printf("Other options:\n");
     printf("-interactive    Turn interactive mode on.\n");
     printf("-ia             short for -interactive.\n");
-
     printf("\nData selection options:\n");
     printf("-prange     Specify subint range to be plotted, default is all.\n");
     printf("-b          Specify bin range to be plotted, default is all.\n");
@@ -262,7 +247,6 @@ int main(int argc, char **argv)
     printf("-appendframes Remove space between the frames of multiple adjacent panels\n");
     printf("-N            \"nrx nry\" Create nrx by nry panels, rather than a single plot\n");
     printf("              per page\n");
-
     printf("\nPlot options:\n");
     printf("-hist         Turn on histogram mode. The bin centre is plotted at an integer\n");
     printf("              bin nr. If plotting versus pulse longitude/time/phase, you can\n");
@@ -286,7 +270,6 @@ int main(int argc, char **argv)
     printf("-x            Set viewport x-range (end) to this value (default is %.2f).\n", viewport_endx);
     printf("-ys           Set viewport y-range (start) to this value (default is %.2f).\n", viewport_starty);
     printf("-y            Set viewport y-range (end) to this value (default is %.2f).\n", viewport_endy);
-
     printf("\nScaling and offset of data:\n");
     printf("-scale      Specify scale, default is 1. This option multiplies the intensity by\n");
     printf("            this factor. In -map mode, a value > 1 results in clipping, making\n");
@@ -303,7 +286,6 @@ int main(int argc, char **argv)
     printf("-vecRange   Specify value corresponding to first and last vector (vertical axis).\n");
     printf("-tobs       For subint/pulse phase plots, use observing time as y-axis.\n");
     printf("-MHz        For frequency/pulse phase plots, use MHz as y-axis.\n");
-
     printf("\nLabel options:\n");
     printf("-title      \"...\" Specify title (supports keywords listed with -textkeywords)\n");
     printf("-heading    \"...\" Specify heading.\n");
@@ -407,7 +389,6 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-showtwice") == 0) {
  showTwice_flag = 1;
       }else if(strcmp(argv[i], "-labels") == 0) {
-
  if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %d %d %f %d %d %f %d %d %f %d %d", &heading_font.characterheight, &heading_font.linewidth, &heading_font.font, &title_font.characterheight, &title_font.linewidth, &title_font.font, &label_font.characterheight, &label_font.linewidth, &label_font.font, &box_font.characterheight, &box_font.linewidth, &box_font.font, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
    return 0;
@@ -2106,11 +2087,11 @@ int main(int argc, char **argv)
   x_centroid += j*float_tmp;
   if(j == stack_state[current_stack_pos-1].x1 || float_tmp > Imax) {
     Imax = float_tmp;
-    bin_min = j;
+    bin_max = j;
   }
   if(j == stack_state[current_stack_pos-1].x1 || float_tmp < Imin) {
     Imin = float_tmp;
-    bin_max = j;
+    bin_min = j;
   }
        }
        x_centroid /= (double)mean;

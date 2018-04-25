@@ -16,26 +16,12 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define _FILE_OFFSET_BITS 64
 #define _USE_LARGEFILE 1
 #define _LARGEFILE_SOURCE 1
-
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
 #include <math.h>
 #include "psrsalsa.h"
-
-
-
-
-
-
-
 #define PUMA_STD 
-
-
-
-
-
-
 #ifndef _PUMA_H
 #define _PUMA_H 
 #define MMAX(A,B) (A > B? A: B)
@@ -1119,22 +1105,21 @@ void FillPuMaHeader(Header_type *hdr, int obsID, int timefilenr, int freqband, i
 }
 void beadj_convert_write(Adjustments outpadj, FILE *fout)
 {
-  int r;
   Adjustments beadj;
 #ifdef __linux__
   PutBEint(&beadj.framenumber, outpadj.framenumber);
   PutBEfloat(&beadj.scale, outpadj.scale);
   PutBEfloat(&beadj.offset, outpadj.offset);
-  r = fwrite(&beadj,sizeof(Adjustments),1,fout);
+  fwrite(&beadj,sizeof(Adjustments),1,fout);
 #endif
 #ifdef __alpha
   PutBEint(&beadj.framenumber, outpadj.framenumber);
   PutBEfloat(&beadj.scale, outpadj.scale);
   PutBEfloat(&beadj.offset, outpadj.offset);
-  r = fwrite(&beadj,sizeof(Adjustments),1,fout);
+  fwrite(&beadj,sizeof(Adjustments),1,fout);
 #endif
 #ifdef __hpux
-  r = fwrite(&outpadj,sizeof(Adjustments),1,fout);
+  fwrite(&outpadj,sizeof(Adjustments),1,fout);
 #endif
 }
 void FillPuMaHeaderSimple(Header_type *hdr, int obsID, int timefilenr, int freqband, int flipped, float BW, float SkyMidFreq, long nrTimeSamples, double DataMJD, double StartMJD, char *ObsName, double Dur, char *pulsar, double RA, double Dec, int NSHARCsAdded, int NSampsAdded, int NFreqInFile, int Tsamp, int polmode, double AdjustInterval, int BitsPerSamp, long NrFrames, char *observatoryname, double longitude, double latitude, double height)

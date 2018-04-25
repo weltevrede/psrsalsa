@@ -41,6 +41,7 @@ int read_profilePSRData(datafile_definition datafile, float *profileI, int *zapM
 int read_partprofilePSRData(datafile_definition datafile, float *profileI, int *zapMask, int polchan, long nskip, long nread, verbose_definition verbose);
 int read_rmsPSRData(datafile_definition datafile, float *rms, float *avrg, int *zapMask, pulselongitude_regions_definition *regions, int invert, int polchan, int freqchan, verbose_definition verbose);
 int convert_if_uniform_frequency_spacing(datafile_definition *datafile, verbose_definition verbose);
+int force_uniform_frequency_spacing(datafile_definition *datafile, verbose_definition verbose);
 void cleanVerboseState(verbose_definition *verbose_state);
 void copyVerboseState(verbose_definition verbose_state_src, verbose_definition *verbose_state_dst);
 int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char **argv, verbose_definition verbose);
@@ -83,7 +84,7 @@ void psrfits_set_use_weighted_freq(int val);
 int filterPApoints(datafile_definition *datafile, verbose_definition verbose);
 int readPPOLfile(datafile_definition *datafile, float *data, int extended, float add_longitude_shift, verbose_definition verbose);
 int writePPOLfile(datafile_definition datafile, float *data, int extended, int onlysignificantPA, int twoprofiles, float PAoffset, verbose_definition verbose);
-int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselongitude_regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, float paoffset, verbose_definition verbose);
+int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselongitude_regions_definition onpulse, int normalize, int correctLbias, float correctQV, float correctV, int nolongitudes, float loffset, float paoffset, datafile_definition *rms_file, float rebin_factor, verbose_definition verbose);
 int preprocess_make_profile(datafile_definition original, datafile_definition *profile, int stokesI, verbose_definition verbose);
 int preprocess_addNoise(datafile_definition original, datafile_definition *clone, float rms, verbose_definition verbose);
 int preprocess_shuffle(datafile_definition original, datafile_definition *clone, int fixseed, verbose_definition verbose);
@@ -92,7 +93,7 @@ int preprocess_coherency(datafile_definition *original, verbose_definition verbo
 int preprocess_rotateStokes(datafile_definition *original, datafile_definition *clone, int inplace, int subint, float angle, float *angle_array, int stokes1, int stokes2, verbose_definition verbose);
 int preprocess_addsuccessivepulses(datafile_definition original, datafile_definition *clone, long nrpulses, int complete, verbose_definition verbose);
 int preprocess_dedisperse(datafile_definition *original, int update, double freq_ref, verbose_definition verbose);
-int preprocess_deFaraday(datafile_definition *original, int undo, int update, double freq_ref, verbose_definition verbose);
+int preprocess_deFaraday(datafile_definition *original, int undo, int update, double freq_ref, double *rm_table, verbose_definition verbose);
 int preprocess_changeRefFreq(datafile_definition *original, double freq_ref_new, verbose_definition verbose);
 int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_definition *clone, long nrfreq, int *fzapMask, verbose_definition verbose);
 int preprocess_rebin(datafile_definition original, datafile_definition *clone, long NrBins, verbose_definition verbose);
@@ -138,6 +139,7 @@ int calc_precess_nut_ab(char system, double mjd, double *ra, double *dec, int nu
 float derotate_deg(float a);
 float derotate_180(float a);
 double derotate_180_double(double a);
+double derotate_180_rad_double(double a);
 float derotate_90(float a);
 double derotate_90_double(double a);
 double derotate_180_small_double(double a);
@@ -268,3 +270,5 @@ int ascii_file_stats(FILE *fin, char skipChar, long *nrlines, int maxlinelength,
 int change_filename_extension(char *inputname, char *outputname, char *extension, int outputnamelength, verbose_definition verbose);
 int read_ascii_column(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, double scale, int read_log, float **data, float *mindata, float *maxdata, float *avdata, verbose_definition verbose, int verbose_stderr);
 int read_ascii_column_double(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, double scale, int read_log, double **data, double *mindata, double *maxdata, double *avdata, verbose_definition verbose, int verbose_stderr);
+int read_ascii_column_int(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, int **data, int *mindata, int *maxdata, double *avdata, verbose_definition verbose, int verbose_stderr);
+int read_ascii_column_str(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, char ***data, verbose_definition verbose, int verbose_stderr);

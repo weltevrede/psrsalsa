@@ -19,28 +19,16 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <gsl/gsl_sort.h>
 #include <gsl/gsl_cdf.h>
 #include "psrsalsa.h"
-
-
-
 long randomUnsignedInt()
 {
   time_t seconds;
   struct timeval precisetime;
-
-
-
-
   time(&seconds);
   gettimeofday(&precisetime,0x0);
-
   return (long)seconds*(long)precisetime.tv_usec;
 }
-
-
-
 void randomize_idnum(long *idnum)
 {
-
   *idnum = -randomUnsignedInt();
 }
 int find_peak_correlation(float *data1, float *data2, int ndata, int zeropad, int circularpad, int duplicate, int *lag, float *correl_max, verbose_definition verbose)

@@ -17,18 +17,13 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define _USE_LARGEFILE 1
 #define _USE_LARGEFILE 1
 #define _LARGEFILE_SOURCE 1
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
-
 #include "psrsalsa.h"
-
-
 psrsalsaApplication application;
-
 int main(int argc, char **argv)
 {
   int index, c_index, nrwords, iformat_initial_value, didhistory, didweights, didfreqlist, nohead, noweights, show_linenumber;
@@ -37,16 +32,13 @@ int main(int argc, char **argv)
   long i;
   char *filename_ptr, cmd[5000];
   datafile_definition *datain;
-
   initApplication(&application, "pheader", "[options] inputfile(s)");
-
   c_index = 0;
   application.switch_formatlist = 1;
   application.switch_iformat = 1;
   application.switch_verbose = 1;
   application.switch_debug = 1;
   application.switch_filelist = 1;
-
   nohead = 0;
   noweights = 1;
   showfootnotes = 1;
@@ -56,7 +48,6 @@ int main(int argc, char **argv)
   footnote_parang = 0;
   show_linenumber = 0;
   precision = 0;
-
   if(argc < 2) {
     printf("Program to show the header information of pulsar data. Usage:\n\n");
     printApplicationHelp(&application);
@@ -128,7 +119,6 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-linenr") == 0) {
  show_linenumber = 1;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.verbose, "Unknown option: %s\n\nRun pheader without command line arguments to show help", argv[i]);
    return 0;
@@ -139,7 +129,6 @@ int main(int argc, char **argv)
       }
     }
   }
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
@@ -147,11 +136,8 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.verbose, "pheader: No files specified");
     return 0;
   }
-
-
   if(c_index != 0) {
     pickWordFromString(argv[c_index], 1, &nrwords, 0, ' ', application.verbose_state);
-
     for(i = 0; i < nrwords; i++) {
       sscanf(pickWordFromString(argv[c_index], i+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
       if(strcasecmp(cmd, "p0") == 0 || strcasecmp(cmd, "period") == 0) {
@@ -196,18 +182,14 @@ int main(int argc, char **argv)
       }
     }
   }
-
   datain = malloc(numberInApplicationFilenameList(&application, argv, application.verbose_state)*sizeof(datafile_definition));
   if(datain == NULL) {
     printerror(application.verbose_state.verbose, "pheader: Cannot allocate memory");
     return 0;
   }
-
   iformat_initial_value = application.iformat;
   i = 0;
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
-
-
     application.iformat = iformat_initial_value;
     if(application.iformat <= 0)
       application.iformat = guessPSRData_format(filename_ptr, 0, application.verbose_state);
@@ -219,11 +201,6 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.verbose, "pheader: Error opening data");
       return 0;
     }
-
-
-
-
-
     verbose_definition verbose2;
     copyVerboseState(application.verbose_state, &verbose2);
     if(c_index == 0)
@@ -232,9 +209,7 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.verbose, "pheader: Error reading header");
       return 0;
     }
-
     if(c_index) {
-
       verbose_definition noverbose;
       cleanVerboseState(&noverbose);
       didhistory = 0;
@@ -247,8 +222,6 @@ int main(int argc, char **argv)
    didhistory = 1;
  }
       }
-
-
       didweights = 0;
       didfreqlist = 0;
       pickWordFromString(argv[c_index], 1, &nrwords, 0, ' ', application.verbose_state);
@@ -278,8 +251,6 @@ int main(int argc, char **argv)
    didfreqlist = 1;
  }
       }
-
-
       pickWordFromString(argv[c_index], 1, &nrwords, 0, ' ', application.verbose_state);
       for(j = 0; j < nrwords; j++) {
  sscanf(pickWordFromString(argv[c_index], j+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
@@ -294,13 +265,10 @@ int main(int argc, char **argv)
    printf(" sec\n");
  }
       }
-
     }
-
     closePSRData(&datain[i], 1, application.verbose_state);
     i++;
   }
-
   if(c_index == 0) {
     for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
       closePSRData(&datain[i], 0, application.verbose_state);
@@ -309,7 +277,6 @@ int main(int argc, char **argv)
     terminateApplication(&application);
     return 0;
   }
-
   if(nrwords == didhistory + didweights + didfreqlist) {
     for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
       closePSRData(&datain[i], 0, application.verbose_state);
@@ -318,7 +285,6 @@ int main(int argc, char **argv)
     terminateApplication(&application);
     return 0;
   }
-
   if(c_index) {
     pickWordFromString(argv[c_index], 1, &nrwords, 0, ' ', application.verbose_state);
     if(nrwords == 0) {
@@ -329,8 +295,6 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.verbose, "pheader: Nothing to do, specify -c");
     return 0;
   }
-
-
   maxfilenamelength = strlen("filename");
   for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
     if(strlen(datain[index].filename) > maxfilenamelength)
@@ -361,19 +325,16 @@ int main(int argc, char **argv)
     if(strlen(datain[index].scanID) > maxscanidlength)
       maxscanidlength = strlen(datain[index].scanID);
   }
-
   if(nohead == 0) {
     if(show_linenumber)
       printf("line ");
     printf("%s", "filename");
     for(j = 0; j < maxfilenamelength - strlen("filename"); j++)
       printf(" ");
-
     for(i = 0; i < nrwords; i++) {
       sscanf(pickWordFromString(argv[c_index], i+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
       int extra_precision;
       extra_precision = 0;
-
       if(strcasecmp(cmd, "p0") == 0 || strcasecmp(cmd, "period") == 0) {
  printf("  period");
  extra_precision = 1;
@@ -473,7 +434,6 @@ int main(int argc, char **argv)
  printerror(application.verbose_state.verbose, "\npheader: Unknown header parameter (%s), specify -H for a list", cmd);
  return 0;
       }
-
       if(extra_precision) {
  if(precision > 0) {
    for(j = 0; j < precision; j++) {
@@ -481,25 +441,15 @@ int main(int argc, char **argv)
    }
  }
       }
-
     }
     printf("\n");
   }
-
-
-
-
-
-
-
   for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
-
     if(show_linenumber)
       printf("%-4d ", index+1);
     printf("%s", datain[index].filename);
     for(j = 0; j < maxfilenamelength - strlen(datain[index].filename); j++)
       printf(" ");
-
     if(c_index) {
       for(i = 0; i < nrwords; i++) {
  sscanf(pickWordFromString(argv[c_index], i+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
@@ -512,7 +462,6 @@ int main(int argc, char **argv)
      return 0;
    }
    if(period > 0) {
-
      printf(" %*.*lf", 7+precision, 4+precision, period);
    }else {
      printf(" SEARCH?");
@@ -533,7 +482,6 @@ int main(int argc, char **argv)
  }else if(strcasecmp(cmd, "nbits") == 0) {
    printf(" %5d", datain[index].NrBits);
  }else if(strcasecmp(cmd, "dt") == 0 || strcasecmp(cmd, "tsamp") == 0) {
-
    printf(" %*.*lf", 9+precision, 6+precision, get_tsamp(datain[index], 0, application.verbose_state));
  }else if(strcasecmp(cmd, "bw") == 0) {
    printf(" %*.*lf", 7+precision, 1+precision, get_bandwidth(datain[index], application.verbose_state));
@@ -617,14 +565,9 @@ int main(int argc, char **argv)
    return 0;
  }
       }
-
-
     }
     printf("\n");
-
-
   }
-
   if((footnote_length || footnote_length2 || footnote_search || footnote_parang) && showfootnotes) {
     printf("\nFootnotes:\n");
     if(footnote_length) {
@@ -640,7 +583,6 @@ int main(int argc, char **argv)
       printf("- parallactic angle: This is a derived quantity\n");
     }
   }
-
   for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
     closePSRData(&datain[i], 0, application.verbose_state);
   }

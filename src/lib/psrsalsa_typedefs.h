@@ -13,34 +13,23 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
 typedef struct {
   int nrRegions;
-
   int *bins_defined;
   int *left_bin, *right_bin;
-
   int *frac_defined;
   float *left_frac, *right_frac;
 }pulselongitude_regions_definition;
-
 typedef struct {
   int verbose;
   int debug;
   int nocounters;
   int indent;
 }verbose_definition;
-
-
-
 typedef struct {
-
   double centre[maxNrVonMisesComponents], concentration[maxNrVonMisesComponents], height[maxNrVonMisesComponents];
   int nrcomponents;
 }vonMises_collection_definition;
-
-
-
 typedef struct {
   char plotDevice[MaxPgplotDeviceLength];
   int windowwidth, windowheight;
@@ -53,7 +42,6 @@ typedef struct {
   int dontopen;
   int dontclose;
 }pgplot_viewport_definition;
-
 typedef struct {
   int svp;
   float svp_x1, svp_x2, svp_y1, svp_y2;
@@ -62,8 +50,6 @@ typedef struct {
   float swin_x1, swin_x2, swin_y1, swin_y2;
   float TR[6];
 }pgplot_frame_def_internal;
-
-
 typedef struct {
   int drawbox;
   int box_lw, box_f;
@@ -71,12 +57,10 @@ typedef struct {
   float box_xtick, box_ytick;
   int box_nxsub, box_nysub;
   char box_xopt[10], box_yopt[10];
-
   int drawtitle;
   float title_ch;
   int title_lw, title_f;
   char title[MaxStringLength];
-
   int drawlabels;
   float label_ch;
   int label_lw, label_f;
@@ -85,14 +69,10 @@ typedef struct {
   char ylabel[MaxStringLength];
   char wedgelabel[MaxStringLength];
 }pgplot_box_definition;
-
-
 typedef struct {
   pgplot_viewport_definition viewport;
   pgplot_box_definition box;
 }pgplot_options_definition;
-
-
 typedef struct {
   char *timestamp;
   char *cmd;
@@ -100,12 +80,8 @@ typedef struct {
   char *hostname;
   void *nextEntry;
 }datafile_history_entry_definition;
-
 typedef struct
 {
-
-
-
   FILE *fptr, *fptr_hdr;
   fitsfile *fits_fptr;
   char *filename;
@@ -113,22 +89,12 @@ typedef struct
   int version;
   int opened_flag, enable_write_flag;
   int dumpOnClose;
-
-
-
-
-
-
   char *psrname;
   char *observatory;
   char *instrument;
   char *scanID;
-
   char *institute;
-
-
   double telescope_X, telescope_Y, telescope_Z;
-
   int NrBits;
   char isDeDisp, isDeFarad, isDePar, isDebase;
   double dm, rm;
@@ -138,54 +104,27 @@ typedef struct
   long double mjd_start;
   char cableSwap;
   char cableSwapcor;
-
-
   long NrSubints, NrBins, NrPols, NrFreqChan;
-
-
   char isFolded;
   char foldMode;
   double fixedPeriod;
   char tsampMode;
   double fixedtsamp;
   double *tsamp_list;
-
   char tsubMode;
   double *tsub_list;
-
-
   double ra, dec;
-
-
   double bandwidth, centrefreq;
-
   char freqMode;
-
   double *freqlabel_list;
-
-
-
   int gentype;
   char isTransposed;
-
   float xrange[2];
   float yrange[2];
   char xrangeset, yrangeset;
   datafile_history_entry_definition history;
-
-
-
-
-
   float *data;
   float *offpulse_rms;
-
-
-
-
-
-
-
   float *scales, *offsets, *weights;
   long long datastart;
 }datafile_definition;
@@ -220,6 +159,8 @@ typedef struct {
   int switch_stokes, dostokes;
   int switch_coherence, docoherence;
   int switch_noweights, noweights;
+  int switch_useweights, useweights;
+  int switch_uniformweights, uniformweights;
   int switch_scale, doscale; float scale_scale, scale_offset;
   int switch_debase, dodebase;
   int switch_onpulsegr, doonpulsegr;
@@ -247,5 +188,6 @@ typedef struct {
   int switch_rotateStokes; int nr_rotateStokes, rotateStokes1[maxNrRotateStokes], rotateStokes2[maxNrRotateStokes]; float rotateStokesAngle[maxNrRotateStokes];
   int switch_libversions;
   int doautot;
+  int switch_forceUniformFreqLabelling;
   int *fzapMask;
 }psrsalsaApplication;

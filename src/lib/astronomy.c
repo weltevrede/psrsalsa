@@ -17,29 +17,17 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include "psrsalsa.h"
 #include "sla_wrap.h"
-
-
-
-
-
-
 long double calcDMDelay(long double freq, long double freq_ref, int inffrq, long double dm)
 {
   long double dt;
   if(freq <= 0.01)
     return 0;
-
   if(inffrq)
     dt = DM_CONST*dm/(freq*freq);
   else
     dt = DM_CONST*dm*(1.0/(freq*freq)-1.0/(freq_ref*freq_ref));
   return dt;
 }
-
-
-
-
-
 float calcRMAngle(float freq, float freq_ref, int inffrq, float rm)
 {
   float lambda, lambda2, phi;
@@ -54,8 +42,6 @@ float calcRMAngle(float freq, float freq_ref, int inffrq, float rm)
   }
   return phi;
 }
-
-
 void internal_mjd_A_to_year_month_day(long Z, int *year, int *month, int *day)
 {
   long A, B, C, D, E, a1, a2;

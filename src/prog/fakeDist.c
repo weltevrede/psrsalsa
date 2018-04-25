@@ -19,8 +19,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
 #include "psrsalsa.h"
-
-
 int main(int argc, char **argv)
 {
   psrsalsaApplication application;

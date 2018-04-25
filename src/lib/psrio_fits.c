@@ -16,51 +16,35 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define _FILE_OFFSET_BITS 64
 #define _USE_LARGEFILE 1
 #define _LARGEFILE_SOURCE 1
-
 #include <string.h>
 #include <math.h>
 #include "fitsio.h"
 #include "psrsalsa.h"
-
-
-static int psrfits_noweights = 0;
+static int psrfits_weightmode = 0;
 static int psrfits_use_weighted_freq = 0;
 static int psrfits_absweights = 0;
-
 void print_fitsio_version_used(FILE *stream)
 {
   float version;
   fprintf(stream, "%f (library) %f (header)", fits_get_version(&version), CFITSIO_VERSION);
 }
-
-
 void psrfits_set_noweights(int val)
 {
-  psrfits_noweights = val;
+  psrfits_weightmode = val;
 }
-
-
 void psrfits_set_absweights(int val)
 {
   psrfits_absweights = val;
 }
-
-
-
-
 void psrfits_set_use_weighted_freq(int val)
 {
   psrfits_use_weighted_freq = val;
 }
-
-
 void internalFITSscalePulse(float *pulse, long nrSamples, float *offset, float *scale, float maxvalue)
 {
   long i;
-
   *offset = pulse[0];
   for(i = 0; i < nrSamples; i++) {
-
     if(pulse[i] < *offset)
       *offset = pulse[i];
   }
@@ -71,11 +55,7 @@ void internalFITSscalePulse(float *pulse, long nrSamples, float *offset, float *
   }
   if(*scale == 0.0)
     *scale = 1;
-
 }
-
-
-
 int lookupSubintTable(datafile_definition datafile, verbose_definition verbose)
 {
   int ncols, status = 0;
@@ -87,7 +67,6 @@ int lookupSubintTable(datafile_definition datafile, verbose_definition verbose)
   }
   fits_get_num_rows(datafile.fits_fptr, &nrows, &status);
   fits_get_num_cols(datafile.fits_fptr, &ncols, &status);
-
   if(ncols < 19) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR lookupSubintTable: Table has not the correct size, was writePSRFITSHeader not called?");
@@ -95,16 +74,12 @@ int lookupSubintTable(datafile_definition datafile, verbose_definition verbose)
   }
   return 1;
 }
-
-
 int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose)
 {
   int status = 0;
   long i, n;
   int *data, dummy_int;
   float scale, offset, weight;
-
-
   if(datafile.gentype == GENTYPE_RECEIVERMODEL || datafile.gentype == GENTYPE_RECEIVERMODEL2) {
     if(fits_movnam_hdu(datafile.fits_fptr, BINARY_TBL, "FEEDPAR", 0, &status)) {
       fflush(stdout);
@@ -112,13 +87,11 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
       return 0;
     }
     for(n = binnr; n < binnr+nrSamples; n++) {
-
       if(datafile.gentype == GENTYPE_RECEIVERMODEL) {
  i = 1+freq*datafile.NrPols+polarization;
       }else if(datafile.gentype == GENTYPE_RECEIVERMODEL2) {
  i = 1+freq*(datafile.NrPols-2)+polarization;
       }
-
       if(n == 0) {
  if(datafile.gentype == GENTYPE_RECEIVERMODEL || polarization < datafile.NrPols-2) {
    if(fits_write_col(datafile.fits_fptr, TFLOAT, 3, 1+pulsenr, i, 1, &pulse[n-binnr], &status) != 0) {
@@ -128,7 +101,6 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
      return 0;
    }
  }
-
  if(datafile.gentype == GENTYPE_RECEIVERMODEL2 && polarization == datafile.NrPols-2 && n == 0) {
    if(fits_write_col(datafile.fits_fptr, TFLOAT, 5, 1+pulsenr, 1+freq, 1, &pulse[n-binnr], &status) != 0) {
      fflush(stdout);
@@ -137,7 +109,6 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
      return 0;
    }
  }
-
  if(datafile.gentype == GENTYPE_RECEIVERMODEL2 && polarization == datafile.NrPols-1 && n == 0) {
    dummy_int = pulse[n-binnr];
    if(fits_write_col(datafile.fits_fptr, TINT, 6, 1+pulsenr, 1+freq, 1, &dummy_int, &status) != 0) {
@@ -166,13 +137,11 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
     data = (int *)malloc(datafile.NrBins*sizeof(int));
     if(data == NULL)
       return 0;
-
     if(lookupSubintTable(datafile, verbose) == 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR writeFITSpulse: Cannot move to subint table.");
       return 0;
     }
-
     double period;
     int ret;
     if(datafile.isFolded) {
@@ -190,18 +159,15 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
       printerror(verbose.debug, "ERROR writeFITSpulse: This function is not working properly for search mode data. Write out whole subints instead of per channel data.");
       return 0;
     }
-
     if(binnr != 0 || nrSamples != datafile.NrBins) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR writeFITSpulse: Can not write out less than a full period at a time in PSRFITS output (trying to write %ld samples out of %ld bins starting at position %ld).", nrSamples, datafile.NrBins, binnr);
       return 0;
     }
-
     internalFITSscalePulse(pulse, nrSamples, &offset, &scale, 32767);
     for(i = 0; i < nrSamples; i++) {
       data[i] = (pulse[i]-offset)/scale;
     }
-
     if(datafile.gentype != GENTYPE_SEARCHMODE && datafile.isFolded == 1 && ret == 0 && period >= 0) {
       i = 1+polarization*datafile.NrBins*datafile.NrFreqChan+freq*datafile.NrBins+binnr;
       if(fits_write_col(datafile.fits_fptr, TINT, 18, 1+pulsenr, i, nrSamples, data, &status) != 0) {
@@ -213,7 +179,6 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
      printerror(verbose.debug, "ERROR writeFITSpulse: Sample %ld: %f", i+1, pulse[i]);
      break;
    }
-
  }
  return 0;
       }
@@ -358,15 +323,73 @@ int readFITSpulse_receivermodel(datafile_definition *datafile, long pulsenr, int
   }
   return 1;
 }
+void determineWeightsStat(datafile_definition *datafile, int *zeroweightfound, int *differentweights, int *negativeweights, float *weightvalue)
+{
+  int firstnonzeroweight = 1;
+  long n;
+  *zeroweightfound = 0;
+  *differentweights = 0;
+  *negativeweights = 0;
+  for(n = 0; n < datafile->NrSubints*datafile->NrFreqChan; n++) {
+    if(datafile->weights[n] < 0) {
+      *negativeweights = 1;
+    }
+    if(datafile->weights[n] == 0.0) {
+      *zeroweightfound = 1;
+    }else {
+      if(firstnonzeroweight) {
+ *weightvalue = datafile->weights[n];
+ firstnonzeroweight = 0;
+      }else if(datafile->weights[n] != *weightvalue) {
+ *differentweights = 1;
+      }
+    }
+  }
+}
 int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose)
 {
   int status = 0;
   int ncols, anynul, ret, colnum;
-  long nrows, i, istart, iend, bstart, bsample;
+  long nrows, i, istart, bstart, bsample;
   int *data;
-  unsigned char *data_byte, singlebyte;
+  unsigned char singlebyte;
   if(datafile->gentype == GENTYPE_RECEIVERMODEL || datafile->gentype == GENTYPE_RECEIVERMODEL2) {
     return readFITSpulse_receivermodel(datafile, pulsenr, polarization, freq, binnr, nrSamples, pulse, verbose);
+  }
+  int weightmode;
+  weightmode = 0;
+  int zeroweightfound;
+  int differentweights;
+  int negativeweights;
+  float weightvalue;
+  determineWeightsStat(datafile, &zeroweightfound, &differentweights, &negativeweights, &weightvalue);
+  if(pulsenr == 0 && polarization == 0 && freq == 0 && binnr == 0) {
+    if(psrfits_weightmode == 1) {
+      printwarning(verbose.debug, "WARNING: The data is NOT multiplied with the weight, even when set to zero. This might undo any zapping done and avoids introducing artificial intensity fluctuations IF the data is written as the weighted average rather than the sum. This will not be ideal when summing data at a later stage.");
+    }else if(psrfits_weightmode == 2) {
+      printwarning(verbose.debug, "WARNING: The data is NOT multiplied with the weight, unless when zero. This might avoid introducing artificial intensity fluctuations IF the data is written as the weighted average rather than the sum. This will not be ideal when summing data at a later stage.");
+    }else if(psrfits_weightmode == 3) {
+      printwarning(verbose.debug, "WARNING: Data will be multiplied with the weight. This might be benificial when summing data at a later stage IF the data is written as the weighted average rather than the sum. However, it might introduce artificial intensity fluctuations as well.");
+    }
+  }
+  if(datafile->NrFreqChan == 1) {
+    if(psrfits_weightmode == 0) {
+      if(differentweights && pulsenr == 0 && polarization == 0 && freq == 0 && binnr == 0) {
+ printwarning(verbose.debug, "WARNING: FITS file contains data with different weights. For data with only one frequency channel the data is NOT multiplied with the weight if it is nonzero. This avoids introducing artificial intensity fluctuations IF the data is written as the weighted average rather than the sum. This will not be ideal when summing data at a later stage. Use the -useweights option to multiply the data with the weights.");
+      }
+      weightmode = 2;
+    }else {
+      weightmode = psrfits_weightmode;
+    }
+  }else {
+    if(psrfits_weightmode == 0) {
+      if(differentweights && pulsenr == 0 && polarization == 0 && freq == 0 && binnr == 0) {
+ printwarning(verbose.debug, "WARNING: FITS file contains data with different weights. For data with multiple frequency channels the data is multiplied with the weight. This might be benificial when summing data at a later stage IF the data is written as the weighted average rather than the sum. However, it might introduce artificial intensity fluctuations as well. Use the -uniformweights to take the weights equal.");
+      }
+      weightmode = 3;
+    }else {
+      weightmode = psrfits_weightmode;
+    }
   }
   data = (int *)malloc(datafile->NrBins*sizeof(int));
   if(data == NULL) {
@@ -374,7 +397,6 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
     printerror(verbose.debug, "ERROR readFITSpulse: Cannot allocate memory");
     return 0;
   }
-  data_byte = (unsigned char *)data;
   fits_get_num_rows(datafile->fits_fptr, &nrows, &status);
   fits_get_num_cols(datafile->fits_fptr, &ncols, &status);
   if(psrfits_use_weighted_freq) {
@@ -398,7 +420,7 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
       return 0;
     }
   }
-  if(fits_get_colnum (datafile->fits_fptr, CASEINSEN, "DATA", &colnum, &status)) {
+  if(fits_get_colnum(datafile->fits_fptr, CASEINSEN, "DATA", &colnum, &status)) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readFITSpulse: No data in fits file?");
     return 0;
@@ -406,7 +428,6 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
   ret = 0;
   if(datafile->NrBits == 16) {
     istart = polarization*datafile->NrBins*datafile->NrFreqChan+freq*datafile->NrBins+binnr;
-    iend = polarization*datafile->NrBins*datafile->NrFreqChan+freq*datafile->NrBins+binnr+(nrSamples-1);
     if(!fits_read_col(datafile->fits_fptr, TINT, colnum, 1+pulsenr, 1+istart, nrSamples, NULL, data, &anynul, &status)) {
       ret = 1;
     }
@@ -458,10 +479,13 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
  }
  pulse[i] = datafile->scales[pulsenr*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq]*(singlebyte) + datafile->offsets[pulsenr*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq];
       }
-      if(psrfits_noweights == 0 && psrfits_absweights == 0) {
+      if(weightmode == 3 && psrfits_absweights == 0) {
  pulse[i] *= datafile->weights[pulsenr*datafile->NrFreqChan+freq];
-      }else if(psrfits_noweights == 0 && psrfits_absweights != 0) {
+      }else if(weightmode == 3 && psrfits_absweights != 0) {
  pulse[i] *= fabs(datafile->weights[pulsenr*datafile->NrFreqChan+freq]);
+      }else if(weightmode == 2) {
+ if(datafile->weights[pulsenr*datafile->NrFreqChan+freq] == 0.0)
+ pulse[i] = 0;
       }
     }
   }
@@ -496,7 +520,7 @@ int readPSRCHIVE_ASCIIHeader(datafile_definition *datafile, verbose_definition v
   }
   if(set_psrname_PSRData(datafile, psrname, verbose) == 0) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readDeshHeader: Setting pulsar name failed.");
+    printerror(verbose.debug, "ERROR readPSRCHIVE_ASCIIHeader: Setting pulsar name failed.");
     return 0;
   }
   datafile->isFolded = 1;
@@ -631,12 +655,28 @@ int readPSRFITSscales(datafile_definition *datafile, verbose_definition verbose)
       }
     }
   }
-  for(n = 0; n < datafile->NrSubints*datafile->NrFreqChan; n++) {
-    if(datafile->weights[n] < 0) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING: Found negative weights in fits file, so probably fits file is corrupted. You might want to use the -absweights option.");
-      break;
-    }
+  int zeroweightfound;
+  int differentweights;
+  int negativeweights;
+  float weightvalue;
+  determineWeightsStat(datafile, &zeroweightfound, &differentweights, &negativeweights, &weightvalue);
+  if(negativeweights) {
+    fflush(stdout);
+    printwarning(verbose.debug, "WARNING: Found negative weights in fits file, so probably fits file is corrupted. You might want to use the -absweights option.");
+  }
+  if(zeroweightfound && verbose.verbose) {
+    printf("FITS file contains zero-weighted data. By default this is applied, unless the -noweights option is used.\n");
+  }
+  if(differentweights == 0 && (verbose.debug || weightvalue != 1.0)) {
+    printf("FITS file contains uniform weights with a value %f", weightvalue);
+    if(zeroweightfound)
+      printf(" (appart from zero weights).\n");
+    else
+      printf("\n");
+  }
+  if(differentweights) {
+    fflush(stdout);
+    printwarning(verbose.debug, "WARNING: FITS file contains data with different weights. Make sure it is used as desired.");
   }
   return ret;
 }

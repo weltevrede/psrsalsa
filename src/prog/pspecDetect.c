@@ -17,7 +17,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <string.h>
 #include <math.h>
 #include "psrsalsa.h"
-
 double f2_min, f2_max, f3_min, f3_max, fl_min, fl_max, f2n_min, f2n_max, f3n_min, f3n_max;
 double twodsf_Imin;
 double I_noise_max, I_noise_min;
@@ -30,21 +29,15 @@ int SelectedComponent;
 int Centered;
 int KeyCode;
 datafile_definition twodfs, lrfs, AverageProfile, noise;
-
-
 #define Max_nr_noise_patches 100
 #define MaxNrNoiseBins 100
-
 int f2npatch_min[Max_nr_noise_patches],f2npatch_max[Max_nr_noise_patches],f3npatch_min[Max_nr_noise_patches],f3npatch_max[Max_nr_noise_patches];
 int nr_noise_patches;
-
-
 void PlotWindow(verbose_definition verbose);
 int MakeSelection(double sigma_noise);
 void SelectRegion();
 double calculate_noise_sigma(void);
 void calculate_2dfs_Centroid(double sigma_noise, verbose_definition verbose);
-
 int main(int argc, char **argv)
 {
   int i, xi, yi, index;
@@ -52,14 +45,10 @@ int main(int argc, char **argv)
   char filename[1000], txt[1000], *input_filename_ptr;
   double sigma_noise;
   psrsalsaApplication application;
-
   initApplication(&application, "pspecDetect", "[options] pulse_stack,\nwhere pulse_stack is the file name of the pulse stack that has been processed by\npspec to produce the 2DFS and LRFS.");
-
-
   application.switch_verbose = 1;
   application.switch_debug = 1;
   application.switch_device = 1;
-
   cleanPSRData(&twodfs, application.verbose_state);
   cleanPSRData(&lrfs, application.verbose_state);
   cleanPSRData(&AverageProfile, application.verbose_state);
@@ -68,7 +57,6 @@ int main(int argc, char **argv)
   closePSRData(&lrfs, 0, application.verbose_state);
   closePSRData(&AverageProfile, 0, application.verbose_state);
   closePSRData(&noise, 0, application.verbose_state);
-
   SelectedPlot = 0;
   sigma_noise = 0;
   centroid_calculated = 0;
@@ -76,7 +64,6 @@ int main(int argc, char **argv)
   SelectedComponent = 1;
   Centered = 1;
   PlotAvrgProfile = 1;
-
   if(argc < 2) {
     printf("Interactive program designed to analyse features in the 2DFS to obtain\ncentroid P2 and P3 values and corresponding error-bars.\n\n");
     printApplicationHelp(&application);
@@ -94,7 +81,6 @@ int main(int argc, char **argv)
       if(processCommandLine(&application, argc, argv, &index)) {
  i = index;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "pspecDetect: Unknown option: %s\n\nRun pspecDetect without command line arguments to show help", argv[i]);
    terminateApplication(&application);
@@ -106,8 +92,6 @@ int main(int argc, char **argv)
       }
     }
   }
-
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
@@ -115,10 +99,7 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR pspecDetect: No files specified");
     return 0;
   }
-
-
   input_filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state);
-
   sprintf(txt, "%d.2dfs", 1);
   if(change_filename_extension(input_filename_ptr, filename, txt, 1000, application.verbose_state) == 0) {
     return 0;
@@ -145,17 +126,8 @@ int main(int argc, char **argv)
   }
   if(application.verbose_state.verbose)
     printf("%ldx%ld points read from 2dfs\n", twodfs.NrBins, twodfs.NrSubints);
-
-
-
-
-
-
-
   if(preprocess_polselect(twodfs, &noise, 0, application.verbose_state) != 1)
     exit(0);
-
-
   sprintf(txt, "lrfs");
   if(change_filename_extension(input_filename_ptr, filename, txt, 1000, application.verbose_state) == 0) {
     return 0;
@@ -176,8 +148,6 @@ int main(int argc, char **argv)
   }
   fl_min = 0;
   fl_max = lrfs.NrBins-1;
-
-
   if(application.verbose_state.verbose)
     printf("Reading %s\n", filename);
   if(!openPSRData(&AverageProfile, input_filename_ptr, 0, 0, 0, 0, application.verbose_state))
@@ -193,9 +163,6 @@ int main(int argc, char **argv)
     return 0;
   if(AverageProfile.NrBins != lrfs.NrBins) {
     printwarning(application.verbose_state.debug, "WARNING: It looks like data is rebinned? Check the units.");
-
-
-
     datafile_definition clone;
     AverageProfile.format = MEMORY_format;
     AverageProfile.NrPols = 1;
@@ -208,17 +175,13 @@ int main(int argc, char **argv)
     swap_orig_clone(&AverageProfile, &clone, application.verbose_state);
     printwarning(application.verbose_state.debug, "WARNING: Assuming the number of bins = %ld and the sampling time = %lf s.", AverageProfile.NrBins, AverageProfile.fixedtsamp);
   }
-
   if(application.verbose_state.verbose)
     printf("%ld points read from avgprof\n\n", AverageProfile.NrBins);
-
   f2_min = f2n_min = -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
   f2_max = f2n_max = +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
   f3_min = 0;
   f3n_min = 0;
   f3_max = f3n_max = 0.5;
-
-
   ppgopen(application.pgplotdevice);
   ppgask(0);
   ppgslw(1);

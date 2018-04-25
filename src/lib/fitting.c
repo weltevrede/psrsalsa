@@ -18,6 +18,5 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "psrsalsa.h"
 void print_gsl_version_used(FILE *stream)
 {
-
   fprintf(stream, "%s (header) %.2f (specified during compilation)", GSL_VERSION, GSL_VERSION_NUMBER/100.0);
 }

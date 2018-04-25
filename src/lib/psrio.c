@@ -20,7 +20,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <errno.h>
 #include <unistd.h>
 #include "psrsalsa.h"
-
 int readWSRTHeader(datafile_definition *datafile, verbose_definition verbose);
 int readPulseWSRTData(datafile_definition datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse);
 int writePulseWSRTData(datafile_definition datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse);
@@ -44,7 +43,6 @@ int writeEPNfile(datafile_definition datafile, float *data, verbose_definition v
 int readEPNfile(datafile_definition *datafile, float *data, verbose_definition verbose, long request_only_one_pulse);
 int readEPNsubHeader(datafile_definition *datafile, float *scale, float *offset, verbose_definition verbose);
 int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose);
-
 int readPulseSigprocData(datafile_definition datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose);
 int readPPOLHeader(datafile_definition *datafile, int extended, verbose_definition verbose);
 int writePPOLHeader(datafile_definition datafile, int argc, char **argv, verbose_definition verbose);
@@ -59,10 +57,6 @@ int readSigprocASCIIHeader(datafile_definition *datafile, verbose_definition ver
 int writeSigprocASCIIHeader(datafile_definition datafile, verbose_definition verbose);
 int writeSigprocASCIIfile(datafile_definition datafile, float *data, verbose_definition verbose);
 int readSigprocASCIIfile(datafile_definition datafile, float *data, verbose_definition verbose);
-
-
-
-
 int isValidPSRDATA_format(int format)
 {
   if(format == PUMA_format)
@@ -88,10 +82,6 @@ int isValidPSRDATA_format(int format)
   printerror(0, "ERROR isValidPSRDATA_format: specified data format is not recognized.");
   return 0;
 }
-
-
-
-
 void printPSRDataFormats(FILE *printdevice, int nrspaces)
 {
   int i, nrspaces2;
@@ -125,9 +115,6 @@ void printPSRDataFormats(FILE *printdevice, int nrspaces)
   for(i = 0; i < nrspaces; i++) fprintf(printdevice, " ");
   fprintf(printdevice, "(PSRSALSA)     - PSRSALSA binary format\n");
 }
-
-
-
 int parsePSRDataFormats(char *cmd)
 {
   if(strcasecmp(cmd, "ASCII") == 0 || atoi(cmd) == PSRCHIVE_ASCII_format)
@@ -155,10 +142,6 @@ int parsePSRDataFormats(char *cmd)
   }
   return 0;
 }
-
-
-
-
 void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
 {
   memset(datafile, 0, sizeof(datafile_definition));
@@ -174,9 +157,7 @@ void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
   datafile->opened_flag = 0;
   datafile->enable_write_flag = 0;
   datafile->dumpOnClose = 0;
-
   datafile->filename = malloc(1);
-
   if(datafile->filename == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR cleanPSRData: Memory allocation error.");
@@ -201,7 +182,6 @@ void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
     printerror(verbose.debug, "ERROR cleanPSRData: Memory allocation error.");
     exit(0);
   }
-
   datafile->tsub_list[0] = 0;
   datafile->freq_ref = -2;
   datafile->freqMode = FREQMODE_UNKNOWN;
@@ -2201,6 +2181,7 @@ static char * internal_gentype_string_2dfs = "2DFS";
 static char * internal_gentype_string_s2dfsp3 = "S2DFS P3 map";
 static char * internal_gentype_string_s2dfsp2 = "S2DFS P2 map";
 static char * internal_gentype_string_p3fold = "P3 fold";
+static char * internal_gentype_string_polarmap = "Polar map";
 static char * internal_gentype_string_lrcc = "LRCC";
 static char * internal_gentype_string_lrac = "LRAC";
 static char * internal_gentype_string_padist = "PA distr.";
@@ -2228,6 +2209,7 @@ char *returnGenType_str(int gentype)
   case GENTYPE_S2DFSP3: return internal_gentype_string_s2dfsp3; break;
   case GENTYPE_S2DFSP2: return internal_gentype_string_s2dfsp2; break;
   case GENTYPE_P3FOLD: return internal_gentype_string_p3fold; break;
+  case GENTYPE_POLARMAP: return internal_gentype_string_polarmap; break;
   case GENTYPE_LRCC: return internal_gentype_string_lrcc; break;
   case GENTYPE_LRAC: return internal_gentype_string_lrac; break;
   case GENTYPE_PADIST: return internal_gentype_string_padist; break;
@@ -3046,8 +3028,7 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
 }
 int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int cmdOnly, verbose_definition verbose)
 {
-  int i, debug, ret;
-  debug = 0;
+  int i, ret;
   if(datafile->format == PSRSALSA_BINARY_format) {
     if(verbose.verbose) {
       for(i = 0; i < verbose.indent; i++)
@@ -3206,9 +3187,11 @@ int readPSRData(datafile_definition *datafile, float *data, verbose_definition v
     return readPSRCHIVE_ASCIIfile(*datafile, data, verbose);
   else if(datafile->format == EPN_format)
     return readEPNfile(datafile, data, verbose, -1);
-  else if(datafile->format == FITS_format)
-    return readFITSfile(datafile, data, verbose);
-  else if(datafile->format == PPOL_format)
+  else if(datafile->format == FITS_format) {
+    int ret;
+    ret = readFITSfile(datafile, data, verbose);
+    return ret;
+  }else if(datafile->format == PPOL_format)
     return readPPOLfile(datafile, data, 1, 0, verbose);
   else if(datafile->format == PPOL_SHORT_format)
     return readPPOLfile(datafile, data, 0, 0, verbose);
@@ -3254,7 +3237,7 @@ int read_profilePSRData(datafile_definition datafile, float *profileI, int *zapM
 int read_partprofilePSRData(datafile_definition datafile, float *profileI, int *zapMask, int polchan, long nskip, long nread, verbose_definition verbose)
 {
   int zap;
-  long i, j, k, l;
+  long i, j, k;
   float *data;
   if(verbose.verbose) printf("Generating average pulse profile (polarization channel %d)\n", polchan);
   data = (float *)malloc(datafile.NrBins*sizeof(float));
@@ -3280,7 +3263,6 @@ int read_partprofilePSRData(datafile_definition datafile, float *profileI, int *
    profileI[j] += data[j];
  }
       }
-      l = (i-nskip)/10;
     }
   }
   free(data);
@@ -3288,7 +3270,7 @@ int read_partprofilePSRData(datafile_definition datafile, float *profileI, int *
 }
 int read_rmsPSRData(datafile_definition datafile, float *rms, float *avrg, int *zapMask, pulselongitude_regions_definition *regions, int invert, int polchan, int freqchan, verbose_definition verbose)
 {
-  long i, j, k, l, freq0, freq1;
+  long i, j, k, freq0, freq1;
   float *data;
   double *rms_double, *avrg_double;
   int nrOffpulseBins, zap, zap2;
@@ -3340,7 +3322,6 @@ int read_rmsPSRData(datafile_definition datafile, float *rms, float *avrg, int *
    avrg_double[i] += data[j];
  }
       }
-      l = i/10;
     }
   }
   if(freqchan == 0) {
@@ -3368,7 +3349,7 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
   char identifier[100], value[100], txt[100];
   ok = 0;
   for(i = 1; i < argc - 1; i++) {
-    if(strcmp(argv[i], "-header") == 0) {
+    if(strcmp(argv[i], "-header") == 0 || strcmp(argv[i], "-headerUFL") == 0) {
       ok = 1;
     }
   }
@@ -3685,6 +3666,8 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
    return 0;
  }
       }
+    }else if(strcmp(argv[i], "-headerUFL") == 0) {
+      force_uniform_frequency_spacing(psrdata, verbose);
     }
   }
   if(ok && verbose.verbose) {
@@ -3757,10 +3740,6 @@ void printHeaderGentypeOptions(FILE *printdevice)
   fprintf(printdevice, "  %3d           Sliding 2DFS (P3).\n", GENTYPE_S2DFSP3);
   fprintf(printdevice, "  %3d           Sliding 2DFS (P2).\n", GENTYPE_S2DFSP2);
   fprintf(printdevice, "  %3d           P3 fold.\n", GENTYPE_P3FOLD);
-  fprintf(printdevice, "  %3d           LRCC.\n", GENTYPE_LRCC);
-  fprintf(printdevice, "  %3d           RM map.\n", GENTYPE_RMMAP);
-  fprintf(printdevice, "  %3d           Position angle distribution.\n", GENTYPE_PADIST);
-  fprintf(printdevice, "  %3d           Ellipticity angle distribution.\n", GENTYPE_ELLDIST);
   fprintf(printdevice, "  %3d           Receiver model.\n", GENTYPE_RECEIVERMODEL);
   fprintf(printdevice, "  %3d           Receiver model with chi^2 and nfree.\n", GENTYPE_RECEIVERMODEL2);
 }
@@ -4195,7 +4174,7 @@ int convert_if_uniform_frequency_spacing(datafile_definition *datafile, verbose_
   }
   if(datafile->freqMode != FREQMODE_FREQTABLE) {
     if(verbose.debug) {
-      printf("  Data does not have frequency defined for separate channels, so nothing is done\n");
+      printf("  Data does not have frequency defined for separate channels/subintegrations, so nothing is done\n");
     }
     return 1;
   }
@@ -4214,13 +4193,13 @@ int convert_if_uniform_frequency_spacing(datafile_definition *datafile, verbose_
  freq_prev = freq;
       }else if(freqchan == 0 && subint != 0) {
  if(fabs(freq - freq_first) > 1e-6) {
-   printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf != %lf for first channels of subint 0 and %ld). You can expect problems. Warnings for other channels are suppressed.", datafile->filename, freq, freq_first, subint);
+   printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf != %lf for first channels of subint 0 and %ld). Some operations might might not work with this data. Warnings for other channels are suppressed.", datafile->filename, freq, freq_first, subint);
    return 2;
  }
  freq_prev = freq;
       }else {
  if(fabs(freq-freq_prev - df_expected) > 1e-6) {
-   printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf - %lf != %lf for channel %ld and subint %ld). You can expect problems. Warnings for other channels are suppressed.", datafile->filename, freq, freq_prev, df_expected, freqchan, subint);
+   printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf - %lf != %lf for channel %ld and subint %ld). Some operations might might not work with this data. Warnings for other channels are suppressed.", datafile->filename, freq, freq_prev, df_expected, freqchan, subint);
    return 2;
  }
  freq_prev = freq;
@@ -4272,5 +4251,22 @@ int convert_if_uniform_frequency_spacing(datafile_definition *datafile, verbose_
       }
     }
   }
+  return 3;
+}
+int force_uniform_frequency_spacing(datafile_definition *datafile, verbose_definition verbose)
+{
+  if(verbose.debug) {
+    printf("Force channels to be uniformly distributed in frequency\n");
+  }
+  if(datafile->freqMode != FREQMODE_FREQTABLE) {
+    if(verbose.debug) {
+      printf("  Data does not have frequency defined for separate channels/subintegrations, so nothing is done\n");
+    }
+    return 1;
+  }
+  free(datafile->freqlabel_list);
+  datafile->freqlabel_list = NULL;
+  datafile->freqMode = FREQMODE_UNIFORM;
+  printwarning(verbose.debug, "WARNING (%s): Re-labelling frequency channels to be uniformly distributed and forcing them to be the same for each subintegration. Expect all frequency dependent effects to be wrong.", datafile->filename);
   return 3;
 }

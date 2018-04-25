@@ -27,15 +27,11 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <fcntl.h>
 #include <errno.h>
 #include <math.h>
-
-
-
 int pgetch(void)
 {
   char ch;
   int fd = fileno(stdin);
   struct termio old_tty, new_tty;
-
   ioctl(fd, TCGETA, &old_tty);
   new_tty = old_tty;
   new_tty.c_lflag &= ~(ICANON | ECHO | ISIG);
@@ -54,21 +50,12 @@ int pgetch(void)
     fprintf(stderr, "Sending suspend signal. Program is not terminated.\n");
     raise(SIGTSTP);
   }
-
   return ch;
 }
-
-
-
-
-
-
-
 int pgetch_macro(psrsalsaApplication *application, verbose_definition verbose)
 {
   int key;
   int ctrlstate;
-
   ctrlstate = 0;
   do {
     if(application->macro_ptr == NULL) {
@@ -92,7 +79,6 @@ int pgetch_macro(psrsalsaApplication *application, verbose_definition verbose)
       }
     }
   }while(key == '\n' || key == '\r' || key == '^' || key == EOF);
-
   if(ctrlstate) {
     if(key == 'c' || key == 'C') {
       fflush(stdout);
@@ -107,35 +93,22 @@ int pgetch_macro(psrsalsaApplication *application, verbose_definition verbose)
       return 0;
     }
   }
-
   return key;
 }
-
-
-
-
-
 char *who_am_i (void)
 {
   struct passwd *pw;
   char *user = NULL;
-
   pw = getpwuid (geteuid ());
   if (pw) {
     user = pw->pw_name;
   }else if ((user = getenv ("USER")) == NULL) {
-
     fflush(stdout);
     fprintf (stderr, "ERROR: who_am_i failed to retrieve user name from USER environment variable.");
     return NULL;
   }
   return user;
 }
-
-
-
-
-
 void constructCommandLineString(char *txt, int length, int argc, char **argv, verbose_definition verbose)
 {
   int i;
@@ -156,19 +129,13 @@ void constructCommandLineString(char *txt, int length, int argc, char **argv, ve
       strcat(txt, " ");
   }
 }
-
-
-
-
 int getMachinename(char *hostname, int size, verbose_definition verbose)
 {
   struct hostent* h;
   hostname[size-1] = '\0';
   if(gethostname(hostname, size-1) == 0) {
-
     h = gethostbyname(hostname);
     if(h != NULL) {
-
       strncpy(hostname, h->h_name, size-1);
     }
     return 1;
@@ -304,7 +271,7 @@ int ascii_file_get_next_line(FILE *fin, char *txt, int maxlinelength, int skipCh
 }
 int ascii_file_stats(FILE *fin, char skipChar, long *nrlines, int maxlinelength, int autoNrColumns, int *nrColumns, verbose_definition verbose)
 {
-  char *txt, *word_ptr;
+  char *txt;
   int nrwords, ret;
   txt = malloc(maxlinelength);
   if(txt == NULL) {
@@ -316,7 +283,7 @@ int ascii_file_stats(FILE *fin, char skipChar, long *nrlines, int maxlinelength,
   do {
     ret = ascii_file_get_next_line(fin, txt, maxlinelength, skipChar, verbose);
     if(ret != 0) {
-      word_ptr = pickWordFromString(txt, 1, &nrwords, 1, ' ', verbose);
+      pickWordFromString(txt, 1, &nrwords, 1, ' ', verbose);
       if(autoNrColumns != 0 && *nrlines == 0) {
  *nrColumns = nrwords;
       }else {
@@ -608,6 +575,245 @@ int read_ascii_column_double(char *fname, int skiplines, char skipChar, int nrCo
     *maxdata = maxx;
   if(avdata != NULL)
     *avdata = sumx/(double)(*nrdatapoints);
+  return 1;
+}
+int read_ascii_column_int(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, int **data, int *mindata, int *maxdata, double *avdata, verbose_definition verbose, int verbose_stderr)
+{
+  FILE *fin, *verbose_stream;
+  long i, j, n, fpos, maxlinelength, linenr;
+  int nrwords, ret;
+  char *txt, *word_ptr;
+  long minx, maxx, sumx;
+  maxlinelength = 10240+1;
+  if(verbose_stderr) {
+    fflush(stdout);
+    verbose_stream = stderr;
+  }else {
+    verbose_stream = stdout;
+  }
+  fin = fopen(fname, "r");
+  if(fin == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_int: Cannot open %s", fname);
+    return 0;
+  }else {
+    if(verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      fflush(stdout);
+      fprintf(verbose_stream, "Opened file '%s'\n", fname);
+    }
+  }
+  if(skipLinesInFile(fin, skiplines, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_int: Reached EOF while skipping first %d lines", skiplines);
+    return 0;
+  }
+  fpos = ftell(fin);
+  txt = malloc(maxlinelength);
+  if(txt == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_int: Cannot allocate temporary memory");
+    return 0;
+  }
+  if(ascii_file_stats(fin, skipChar, nrdatapoints, maxlinelength, autoNrColumns, &nrColumns, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_int: Error in determining the nr of lines");
+    free(txt);
+    return 0;
+  }
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    fflush(stdout);
+    fprintf(verbose_stream, "  There are %ld datapoints\n", *nrdatapoints);
+    if(autoNrColumns) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      fprintf(verbose_stream, "  There are %d columns\n", nrColumns);
+    }
+  }
+  *data = (int *)malloc((*nrdatapoints)*sizeof(int));
+  if(*data == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_int: Memory allocation error");
+    free(txt);
+    return 0;
+  }
+  fseek(fin, fpos, SEEK_SET);
+  minx = maxx = 0;
+  sumx = 0;
+  n = 0;
+  linenr = 0;
+  do {
+    ret = ascii_file_get_next_line(fin, txt, maxlinelength, skipChar, verbose);
+    if(ret != 0) {
+      linenr += ret;
+      word_ptr = pickWordFromString(txt, colnum, &nrwords, 1, ' ', verbose);
+      if(n >= *nrdatapoints) {
+ fflush(stdout);
+ printerror(verbose.debug, "read_ascii_column_int: Nr of lines in file changed?????");
+ free(txt);
+ free(*data);
+ return 0;
+      }
+      if(word_ptr == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "read_ascii_column_int: Cannot find column %d on line %ld", colnum, linenr);
+ free(txt);
+ free(*data);
+ return 0;
+      }
+      j = sscanf(word_ptr, "%d", &((*data)[n]));
+      if(j != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "read_ascii_column_int: Cannot interpret column %d on line %ld as a int", colnum, linenr);
+ free(txt);
+ free(*data);
+ return 0;
+      }
+      if((*data)[n] < minx || n == 0) {
+ minx = (*data)[n];
+      }
+      if((*data)[n] > maxx || n == 0) {
+ maxx = (*data)[n];
+      }
+      sumx += (*data)[n];
+      n++;
+    }
+  }while(ret != 0);
+  free(txt);
+  fclose(fin);
+  if(verbose.verbose) {
+    fflush(stdout);
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    fflush(stdout);
+    fprintf(verbose_stream, "  %ld points loaded from %s with values between %ld and %ld\n", *nrdatapoints, fname, minx, maxx);
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    fprintf(verbose_stream, "  Average value = %lf\n", sumx/(double)(*nrdatapoints));
+  }
+  if(mindata != NULL)
+    *mindata = minx;
+  if(maxdata != NULL)
+    *maxdata = maxx;
+  if(avdata != NULL)
+    *avdata = sumx/(double)(*nrdatapoints);
+  return 1;
+}
+int read_ascii_column_str(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, char ***data, verbose_definition verbose, int verbose_stderr)
+{
+  FILE *fin, *verbose_stream;
+  long i, n, fpos, maxlinelength, linenr;
+  int nrwords, ret;
+  char *txt, *word, *word_ptr;
+  maxlinelength = 10240+1;
+  if(verbose_stderr) {
+    fflush(stdout);
+    verbose_stream = stderr;
+  }else {
+    verbose_stream = stdout;
+  }
+  fin = fopen(fname, "r");
+  if(fin == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_str: Cannot open %s", fname);
+    return 0;
+  }else {
+    if(verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      fflush(stdout);
+      fprintf(verbose_stream, "Opened file '%s'\n", fname);
+    }
+  }
+  if(skipLinesInFile(fin, skiplines, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_str: Reached EOF while skipping first %d lines", skiplines);
+    return 0;
+  }
+  fpos = ftell(fin);
+  txt = malloc(maxlinelength);
+  word = malloc(maxlinelength);
+  if(txt == NULL || word == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_str: Cannot allocate temporary memory");
+    return 0;
+  }
+  if(ascii_file_stats(fin, skipChar, nrdatapoints, maxlinelength, autoNrColumns, &nrColumns, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_str: Error in determining the nr of lines");
+    free(txt);
+    free(word);
+    return 0;
+  }
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    fflush(stdout);
+    fprintf(verbose_stream, "  There are %ld datapoints\n", *nrdatapoints);
+    if(autoNrColumns) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      fprintf(verbose_stream, "  There are %d columns\n", nrColumns);
+    }
+  }
+  *data = (char **)malloc((*nrdatapoints)*sizeof(char *));
+  if(*data == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "read_ascii_column_str: Memory allocation error");
+    free(word);
+    free(txt);
+    return 0;
+  }
+  fseek(fin, fpos, SEEK_SET);
+  n = 0;
+  linenr = 0;
+  do {
+    ret = ascii_file_get_next_line(fin, txt, maxlinelength, skipChar, verbose);
+    if(ret != 0) {
+      linenr += ret;
+      word_ptr = pickWordFromString(txt, colnum, &nrwords, 1, ' ', verbose);
+      if(n >= *nrdatapoints) {
+ fflush(stdout);
+ printerror(verbose.debug, "read_ascii_column_str: Nr of lines in file changed?????");
+ free(word);
+ free(txt);
+ free(*data);
+ return 0;
+      }
+      if(word_ptr == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "read_ascii_column_str: Cannot find column %d on line %ld", colnum, linenr);
+ free(word);
+ free(txt);
+ free(*data);
+ return 0;
+      }
+      sscanf(word_ptr, "%s", word);
+      (*data)[n] = (char *)malloc(strlen(word)+1);
+      if((*data)[n] == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "read_ascii_column_str: Memory allocation error");
+ free(word);
+ free(txt);
+ return 0;
+      }
+      strcpy((*data)[n], word);
+      n++;
+    }
+  }while(ret != 0);
+  free(word);
+  free(txt);
+  fclose(fin);
+  if(verbose.verbose) {
+    fflush(stdout);
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    fflush(stdout);
+    fprintf(verbose_stream, "  %ld words loaded from %s\n", *nrdatapoints, fname);
+  }
   return 1;
 }
 char *str_replace(char *orig, char *rep, char *with, verbose_definition verbose)

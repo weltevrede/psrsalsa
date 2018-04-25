@@ -14,8 +14,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 */
 
 #include <math.h>
-
-
 float derotate_deg(float a)
 {
   int i;
@@ -28,9 +26,6 @@ float derotate_deg(float a)
     a += 360;
   return a;
 }
-
-
-
 float derotate_180(float a)
 {
   int i;
@@ -43,9 +38,6 @@ float derotate_180(float a)
     a += 180;
   return a;
 }
-
-
-
 double derotate_180_double(double a)
 {
   int i;
@@ -58,8 +50,18 @@ double derotate_180_double(double a)
     a += 180;
   return a;
 }
-
-
+double derotate_180_rad_double(double a)
+{
+  int i;
+  i = fabs(a)/M_PI;
+  if(a > 0)
+    a -= M_PI*i;
+  else
+    a += M_PI*i;
+  if(a < 0)
+    a += M_PI;
+  return a;
+}
 float derotate_90(float a)
 {
   int i;
@@ -72,9 +74,6 @@ float derotate_90(float a)
     a += 90;
   return a;
 }
-
-
-
 double derotate_90_double(double a)
 {
   int i;
@@ -87,10 +86,6 @@ double derotate_90_double(double a)
     a += 90;
   return a;
 }
-
-
-
-
 double derotate_180_small_double(double a)
 {
   double y;
@@ -99,11 +94,6 @@ double derotate_180_small_double(double a)
     y = y-180.0;
   return y;
 }
-
-
-
-
-
 float polar_angle_rad(float x, float y)
 {
   float alpha;
@@ -121,10 +111,6 @@ float polar_angle_rad(float x, float y)
     return alpha + M_PI;
   }
 }
-
-
-
-
 float paswing(float alpha, float beta, float l, float pa0, float l0, int nrJumps, float *jump_longitude, float *jump_offset, float add_height_longitude, float add_height_shift)
 {
   float x1, y1, sa, dl, pa, dbcw, dha;
@@ -133,9 +119,7 @@ float paswing(float alpha, float beta, float l, float pa0, float l0, int nrJumps
   beta *= M_PI/180.0;
   if(l >= add_height_longitude) {
     dbcw = 2.0*add_height_shift*180.0/M_PI;
-
     dha = 10.0*add_height_shift*cos(alpha)*180.0/(3.0*M_PI);
-
   }else {
     dbcw = 0;
     dha = 0;
@@ -154,8 +138,6 @@ float paswing(float alpha, float beta, float l, float pa0, float l0, int nrJumps
   pa = derotate_180(pa);
   return pa;
 }
-
-
 double paswing_double(double alpha, double beta, double l, double pa0, double l0, int nrJumps, double *jump_longitude, double *jump_offset, double add_height_longitude, double add_height_shift)
 {
   double x1, y1, sa, dl, pa, dbcw, dha;
@@ -165,7 +147,6 @@ double paswing_double(double alpha, double beta, double l, double pa0, double l0
   if(l >= add_height_longitude) {
     dbcw = 2.0*add_height_shift*180.0/M_PI;
     dha = 10.0*add_height_shift*cos(alpha)*180.0/(3.0*M_PI);
-
   }else {
     dbcw = 0;
     dha = 0;

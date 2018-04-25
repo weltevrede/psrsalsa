@@ -20,8 +20,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <malloc.h>
 #include <gsl/gsl_sort.h>
 #include "psrsalsa.h"
-
-
 int main(int argc, char **argv)
 {
   int read_log, centered_at_zero, file_column1, file_column2, colspecified, polspecified, filename, truncate, cdf, select;
@@ -37,10 +35,7 @@ int main(int argc, char **argv)
   datafile_definition datain;
   pgplot_options_definition pgplot_options;
   pgplot_clear_options(&pgplot_options);
-
-
   initApplication(&application, "pdist", "[options] inputfile(s)");
-
   application.switch_verbose = 1;
   application.switch_debug = 1;
   application.switch_iformat = 1;
@@ -48,7 +43,6 @@ int main(int argc, char **argv)
   application.switch_device = 1;
   application.switch_cmap = 1;
   application.switch_cmaplist = 1;
-
   nrbins_specified = 0;
   nrbins_specifiedy = 0;
   dx_specified = 0;
@@ -60,8 +54,6 @@ int main(int argc, char **argv)
   centered_at_zero = 1;
   extra_phase = 0;
   showGraphics = 0;
-
-
   xlabelset = 0;
   sprintf(title, "Distribution");
   rangex_set = 0;
@@ -78,7 +70,6 @@ int main(int argc, char **argv)
   truncate = 0;
   cdf = 0;
   select = 0;
-
   if(argc < 2) {
     printf("Program to generate or plot a histogram by binning data. Also a cummulative\n");
     printf("distribution can be generated. Usage:\n\n");
@@ -157,7 +148,6 @@ int main(int argc, char **argv)
  if(showGraphics == 0)
    showGraphics = 1;
       }else if(strcmp(argv[i], "-xlabel") == 0) {
-
  xlabelset = i+1;
  i++;
       }else if(strcmp(argv[i], "-title") == 0) {

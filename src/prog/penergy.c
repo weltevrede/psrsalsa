@@ -17,11 +17,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <string.h>
 #include <math.h>
 #include "psrsalsa.h"
-
 int writePSRCHIVE_ASCIIHeader(datafile_definition datafile, verbose_definition verbose);
-
-
-
 int main(int argc, char **argv)
 {
   FILE *ofile;
@@ -38,10 +34,8 @@ int main(int argc, char **argv)
   datafile_definition datain, opfile, pulse_profile;
   psrsalsaApplication application;
   pgplot_options_definition pgplot_options;
-
   int index;
   int guessing_format;
-
   initApplication(&application, "penergy", "[options] inputfile(s)");
   application.switch_headerlist = 1;
   application.switch_header = 1;
@@ -68,7 +62,9 @@ int main(int argc, char **argv)
   application.switch_nskip = 1;
   application.switch_nread = 1;
   application.switch_scale = 1;
-
+  application.switch_noweights = 1;
+  application.switch_useweights = 1;
+  application.switch_uniformweights = 1;
   snrTresh = 1;
   output2file = 1;
   individual_bin_mode = 0;
@@ -86,7 +82,6 @@ int main(int argc, char **argv)
   only_onpulse = 0;
   nodebase = 1;
   pgplot_clear_options(&pgplot_options);
-
   if(argc < 2) {
     printf("Program for calculating pulse energy statistics. Use pdist to make distributions. The program can be run in two modes:\n\n1) Without the -burst option: Calculate burst statistics using the first selected on-pulse region. The not selected regions are used as the off-pulse regions only used for S/N determinations. When -debase is used, the baseline is determined from the off-pulse region as well. Unless specified otherwise, an ascii file will be generated.\n\n2) With the burst option: By default this program tries a fixed number of widths as a matched filter to search for bursts in the signal. Unless -only_onpulse or -only_onpulse1 is specified, the off-pulse region is only used to get the rms of the noise.\n\n");
     printApplicationHelp(&application);
@@ -132,10 +127,8 @@ int main(int argc, char **argv)
  filename = i+1;
  i++;
       }else if(strcmp(argv[i], "-dynspec2") == 0) {
-
  output2file = 3;
       }else if(strcmp(argv[i], "-dynspec") == 0) {
-
  output2file = 2;
       }else if(strcmp(argv[i], "-b") == 0) {
  individual_bin_mode = 1;
@@ -185,7 +178,6 @@ int main(int argc, char **argv)
  }
  i++;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "ERROR penergy: Unknown option: %s\n\nRun penergy without command line arguments to show help", argv[i]);
    terminateApplication(&application);
@@ -197,7 +189,6 @@ int main(int argc, char **argv)
       }
     }
   }
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
@@ -205,23 +196,16 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR penergy: No input file(s) specified");
     return 0;
   }
-
   init_nrRegions = application.onpulse.nrRegions;
-
   guessing_format = 0;
-
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
-
     if(application.verbose_state.verbose)
       printf("Reading from %s\n", filename_ptr);
-
     oname = (char *) calloc(strlen(filename_ptr)+strlen(output_suffix)+8, 1);
     if(oname == NULL) {
       printerror(application.verbose_state.debug, "ERROR penergy: Memory allocation error.\n");
       return 0;
     }
-
-
     if(guessing_format) {
       application.iformat = -1;
     }
@@ -237,36 +221,22 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR penergy: Error opening data");
       return 0;
     }
-
-
-
     if(PSRDataHeader_parse_commandline(&datain, argc, argv, application.verbose_state) == 0)
       return 0;
-
-
-
-
     region_frac_to_int(&(application.onpulse), datain.NrBins, 0);
-
     for(j = 1; j < argc; j++) {
       if(strcmp(argv[j], "-header") == 0) {
  printwarning(application.verbose_state.debug, "WARNING: If using the -header option, be aware it applied BEFORE the preprocessing.");
       }
     }
-
-
     if(preprocessApplication(&application, &datain) == 0) {
       return 0;
     }
-
     regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
-
-
     if(freq1 < 0 || freq2 < 0) {
       freq1 = 0;
       freq2 = datain.NrFreqChan-1;
     }
-
     if(application.onpulse.nrRegions == 0
        ) {
       if(preprocess_make_profile(datain, &pulse_profile, 1, application.verbose_state) == 0) {
@@ -274,7 +244,6 @@ int main(int argc, char **argv)
  return 0;
       }
     }
-
     if(application.onpulse.nrRegions == 0
        ) {
       strcpy(pgplot_options.viewport.plotDevice, application.pgplotdevice);
@@ -289,7 +258,6 @@ int main(int argc, char **argv)
       selectRegions(pulse_profile.data, datain.NrBins, &pgplot_options, 0, 0, 0, &(application.onpulse), application.verbose_state);
       regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
     }
-
     if(application.onpulse.nrRegions == 0) {
       printerror(application.verbose_state.debug, "ERROR penergy: At least one on-pulse region needs to be defined. Use the -onpulse option or select at least one region in pgplot window.");
       return 0;
@@ -298,21 +266,17 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR penergy: The onpulse region is not defined in bins.");
       return 0;
     }
-
     Ipulse = malloc(datain.NrBins*sizeof(float));
     if(Ipulse == NULL) {
       printerror(application.verbose_state.debug, "ERROR penergy: Cannot allocate memory");
       return 0;
     }
-
     if(burstmode == 0) {
       output_values = malloc(datain.NrSubints*sizeof(float));
       if(output_values == NULL) {
  printerror(application.verbose_state.debug, "ERROR penergy: Cannot allocate memory");
  return 0;
       }
-
-
       if(application.onpulse.nrRegions == 0) {
  printerror(application.verbose_state.debug, "ERROR penergy: At least one on-pulse region needs to be defined. Use the -onpulse option or select at least one region in pgplot window.");
  return 0;
@@ -324,10 +288,7 @@ int main(int argc, char **argv)
       if(application.onpulse.nrRegions > 1) {
  printwarning(application.verbose_state.debug, "WARNING penergy: When selecting multiple onpulse regions, only the first is used to calculate onpulse statistics. Non-selected regions are used for the off-pulse statistics.");
       }
-
       for(binnr = application.onpulse.left_bin[0]; binnr <= application.onpulse.right_bin[0]; binnr++) {
-
-
  strcpy(oname, filename_ptr);
  if(filename != 0) {
    strcpy(oname, argv[filename]);
@@ -339,8 +300,6 @@ int main(int argc, char **argv)
      strcat(oname, output_suffix);
    }
  }
-
-
  if(output2file == 1) {
    printf("Output Ascii to %s\n",oname);
    ofile = fopen(oname,"w+");
@@ -351,7 +310,6 @@ int main(int argc, char **argv)
    }
      cleanPSRData(&opfile, application.verbose_state);
      copy_params_PSRData(datain, &opfile, application.verbose_state);
-
      opfile.fptr_hdr = ofile;
      opfile.NrBins = datain.NrSubints;
      opfile.NrSubints = datain.NrPols;
@@ -359,7 +317,6 @@ int main(int argc, char **argv)
        opfile.NrSubints = 1;
      opfile.NrFreqChan = freq2-freq1+1;
      opfile.NrPols = 7;
-
      if(set_filename_PSRData(&opfile, "penergy", application.verbose_state) == 0) {
        printerror(application.verbose_state.debug, "ERROR penergy: Setting filename failed");
        return 0;
@@ -372,7 +329,6 @@ int main(int argc, char **argv)
    printf("Output to %s file %s\n", returnFileFormat_str(application.oformat), oname);
    cleanPSRData(&opfile, application.verbose_state);
    copy_params_PSRData(datain, &opfile, application.verbose_state);
-
    if(openPSRData(&opfile, oname, application.oformat, 1, 0, 0, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR penergy: Cannot open %s", oname);
      return 0;
@@ -390,7 +346,6 @@ int main(int argc, char **argv)
      return 0;
    }
  }
-
  on_totenergy = 0;
  off_totenergy = 0;
  on_peakenergy = 0;
@@ -445,7 +400,6 @@ int main(int argc, char **argv)
   off_rmsenergy = -1;
   s2n = -1;
        }
-
        if(output2file == 1) {
     fprintf(ofile, "%ld %ld %ld %e %e %e %e %e %e %e\n", polnr, freqnr-freq1, subintnr, on_peakenergy, off_peakenergy,on_totenergy, off_totenergy, on_rmsenergy, off_rmsenergy, s2n);
        }else if(output2file > 1) {
@@ -463,7 +417,6 @@ int main(int argc, char **argv)
     output_values[subintnr] = on_totenergy;
   }
        }
-
        on_totenergy = 0;
        off_totenergy = 0;
        on_peakenergy = 0;
@@ -472,18 +425,14 @@ int main(int argc, char **argv)
        off_rmsenergy = 0;
        s2n = 0;
      }
-
-
      if(output2file > 1) {
        if(writePulsePSRData(&opfile, 0, polnr, freqnr, 0, opfile.NrBins, output_values, application.verbose_state) != 1) {
   printerror(application.verbose_state.debug, "ERROR penergy: Write error");
   return 0;
        }
      }
-
    }
  }
-
  if(output2file == 1) {
      char *txt;
      txt = malloc(10000);
@@ -509,10 +458,8 @@ int main(int argc, char **argv)
  }
  if(output2file > 1 || (output2file == 1
           )) {
-
    closePSRData(&opfile, 0, application.verbose_state);
  }
-
  if(individual_bin_mode == 0)
    break;
       }
@@ -521,11 +468,7 @@ int main(int argc, char **argv)
  printerror(application.verbose_state.debug, "ERROR penergy: The -burst mode only opperates on the first polarization channel");
  return 0;
       }
-
-
       for(freqnr = freq1; freqnr <= freq2; freqnr++) {
-
-
  strcpy(oname, filename_ptr);
  if(filename != 0) {
    strcpy(oname, argv[filename]);
@@ -545,13 +488,11 @@ int main(int argc, char **argv)
    return 0;
  }
    fprintf(ofile, "#pulsenr, bin (left edge), pulse phase (center), width (bins), snr, integrated energy\n");
-
  for(subintnr = 0; subintnr <= (datain.NrSubints-1); subintnr++) {
    if(application.verbose_state.verbose && (subintnr % 10 == 0) && subintnr > 0 && application.verbose_state.nocounters == 0) {
      printf("\r%f%%        ", 100.0*(subintnr+1)/(float)((datain.NrSubints-1)+1.0));
      fflush(stdout);
    }
-
    if(readPulsePSRData(&datain, subintnr, 0, freqnr, 0, datain.NrBins, Ipulse, application.verbose_state) != 1) {
      printerror(application.verbose_state.debug, "ERROR penergy: Reading failed.\n");
      return 0;
@@ -564,7 +505,6 @@ int main(int argc, char **argv)
      if(freqnr != 0 || subintnr != 0)
        verbose2.verbose = 0;
      boxcarFindpeak(Ipulse, datain.NrBins, &(application.onpulse), &binnr_max, &pulsewidth, &snr, &E, 0, posOrNeg, allwidths, refine, maxbin2, only_onpulse, nodebase, verbose2);
-
      if(snr > snrTresh && pulsewidth <= maxbin)
        fprintf(ofile, "%ld %d %e %d %e %e\n", subintnr, binnr_max, ((float)binnr_max+0.5*(float)pulsewidth)/(float)datain.NrBins, pulsewidth, snr, E);
       }
@@ -578,11 +518,8 @@ int main(int argc, char **argv)
     if(burstmode == 0)
       free(output_values);
     free(oname);
-
-
     application.onpulse.nrRegions = init_nrRegions;
   }
-
   terminateApplication(&application);
   return 0;
 }

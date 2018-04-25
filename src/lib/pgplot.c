@@ -19,16 +19,12 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include "psrsalsa.h"
 #include <cpgplot.h>
-
-
-
 static double internal_pgplot_xmin = 0;
 static double internal_pgplot_xmax = 1;
 static double internal_pgplot_ymin = 0;
 static double internal_pgplot_ymax = 1;
 static int internal_pgplot_nrx = 1;
 static int internal_pgplot_nry = 1;
-
 void print_pgplot_version_used(FILE *stream)
 {
   char version[25];
@@ -36,12 +32,6 @@ void print_pgplot_version_used(FILE *stream)
   cpgqinf("VERSION", version, &length);
   fprintf(stream, "%s (library)", version);
 }
-
-
-
-
-
-
 int pgplotMapCoordinate_dbl(double x, double y, int *nx, int *ny)
 {
   int clip;
@@ -66,7 +56,6 @@ int pgplotMapCoordinate_dbl(double x, double y, int *nx, int *ny)
   }
   return clip;
 }
-
 int pgplotMapCoordinate(float x, float y, int *nx, int *ny)
 {
   double x2, y2;
@@ -74,9 +63,6 @@ int pgplotMapCoordinate(float x, float y, int *nx, int *ny)
   y2 = y;
   return pgplotMapCoordinate_dbl(x2, y2, nx, ny);
 }
-
-
-
 void pgplotMapCoordinateInverse_dbl(double *x, double *y, int nx, int ny)
 {
   if(internal_pgplot_nrx != 1)
@@ -88,7 +74,6 @@ void pgplotMapCoordinateInverse_dbl(double *x, double *y, int nx, int ny)
   else
     *y = internal_pgplot_ymin;
 }
-
 void pgplotMapCoordinateInverse(float *x, float *y, int nx, int ny)
 {
   double x2, y2;
@@ -96,18 +81,11 @@ void pgplotMapCoordinateInverse(float *x, float *y, int nx, int ny)
   *x = x2;
   *y = y2;
 }
-
-
-
 void pgplotMapCoordinateBinSize(float *dx, float *dy)
 {
   *dx = (internal_pgplot_xmax-internal_pgplot_xmin)/((double)internal_pgplot_nrx-1.0);
   *dy = (internal_pgplot_ymax-internal_pgplot_ymin)/((double)internal_pgplot_nry-1.0);
 }
-
-
-
-
 void pgplot_setWindowsize(int windowwidth, int windowheight, float aspectratio)
 {
   float x, y;
@@ -119,17 +97,12 @@ void pgplot_setWindowsize(int windowwidth, int windowheight, float aspectratio)
     ppgpap(0, aspectratio);
   }
 }
-
-
-
-
 void pgplot_makeframe(pgplot_frame_def_internal *frame)
 {
   if(frame->svp)
     ppgsvp(frame->svp_x1, frame->svp_x2, frame->svp_y1, frame->svp_y2);
   if(frame->swin) {
     ppgswin(frame->swin_x1, frame->swin_x2, frame->swin_y1, frame->swin_y2);
-
     if(internal_pgplot_nrx != 1) {
       frame->TR[0] = internal_pgplot_xmin - (internal_pgplot_xmax-internal_pgplot_xmin)/(float)(internal_pgplot_nrx-1);
       frame->TR[1] = (internal_pgplot_xmax-internal_pgplot_xmin)/(float)(internal_pgplot_nrx-1);
@@ -1307,7 +1280,6 @@ int pgplotMap(pgplot_options_definition *pgplot, float *cmap, int nrx, int nry, 
   float *cmap_subset;
   if(plotSubset) {
     int subset_x0, subset_y0;
-    float subset_xmin, subset_xmax, subset_ymin, subset_ymax;
     subset_extrabefore = 1;
     subset_extraafter = 1;
     subset_x0 = (nrx-1)*(xminshow - xmin)/(xmax-xmin)-1;
@@ -1353,10 +1325,6 @@ int pgplotMap(pgplot_options_definition *pgplot, float *cmap, int nrx, int nry, 
    cmap_subset[j*subset_nrx+i] = cmap[(j+subset_y0)*nrx+i+subset_x0];
  }
       }
-      subset_xmin = subset_x0*(xmax-xmin)/(float)(nrx-1) + xmin;
-      subset_xmax = (subset_x0+subset_nrx)*(xmax-xmin)/(float)(nrx-1) + xmin;
-      subset_ymin = subset_y0*(ymax-ymin)/(float)(nry-1) + ymin;
-      subset_ymax = (subset_y0+subset_nry)*(ymax-ymin)/(float)(nry-1) + ymin;
       pgplot_frame_internal.TR[0] += pgplot_frame_internal.TR[1]*subset_x0;
       pgplot_frame_internal.TR[3] += pgplot_frame_internal.TR[5]*subset_y0;
     }

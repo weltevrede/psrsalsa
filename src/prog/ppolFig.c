@@ -19,9 +19,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <string.h>
 #include <stdlib.h>
 #include "psrsalsa.h"
-
 #define MaxNrJumps 100
-
 int main(int argc, char **argv)
 {
   int index, firstfiletoopen, curpanelnrx, curpanelnry, nokeypresses, showtotPol, nopaswing;
@@ -120,7 +118,6 @@ int main(int argc, char **argv)
     fprintf(stdout, "-ysize         Set ysize of the plot [def=%.1f].\n", ysize);
     fprintf(stdout, "-ysizepa       Set relative ysize of PA plot [def=%.1f].\n", ysizepa);
     fprintf(stdout, "-xticks        \"XTICK NXSUB\"  Adjust PGPLOT tickmarks [def=\"%.0f %d\"].\n", xtick, nxsub);
-
     printf("\n");
     printf("Please use the appropriate citation when using results of this software in your publications:\n\n");
     printf("More information about fitting position-angle swings and using the beam-width information can be found in:\n");
@@ -277,7 +274,6 @@ int main(int argc, char **argv)
  terminateApplication(&application);
  return 0;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "ppolFig: Unknown option: %s", argv[i]);
    printerror(application.verbose_state.debug, "\nRun ppolFig without command line arguments to show help");
@@ -290,9 +286,6 @@ int main(int argc, char **argv)
       }
     }
   }
-
-
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
@@ -301,11 +294,8 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR ppolFig: No files specified");
     return 0;
   }
-
-
   firstfiletoopen = 1;
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
-
     if(firstfiletoopen == 0) {
       if(curpanelnrx == 0 && curpanelnry == 0) {
  if(nokeypresses == 0) {
@@ -318,20 +308,14 @@ int main(int argc, char **argv)
  }
       }
     }
-
-
     if(!openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.verbose_state))
       return 0;
     if(application.verbose_state.verbose) {
       fflush(stdout);
       printwarning(application.verbose_state.debug, "Input data contains %ld bins, %ld pulses, %ld polarizations and %ld frequencies.", (datain.NrBins), datain.NrSubints, (datain.NrPols), datain.NrFreqChan);
     }
-
-
-
     if(PSRDataHeader_parse_commandline(&datain, argc, argv, application.verbose_state) == 0)
       return 0;
-
     if(datain.poltype != POLTYPE_ILVPAdPA && datain.poltype != POLTYPE_PAdPA && datain.poltype != POLTYPE_ILVPAdPATEldEl) {
       fflush(stdout);
       printerror(application.verbose_state.debug, "ERROR ppolFig: File does not appear to contain PA data. ppolFig will not show data.");

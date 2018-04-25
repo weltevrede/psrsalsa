@@ -22,12 +22,6 @@ static double *xstart_internal_psrsalsa_d;
 static double *x_internal_psrsalsa_d;
 static double (*funk_remember_user_function_d)(double []);
 static int algorithm_internal_psrsalsa_d;
-
-
-
-
-
-
 double funk_internal_psrsalsa_d(double x[])
 {
   int i, j;

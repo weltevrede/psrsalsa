@@ -17,19 +17,15 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define _USE_LARGEFILE 1
 #define _USE_LARGEFILE 1
 #define _LARGEFILE_SOURCE 1
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
 #include "psrsalsa.h"
-
 #include "gsl/gsl_randist.h"
-
 int readZapFile(char *zaplistname, int *zapMask, int zapSkipLines, int nrZapCols, int zapColumn, int zapColumn2, int inverseZap, verbose_definition verbose);
 void make_blocks(long baseline_length, long blockSize, long nrPulses, long *nrOutputBlocks, int *zapMask, verbose_definition verbose);
-
 int main(int argc, char **argv)
 {
   int debase_flag, debase_offset_flag, index, deviceOpened, read_whole_file;
@@ -81,6 +77,8 @@ int main(int argc, char **argv)
   application.switch_stokes = 1;
   application.switch_coherence = 1;
   application.switch_noweights = 1;
+  application.switch_useweights = 1;
+  application.switch_uniformweights = 1;
   application.switch_scale = 1;
   application.switch_insertparang = 1;
   application.switch_deparang = 1;
@@ -93,8 +91,6 @@ int main(int argc, char **argv)
   application.switch_shuffle = 1;
   application.switch_rotateStokes = 1;
   application.switch_libversions = 1;
-
-
   debase_flag = 0;
   debase_offset_flag = 0;
   read_whole_file = 1;
@@ -121,7 +117,6 @@ int main(int argc, char **argv)
   strcpy(output_suffix2, "zapped.gg");
   filename = 0;
   pgplot_clear_options(&pgplot_options);
-
   if(argc < 2) {
     printf("Program to modify pulsar data in various ways. Usage:\n\n");
     printApplicationHelp(&application);
@@ -155,7 +150,6 @@ int main(int argc, char **argv)
     printf("                  (can specify -fzap multiple times)\n");
     printf("-blocksize        Nr of succesive nonzapped pulses that should be writen out\n");
     printf("-remove           Remove zapped pulses instead of making them zero\n");
-
     printf("\nOn-pulse definition:\n\n");
     printf("-onpulsegr        Enables selecting more on-pulse regions graphically than\n");
     printf("                  defined by -onpulse\n");
@@ -195,7 +189,6 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
-
  if(baseline_length != 0)
    remove_pulses_flag = 1;
         i++;
@@ -270,14 +263,12 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "pmod: Mixing of zap and inverse-zap options is not allowed.");
    return 0;
  }
-
  i++;
       }else if(strcmp(argv[i], "-fzap") == 0) {
  if(finverseZap == 1) {
    printerror(application.verbose_state.debug, "pmod: Mixing of zap and inverse-zap options is not allowed.");
    return 0;
  }
-
  i++;
       }else if(strcmp(argv[i], "-addnoise") == 0) {
  addnoise_flag = 1;
@@ -296,7 +287,6 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-memsave") == 0) {
  read_whole_file = 0;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "pmod: Unknown option: %s\n\nRun pmod without command line arguments to show help", argv[i]);
    terminateApplication(&application);
@@ -308,13 +298,10 @@ int main(int argc, char **argv)
       }
     }
   }
-
   if(inverseZap == -1)
     inverseZap = 0;
   if(finverseZap == -1)
     finverseZap = 0;
-
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
@@ -322,10 +309,8 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR pmod: No files specified");
     return 0;
   }
-
   strcpy(pgplot_options.viewport.plotDevice, application.pgplotdevice);
   pgplot_options.viewport.dontclose = 1;
-
   gsl_rng_env_setup();
   rand_num_gen_type = gsl_rng_default;
   rand_num_gen = gsl_rng_alloc(rand_num_gen_type);
@@ -333,9 +318,7 @@ int main(int argc, char **argv)
     idnum = 1;
   else
     randomize_idnum(&idnum);
-
   gsl_rng_set(rand_num_gen, idnum);
-
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
     deviceOpened = 0;
     if(filename == 0) {
@@ -350,11 +333,8 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pmod: Cannot change extension in output name.");
       return 0;
     }
-
-
     cleanPSRData(&dataout, application.verbose_state);
     cleanPSRData(&dataout2, application.verbose_state);
-
     if(application.iformat <= 0)
       application.iformat = guessPSRData_format(filename_ptr, 0, application.verbose_state);
     if(isValidPSRDATA_format(application.iformat) == 0) {
@@ -370,25 +350,15 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pmod: Error opening data");
       return 0;
     }
-
-
     if(!read_whole_file) {
       if(readHeaderPSRData(&datain, 0, 0, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "pmod: Error reading header");
  return 0;
       }
     }
-
-
-
     if(PSRDataHeader_parse_commandline(&datain, argc, argv, application.verbose_state) == 0)
       return 0;
-
-
-
-
     region_frac_to_int(&(application.onpulse), datain.NrBins, 0);
-
     for(i = 1; i < argc; i++) {
       if(strcmp(argv[i], "-header") == 0) {
  fflush(stdout);
@@ -396,13 +366,9 @@ int main(int argc, char **argv)
  break;
       }
     }
-
     if(preprocessApplication(&application, &datain) == 0) {
       return 0;
     }
-
-
-
     zapMask = (int *)malloc(datain.NrSubints*sizeof(int));
     fzapMask = (int *)malloc(datain.NrFreqChan*sizeof(int));
     if(zapMask == NULL || fzapMask == NULL) {
@@ -470,7 +436,6 @@ int main(int argc, char **argv)
    application.fzapMask = fzapMask;
       }
     }
-
     if(prange_set) {
       for(i = 1; i < argc-1; i++) {
  if(strcmp(argv[i], "-prange") == 0) {
@@ -492,16 +457,10 @@ int main(int argc, char **argv)
  }
       }
     }
-
-
-
-
-
     nrPol = datain.NrPols;
     nrBins = datain.NrBins;
     nrPulses= datain.NrSubints;
     NrFreqChan = datain.NrFreqChan;
-
     if(application.verbose_state.verbose) printf("Input data contains %d bins, %ld pulses, %d polarizations and %d frequencies.\n", nrBins, nrPulses, nrPol, NrFreqChan);
     profileI = (float *)malloc(nrBins*sizeof(float));
     rms = (float *)malloc(nrPulses*nrPol*sizeof(float));
@@ -513,9 +472,6 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pmod: Memory allocation error.");
       return 0;
     }
-
-
-
     if(debase_flag || removeOnPulse_flag
        ) {
       if(read_profilePSRData(datain, profileI, zapMask, 0, application.verbose_state) != 1) {
@@ -523,7 +479,6 @@ int main(int argc, char **argv)
  return 0;
       }
     }
-
       if((debase_flag && debase_offset_flag == 0) || removeOnPulse_flag
   ) {
  if(selectMoreOnpulseRegions || application.onpulse.nrRegions == 0) {
@@ -547,25 +502,16 @@ int main(int argc, char **argv)
    }
  }
       }
-
-
-
     region_int_to_frac(&(application.onpulse), 1.0/(float)datain.NrBins, 0);
     regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
-
-
-
-
     if(baseline_length) {
       for(i = 0; i < baseline_length; i++)
  zapMask[i] = 0;
       for(i = nrPulses-baseline_length; i < nrPulses; i++)
  zapMask[i] = 0;
     }
-
     if(blockMode != 0)
       make_blocks(baseline_length, blockSize, nrPulses, &nrOutputBlocks, zapMask, application.verbose_state);
-
     if(application.verbose_state.debug) {
       if(baseline_length)
  printf("DEBUG: Zapping %ld subints because using a running baseline\n", 2*baseline_length);
@@ -598,7 +544,6 @@ int main(int argc, char **argv)
       printf("%ld = %ld subints\n", nrPulses-baseline_length-1, nrPulses-baseline_length-prev_pulse_nr);
     }
     if(application.verbose_state.verbose) printf("Total number of zapped pulses: %ld\n", nrZapped);
-
     if(outputlist) {
       FILE *fout_zap;
       fout_zap = fopen("zaplist.txt", "w");
@@ -614,8 +559,6 @@ int main(int argc, char **argv)
       fclose(fout_zap);
       printf("Zap list is written to zaplist.txt\n");
     }
-
-
     copy_params_PSRData(datain, &dataout, application.verbose_state);
     copy_params_PSRData(datain, &dataout2, application.verbose_state);
     if(debase_flag) {
@@ -634,7 +577,6 @@ int main(int argc, char **argv)
       printf("Cannot write header to %s\n\n", output_name);
       return 0;
     }
-
     if(zapoption
        ) {
       dataout2.NrBins = nrBins;
@@ -648,7 +590,6 @@ int main(int argc, char **argv)
    printf("Cannot write header to %s\n\n", output_name);
    return 0;
  }
-
       }
     }
       for(k=0; k < nrPol; k++) {
@@ -658,11 +599,8 @@ int main(int argc, char **argv)
        printf("Processing polarization channel %ld (of the %d)\n", k+1, nrPol);
      }
    }
-
    if(debase_flag || removeOnPulse_flag) {
      read_rmsPSRData(datain, &rms[datain.NrSubints*k], &runningBaseline[datain.NrSubints*k], zapMask, &(application.onpulse), 0, k, l, application.verbose_state);
-
-
      if(l == 0 && application.verbose_state.verbose) {
        if(datain.NrFreqChan > 1)
   printf("  Preparing baseline for first frequency channel\n");
@@ -678,17 +616,14 @@ int main(int argc, char **argv)
        runningRMS[i+datain.NrSubints*k] = rms[i+datain.NrSubints*k];
      }
      int itteration, ok;
-     float baseline_old, rms_old;
-     baseline_old = 0;
+     float rms_old;
      rms_old = 0;
      for(i = baseline_length; i < nrPulses-baseline_length; i++) {
-
        for(itteration = 0; itteration < 2; itteration++) {
   baseline[i+datain.NrSubints*k] = 0;
   runningRMS[i+datain.NrSubints*k] = 0;
   tmp_used_pulses = 0;
   for(j = -baseline_length; j <= baseline_length; j++) {
-
     if(runningBaseline[i+j+datain.NrSubints*k] != 0.0) {
         ok = 1;
       if(ok) {
@@ -697,8 +632,6 @@ int main(int argc, char **argv)
         rms_old += runningBaseline[i+j+datain.NrSubints*k]*runningBaseline[i+j+datain.NrSubints*k];
         tmp_used_pulses++;
       }
-
-
     }
   }
   if(tmp_used_pulses > 0) {
@@ -707,7 +640,6 @@ int main(int argc, char **argv)
     rms_old /= (float)(tmp_used_pulses);
     rms_old -= baseline[i+datain.NrSubints*k]*baseline[i+datain.NrSubints*k];
   }
-  baseline_old = baseline[i+datain.NrSubints*k];
     break;
        }
        m = i/10;
@@ -719,9 +651,6 @@ int main(int argc, char **argv)
      if(l == 0 && application.verbose_state.verbose)
        printf("    Done                      \n");
    }
-
-
-
    if(debase_flag && l == 0) {
      if(application.verbose_state.verbose)
        printf("  Subtracting baseline\n");
@@ -730,10 +659,8 @@ int main(int argc, char **argv)
    pulse_nr_in_output = 0;
    for(i = 0; i < nrPulses; i++) {
      readPulsePSRData(&datain, i, k, l, 0, nrBins, profileI, application.verbose_state);
-
      if(debase_flag && debase_offset_flag == 0) {
        for(j = 0; j < nrBins; j++) {
-
   if(runningBaseline[i+datain.NrSubints*k] != 0.0) {
     profileI[j] -= baseline[i+datain.NrSubints*k];
   }
@@ -749,22 +676,15 @@ int main(int argc, char **argv)
      if(removeOnPulse_flag) {
        for(j = 0; j < nrBins; j++) {
   if(checkRegions(j, &(application.onpulse), 0, application.verbose_state) != 0) {
-
-
-
     profileI[j] = gsl_ran_gaussian(rand_num_gen, runningRMS[i+datain.NrSubints*k]);
   }
        }
      }
      if(addnoise_flag) {
        for(j = 0; j < nrBins; j++) {
-
-
-
   profileI[j] += gsl_ran_gaussian(rand_num_gen, noiseRMS);
        }
      }
-
      if(zapoption
         ) {
        if(zapMask[i] != 0) {
@@ -776,20 +696,16 @@ int main(int argc, char **argv)
        }
      }
      if(zapMask[i] != 0) {
-
        for(j = 0; j < nrBins; j++)
   profileI[j] = 0;
        baseline[i] = 0;
      }
      if(fzapMask[l] != 0) {
-
        for(j = 0; j < nrBins; j++)
   profileI[j] = 0;
        baseline[i] = 0;
      }
-
      if(i >= baseline_length && i < nrPulses-baseline_length) {
-
        if(remove_pulses_flag == 0 || zapMask[i] == 0) {
   if(remove_pulses_flag == 0) {
     pulse_nr_in_output = i;
@@ -812,7 +728,6 @@ int main(int argc, char **argv)
  }
  if(application.verbose_state.verbose)
    printf("    Done                             \n");
-
  if(k == 0 && (debase_flag && debase_offset_flag==0) && nrPulses-2*baseline_length > 1) {
    strcpy(txt, "Baseline ");
    strcat(txt, datain.psrname);
@@ -840,27 +755,21 @@ int main(int argc, char **argv)
     }
     printf("Writing of %s done\n", output_name);
   }
-
   gsl_rng_free(rand_num_gen);
   terminateApplication(&application);
   return 0;
 }
-
-
-
 int readZapFile(char *zaplistname, int *zapMask, int zapSkipLines, int nrZapCols, int zapColumn, int zapColumn2, int inverseZap, verbose_definition verbose)
 {
   FILE *fin_zap;
   long i, i2, j;
   char txt[100];
-
   if(zapColumn2 > 0) {
     if(zapColumn2 <= zapColumn) {
       printerror(verbose.debug, "pmod: column %d was expected to be larger than %d.", zapColumn2, zapColumn);
       return 0;
     }
   }
-
   fin_zap = fopen(zaplistname, "r");
   if(fin_zap == NULL) {
     printerror(verbose.debug, "pmod: Cannot open %s", zaplistname);
@@ -882,7 +791,6 @@ int readZapFile(char *zaplistname, int *zapMask, int zapSkipLines, int nrZapCols
  j = fscanf(fin_zap, "%s", txt);
  if(j != 1)
    break;
-
       }
     }
     j = fscanf(fin_zap, "%ld", &i);
@@ -892,7 +800,6 @@ int readZapFile(char *zaplistname, int *zapMask, int zapSkipLines, int nrZapCols
    j = fscanf(fin_zap, "%s", txt);
    if(j != 1)
      break;
-
  }
       }
       j = fscanf(fin_zap, "%ld", &i2);
@@ -937,8 +844,6 @@ int readZapFile(char *zaplistname, int *zapMask, int zapSkipLines, int nrZapCols
   fclose(fin_zap);
   return 1;
 }
-
-
 void make_blocks(long baseline_length, long blockSize, long nrPulses, long *nrOutputBlocks, int *zapMask, verbose_definition verbose)
 {
   long i, j, k, nrZapped;
@@ -947,7 +852,6 @@ void make_blocks(long baseline_length, long blockSize, long nrPulses, long *nrOu
   do {
     k = 1;
     for(j = i; j < i+blockSize; j++) {
-
       if(j == nrPulses-baseline_length) {
  k = -j;
  break;
@@ -958,7 +862,6 @@ void make_blocks(long baseline_length, long blockSize, long nrPulses, long *nrOu
       }
     }
     if(k <= 0) {
-
       for(j = i; j <= -k; j++) {
  if(j < nrPulses) {
    zapMask[j] = 1;
@@ -967,7 +870,6 @@ void make_blocks(long baseline_length, long blockSize, long nrPulses, long *nrOu
       }
       i = -k+1;
     }else {
-
       i += blockSize;
       nrOutputBlocks++;
     }

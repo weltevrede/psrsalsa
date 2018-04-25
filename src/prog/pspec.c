@@ -18,22 +18,19 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include <string.h>
 #include "psrsalsa.h"
-
 #define MaxNrPolarizations 5
-
 int pgplotProfile(char *plotDevice, int windowwidth, int windowheight, float *profile, float *stddev, float *rms_stddev, float *modindex, float *rms_modindex, int nrx, float xmin, float xmax, char *xlabel, char *ylabel, char *title, int stddev_flag, int mod_flag, int zoom_flag, float xmin_zoom, float xmax_zoom, verbose_definition verbose);
 int main(int argc, char **argv)
 {
   int fft_size, index, originalNrPols, selectMoreOnpulseRegions, powertwo, track_only_first_region;
-  int profile_flag, lrfs_flag, stddev_flag, mod_flag, twodfs_flag, bootstrap, subtractDC, track_flag, amplitude_flag, ftrack_mask, inverseFFT, write_flag, modSimple_flag, zoom_flag, zoom_flag1, p2range_set, regionnr, p3_fold_flag, p3_fold_refine, p3_fold_cpb, p3_fold_nbin, p3_fold_onpulse_flag, originalNrPolsP3, p3fold_nosmooth, s2dfs_p3_flag, s2dfs_p2_flag;
+  int profile_flag, lrfs_flag, stddev_flag, mod_flag, twodfs_flag, bootstrap, subtractDC, track_flag, amplitude_flag, ftrack_mask, inverseFFT, write_flag, modSimple_flag, zoom_flag, zoom_flag1, p2range_set, regionnr, s2dfs_p3_flag, s2dfs_p2_flag;
   long fft_blocks, junk_int;
   long i, j, k, l, p, nrpointsrms;
-  float xmin, xmax, xmin_zoom, xmax_zoom, mod_sigma, stddev_sigma, sampleI, freq_min, freq_max, var_rms, p3_fold, p3_fold_smoothWidth, p3fold_dphase;
+  float xmin, xmax, xmin_zoom, xmax_zoom, mod_sigma, stddev_sigma, sampleI, freq_min, freq_max, var_rms;
   float *profileI, *lrfs, *lrfs2, *stddev, *modindex, *rms_sigma, *rms_modindex, *twodfs, *clone_profileI, *phase_track, *phase_track_phases, *amplitude_profile, slope, track_dphase;
-  float *p3foldmap, *p3foldmap2;
   float zapmin, zapmax, p2min, p2max, p2, p3, junk_float;
   double *stddev_av, *modindex_av, *stddev_square, *modindex_square, rms, avrg;
-  char lrfsdevice[1000], onpulseselectdevice[1000], profiledevice[1000], trackdevice[1000], amplitudedevice[1000], twodfsdevice[1000], outputname[1000], txt[1000], p3fold_device[1000], s2dfs_p3_device[1000], s2dfs_p2_device[1000];
+  char lrfsdevice[1000], onpulseselectdevice[1000], profiledevice[1000], trackdevice[1000], amplitudedevice[1000], twodfsdevice[1000], outputname[1000], txt[1000], s2dfs_p3_device[1000], s2dfs_p2_device[1000];
   FILE *fout_ascii;
   psrsalsaApplication application;
   datafile_definition fin[MaxNrPolarizations], clone, fout;
@@ -92,29 +89,19 @@ int main(int argc, char **argv)
   sprintf(trackdevice, "?");
   sprintf(amplitudedevice, "?");
   sprintf(twodfsdevice, "?");
-  sprintf(p3fold_device, "?");
   sprintf(s2dfs_p3_device, "?");
   sprintf(s2dfs_p2_device, "?");
   cleanVerboseState(&noverbose);
   noverbose.nocounters = 1;
   track_only_first_region = 0;
-  p3_fold_flag = 0;
-  p3_fold_cpb = 1;
-  p3_fold_refine = 1;
-  p3_fold_smoothWidth = -1;
-  p3fold_dphase = 0;
-  p3_fold_onpulse_flag = 1;
-  p3fold_nosmooth = 0;
   s2dfs_p3_flag = 0;
   s2dfs_p2_flag = 0;
-
   application.oformat = FITS_format;
   if(argv[argc-1][0] == '-' && strcmp(argv[argc-1], "-formatlist") != 0 && strcmp(argv[argc-1], "-headerlist") != 0) {
     printerror(application.verbose_state.debug, "pspec: Last command line option is expected to be a file name.\nRun pspec without command line arguments to show help");
     terminateApplication(&application);
     return 0;
   }
-
   if(argc < 2) {
     printf("Program to analyse (folded) single pulse data using mostly Fourier techniques.\nIt is assumed the data contains a single pulse in each subint and that the\nbaseline is subtracted (use pmod -debase).\n\n");
     printApplicationHelp(&application);
@@ -154,32 +141,6 @@ int main(int argc, char **argv)
     printf("                      (for first selected region only).\n");
     printf("  -freq               Define which fluctuation frequencies (in cpp) are used for\n");
     printf("                      the subpulse phase track/amplitude calculation\n");
-    printf("  -p3fold             \"P3 n\": Fold the data using this P3 value in pulse\n");
-    printf("                      periods and the P3 cycle is divided in n bins in the final\n");
-    printf("                      result. If n > P3, the different bins are not independent\n");
-    printf("                      and you might want to use -p3fold_smooth option to make\n");
-    printf("                      the effective resolution equal to P3.\n");
-    printf("  -p3fold_dphase      Add this subpulse phase in degrees (can also use -slope).\n");
-    printf("  -p3fold_norefine    Do not attemt to align subsequent blocks, i.e. fixed\n");
-    printf("                      period folding\n");
-    printf("  -p3fold_nritt       Set the number of itterations, which produces a template\n");
-    printf("                      first thereby producing better results. Default is %d.\n", p3_fold_refine);
-    printf("  -p3fold_cpb         Set the number of cycles per block used in the cross\n");
-    printf("                      correlation used to compensate for P3 variations. More\n");
-    printf("                      means more signal to correlate (more precise alignment of\n");
-    printf("                      the blocks, less means less smearing in each block because\n");
-    printf("                      of P3 variation within the block. Default is %d.\n", p3_fold_cpb);
-    printf("  -p3fold_smooth      Replace the tophat weight used to assign power to the P3\n");
-    printf("                      bins with a Gausian weight with this width in pulse\n");
-    printf("                      periods. This could make oversampling look nicer and\n");
-    printf("                      reduce the effective resolution. Example: if P3=10P, you\n");
-    printf("                      could set n in the -p3fold option to 20, resulting in\n");
-    printf("                      oversampling with a factor 2. By setting -p3fold_smooth\n");
-    printf("                      to 2, the effective resolution is reduced by a factor 2\n");
-    printf("                      because each input pulse is smeared out with this width\n");
-    printf("                      in pulse periods.\n");
-    printf("  -p3fold_noonpulse   Ignore selected pulse longitude range, but use the full\n");
-    printf("                      range when doing the cross correlations\n");
     printf("  -p2zap              \"P2min P2max\" Zap fluctuations in this P2 range in cpp.\n");
     printf("  -p3zap              \"P3min P3max\" Zap fluctuations in this P3 range.\n");
     printf("                      P3min and P3max can be specified as bins or in cpp.\n");
@@ -192,10 +153,8 @@ int main(int argc, char **argv)
     printf("  -2dfsd              Set pgplot device for the 2DFS.\n");
     printf("  -s2dfs_p3d          Set pgplot device for the S2DFS (P3 map).\n");
     printf("  -s2dfs_p2d          Set pgplot device for the S2DFS (P2 map).\n");
-    printf("  -p3foldd            Set pgplot device for the P3 fold map.\n");
     printf("  -onpulsegr          Enables graphical selection of additional on-pulse regions\n");
     printf("                      to those defined with the -onpulse option.\n");
-
     printf("\n");
     printf("Please use the appropriate citation when using results of this software in your publications:\n\n");
     printf("More information about the lrfs/2dfs/modulation index can be found in:\n");
@@ -234,9 +193,6 @@ int main(int argc, char **argv)
  i++;
       }else if(strcmp(argv[i], "-profd") == 0) {
  strcpy(profiledevice, argv[i+1]);
- i++;
-      }else if(strcmp(argv[i], "-p3foldd") == 0) {
- strcpy(p3fold_device, argv[i+1]);
  i++;
       }else if(strcmp(argv[i], "-lrfsd") == 0) {
  strcpy(lrfsdevice, argv[i+1]);
@@ -288,43 +244,8 @@ int main(int argc, char **argv)
  subtractDC = 0;
       }else if(strcmp(argv[i], "-onpulsegr") == 0) {
  selectMoreOnpulseRegions = 1;
-      }else if(strcmp(argv[i], "-p3fold") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %d", &p3_fold, &p3_fold_nbin, NULL) == 0) {
-   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
-   return 0;
- }
- p3_fold_flag = 1;
- i++;
-      }else if(strcmp(argv[i], "-p3fold_nritt") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &p3_fold_refine, NULL) == 0) {
-   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
-   return 0;
- }
- i++;
-      }else if(strcmp(argv[i], "-p3fold_cpb") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &p3_fold_cpb, NULL) == 0) {
-   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
-   return 0;
- }
- i++;
-      }else if(strcmp(argv[i], "-p3fold_smooth") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &p3_fold_smoothWidth, NULL) == 0) {
-   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
-   return 0;
- }
- i++;
-      }else if(strcmp(argv[i], "-p3fold_norefine") == 0) {
- p3_fold_refine = 0;
-      }else if(strcmp(argv[i], "-p3fold_noonpulse") == 0) {
- p3_fold_onpulse_flag = 0;
       }else if(strcmp(argv[i], "-track_dphase") == 0) {
  if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &track_dphase, NULL) == 0) {
-   printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
-   return 0;
- }
- i++;
-      }else if(strcmp(argv[i], "-p3fold_dphase") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &p3fold_dphase, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pspec: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -367,34 +288,17 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR pspec: fft length is not a power of two.");
     return 0;
   }
-
-
-
-
   for(i = 0; i < MaxNrPolarizations; i++)
     cleanPSRData(&fin[i], application.verbose_state);
-
-
-
-
-
-
   if(application.iformat <= 0)
     application.iformat = guessPSRData_format(argv[argc-1], 0, application.verbose_state);
   if(application.iformat < 1) {
     printerror(application.verbose_state.debug, "ERROR pspec: Unknown input file format.\n");
     return 0;
   }
-
-
   closePSRData(&fin[0], 0, application.verbose_state);
-
-
   if(!openPSRData(&fin[0], argv[argc-1], application.iformat, 0, 1, 0, application.verbose_state))
     return 0;
-
-
-
   if(PSRDataHeader_parse_commandline(&fin[0], argc, argv, application.verbose_state) == 0)
     return 0;
   for(i = 1; i < argc; i++) {
@@ -405,7 +309,6 @@ int main(int argc, char **argv)
   if(preprocessApplication(&application, &fin[0]) == 0) {
     return 0;
   }
-
   double period;
   int ret;
   ret = get_period(fin[0], 0, &period, application.verbose_state);
@@ -430,18 +333,12 @@ int main(int argc, char **argv)
   if(check_baseline_subtracted(fin[0], application.verbose_state) == 0) {
     printwarning(application.verbose_state.debug, "WARNING pspec: Baseline does not appear to be subtracted. Use pmod -debase first.\n");
   }
-
-
-
   region_frac_to_int(&(application.onpulse), fin[0].NrBins, 0);
   if(fin[0].NrPols > MaxNrPolarizations) {
     printerror(application.verbose_state.debug, "ERROR pspec: Maximum supported input parameters is exceeded.\n");
     return 0;
   }
-
-
   originalNrPols = fin[0].NrPols;
-
   if(fin[0].NrPols > 0) {
     for(i = fin[0].NrPols-1; i >= 0; i--) {
       if(preprocess_polselect(fin[0], &clone, i, application.verbose_state) == 0) {
@@ -451,9 +348,6 @@ int main(int argc, char **argv)
       swap_orig_clone(&fin[i], &clone, application.verbose_state);
     }
   }
-
-
-
   cleanPSRData(&fout, application.verbose_state);
   copy_params_PSRData(fin[0], &fout, application.verbose_state);
   profileI = (float *)malloc(fin[0].NrBins*sizeof(float));
@@ -1159,94 +1053,6 @@ int main(int argc, char **argv)
     free(twodfs);
     free(s2dfs_p3);
     free(s2dfs_p2);
-  }
-  if(p3_fold_flag) {
-    p3foldmap = malloc(originalNrPols*fin[0].NrBins * p3_fold_nbin * sizeof(float));
-    if(p3foldmap == NULL) {
-      printerror(application.verbose_state.debug, "ERROR pspec: Cannot allocate memory");
-      return 0;
-    }
-    originalNrPolsP3 = originalNrPols;
-      if(originalNrPols > 1) {
- printwarning(application.verbose_state.debug, "WARNING pspec: Only first polarization chanel is folded.");
- originalNrPolsP3 = 1;
-      }
-    for(i = 0; i < originalNrPolsP3; i++) {
-      if(p3_fold_onpulse_flag) {
- if(foldP3(fin[i].data, fin[i].NrSubints, fin[i].NrBins, &p3foldmap[i*fin[0].NrBins * p3_fold_nbin], p3_fold_nbin, p3_fold, p3_fold_refine, p3_fold_cpb, p3fold_nosmooth, p3_fold_smoothWidth, slope*360.0/(float)fin[i].NrBins, p3fold_dphase, &application.onpulse
-, application.verbose_state) == 0) {
-   return 0;
- }
-      }else {
- if(foldP3(fin[i].data, fin[i].NrSubints, fin[i].NrBins, &p3foldmap[i*fin[0].NrBins * p3_fold_nbin], p3_fold_nbin, p3_fold, p3_fold_refine, p3_fold_cpb, p3fold_nosmooth, p3_fold_smoothWidth, slope*360.0/(float)fin[i].NrBins, p3fold_dphase, NULL
-, application.verbose_state) == 0) {
-   return 0;
- }
-      }
-    }
-    if(strcmp(p3fold_device, "?") == 0)
-      printf("Specify plotting device to show the P3 fold map: \n  ");
-      strcpy(pgplot_options.viewport.plotDevice, p3fold_device);
-      strcpy(pgplot_options.box.xlabel, "Pulse phase [degrees]");
-      strcpy(pgplot_options.box.ylabel, "P3 [pulse periods]");
-      strcpy(pgplot_options.box.title, "P3 fold");
-      ret = get_period(fin[0], 0, &period, application.verbose_state);
-      if(ret == 2) {
- printerror(application.verbose_state.debug, "ERROR pspec (%s): Cannot obtain period", fin[0].filename);
- return 0;
-      }
-      pgplotMap(&pgplot_options, p3foldmap, fin[0].NrBins, p3_fold_nbin, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, xmin_zoom, xmax_zoom, 0.5*p3_fold/(float)p3_fold_nbin, 0.5*p3_fold/(float)p3_fold_nbin + p3_fold*(p3_fold_nbin-1)/(float)p3_fold_nbin, 0, p3_fold, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, application.verbose_state);
-    if(write_flag) {
-      fout.NrSubints = p3_fold_nbin;
-      fout.NrBins = fin[0].NrBins;
-      fout.NrPols = originalNrPolsP3;
-      fout.gentype = GENTYPE_P3FOLD;
-      fout.tsubMode = TSUBMODE_FIXEDTSUB;
-      if(fout.tsub_list != NULL)
- free(fout.tsub_list);
-      fout.tsub_list = (double *)malloc(sizeof(double));
-      if(fout.tsub_list == NULL) {
- fflush(stdout);
- printerror(application.verbose_state.debug, "ERROR pspec: Memory allocation error");
- return 0;
-      }
-      fout.tsub_list[0] = get_tobs(fin[0], application.verbose_state);
-      fout.yrangeset = 1;
-      fout.yrange[0] = 0.5*p3_fold/(float)p3_fold_nbin;
-      fout.yrange[1] = 0.5*p3_fold/(float)p3_fold_nbin + p3_fold*(p3_fold_nbin-1)/(float)p3_fold_nbin;
-      if(change_filename_extension(argv[argc-1], outputname, "p3fold", 1000, application.verbose_state) == 0) {
- return 0;
-      }
-      if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, application.verbose_state)) {
- printerror(application.verbose_state.debug, "ERROR pspec: Unable to open file for writing.\n");
- return 0;
-      }
-      if(writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, application.verbose_state) == 0) {
- printerror(application.verbose_state.debug, "ERROR pspec: Unable to write header.\n");
- return 0;
-      }
-      p3foldmap2 = malloc(originalNrPols*fin[0].NrBins * p3_fold_nbin * sizeof(float));
-      if(p3foldmap2 == NULL) {
- printerror(application.verbose_state.debug, "ERROR pspec: Cannot allocate memory");
- return 0;
-      }
-      for(i = 0; i < p3_fold_nbin; i++) {
- for(p = 0; p < originalNrPolsP3; p++) {
-   memcpy(&p3foldmap2[(originalNrPolsP3*i+p)*fin[0].NrBins], &p3foldmap[(p*p3_fold_nbin+i)*fin[0].NrBins], fin[0].NrBins*sizeof(float));
- }
-      }
-      if(writePSRData(&fout, p3foldmap2, application.verbose_state) == 0) {
- printerror(application.verbose_state.debug, "ERROR pspec: Unable to write data.\n");
- return 0;
-      }
-      free(p3foldmap2);
-      closePSRData(&fout, 1, application.verbose_state);
-      fout.gentype = GENTYPE_UNDEFINED;
-      fout.yrangeset = 0;
-      fout.xrangeset = 0;
-      fout.NrPols = 1;
-    }
-    free(p3foldmap);
   }
   closePSRData(&fout, 0, application.verbose_state);
   for(i = 0; i < MaxNrPolarizations; i++)

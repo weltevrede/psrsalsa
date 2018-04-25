@@ -17,12 +17,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <string.h>
 #include <math.h>
 #include "psrsalsa.h"
-
-
-
-
-
-
 int readVonMisesModel(char *filename, vonMises_collection_definition *components, verbose_definition verbose)
 {
   int i;
@@ -51,17 +45,12 @@ int readVonMisesModel(char *filename, vonMises_collection_definition *components
   }
   return 1;
 }
-
-
 double calcVonMisesFunction2(double centre, double concentration, double height, double phase, double shift)
 {
   double y;
   y = exp((cos(2.0*M_PI*(phase-centre-shift))-1.0)*concentration) * height;
   return y;
 }
-
-
-
 double calcVonMisesFunction(vonMises_collection_definition *components, double phase, double shift)
 {
   int n;
@@ -74,14 +63,10 @@ double calcVonMisesFunction(vonMises_collection_definition *components, double p
   }
   return y;
 }
-
-
-
 void calcVonMisesProfile(vonMises_collection_definition *components, int nrbins, float *profile, double shift, int normalize)
 {
   int i;
   double x, Imax = -1;
-
   for(i = 0; i < nrbins; i++) {
     profile[i] = 0;
   }
@@ -99,16 +84,10 @@ void calcVonMisesProfile(vonMises_collection_definition *components, int nrbins,
     }
   }
 }
-
-
-
-
 float correlateVonMisesFunction(vonMises_collection_definition *components, int nrbins, float *profile, verbose_definition verbose)
 {
   float correl_max, *profile2;
   int i;
-
-
   int ishift;
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
@@ -122,7 +101,6 @@ float correlateVonMisesFunction(vonMises_collection_definition *components, int 
     printerror(verbose.debug, "ERROR correlateVonMisesFunction: Memory allocation error.");
     return 0;
   }
-
   calcVonMisesProfile(components, nrbins, profile2, 0, 0);
   find_peak_correlation(profile, profile2, nrbins, 0, 1, 1, &ishift, &correl_max, verbose);
   if(verbose.verbose) {

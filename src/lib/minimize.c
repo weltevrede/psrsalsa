@@ -22,15 +22,10 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <gsl/gsl_min.h>
 #include "gsl/gsl_roots.h"
 #include "psrsalsa.h"
-
-
-
-
-
 int minimize_1D_double_refine_borders(int findroot, double (*funk)(double, void *), void *params, int gridsearch, int investigateLocalMinima, double *x_lower, double *x_upper, int debug_verbose)
 {
   double x, y, ymin[3], ymin_new[3], dy[3], ymax, x_lower_new, x_upper_new, sign_old, gridsearch_margin, imin_new[3], i_originalgrid, imin1, imin2;
-  int imin[3], unset[3], imax, i, minima;
+  int imin[3], unset[3], i, minima;
   unset[0] = unset[1] = unset[2] = 1;
   for(i = 0; i < gridsearch; i++) {
     x = *x_lower + i*(*x_upper - *x_lower)/(double)(gridsearch-1);
@@ -86,7 +81,6 @@ int minimize_1D_double_refine_borders(int findroot, double (*funk)(double, void 
  }
       }
       if(i == 0 || y > ymax) {
- imax = i;
  ymax = y;
       }
     }
@@ -236,10 +230,6 @@ int minimize_1D_double(int findroot, double (*funk)(double, void *), void *param
     T_minimizer = gsl_min_fminimizer_brent;
     s_minimizer = gsl_min_fminimizer_alloc(T_minimizer);
     fflush(stdout);
-    double val1, val2, val3;
-    val1 = funk(x_lower, params);
-    val2 = funk(*x_minimum, params);
-    val3 = funk(x_upper, params);
     gsl_min_fminimizer_set(s_minimizer, &F, *x_minimum, x_lower, x_upper);
   }else {
     T_root = gsl_root_fsolver_brent;

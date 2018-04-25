@@ -13,42 +13,28 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
-
-
-
-
 #define _FILE_OFFSET_BITS 64
 #define _USE_LARGEFILE 1
 #define _LARGEFILE_SOURCE 1
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
 #include "psrsalsa.h"
-
 #define MaxNrOnpulseRegions 10
-
-
-
 int NrOnpulseRegions, OnPulseRegion[MaxNrOnpulseRegions][2];
-
 void PlotProfile(int NrBins, float *Ipulse, char *xlabel, char *ylabel, char *title, int Highlight, int color, int clearPage);
 void ShiftProfile(int shift, int NrBins, float *Iprofile, float *outputProfile);
-
 int main(int argc, char **argv)
 {
   char output_fname[1000], PlotDevice[100], singlechar, *inputname;
-  int deviceID, circularShift, noinput, onlyI, memsave, currentfilenumber, dummy_int;
+  int circularShift, noinput, onlyI, memsave, currentfilenumber, dummy_int;
   int shift, bin1, bin2, subintWritten, poladd;
   long i, j, pol, fchan, nsub, binnr, nrinputfiles, subintslost, currentOutputSubint, sumNsub, curNrInsubint;
   float *Iprofile, *Iprofile_firstfile, *shiftedProfile, *subint, x, y, *float_ptr, *float_ptr2;
   datafile_definition **fin;
   datafile_definition fout, clone;
-
-
   psrsalsaApplication application;
   initApplication(&application, "padd", "[options] inputfiles");
   application.switch_blocksize = 1;
@@ -62,11 +48,7 @@ int main(int argc, char **argv)
   application.switch_FSCR = 1;
   application.switch_nocounters = 1;
   application.switch_changeRefFreq = 1;
-
-
-
   application.oformat = FITS_format;
-
   strcpy(PlotDevice, "?");
   onlyI = 0;
   strcpy(output_fname, "addedfile.gg");
@@ -78,7 +60,6 @@ int main(int argc, char **argv)
   sumNsub = 1;
   poladd = 0;
   x = y = singlechar = 0;
-
   if(argc < 2) {
     printf("Program to add data files together. Usage:\n\n");
     printApplicationHelp(&application);
@@ -140,7 +121,6 @@ int main(int argc, char **argv)
  }
  i++;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "ERROR padd: Unknown option %s. Run padd without command-line options to get help.", argv[i]);
    terminateApplication(&application);
@@ -152,7 +132,6 @@ int main(int argc, char **argv)
       }
     }
   }
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
@@ -161,8 +140,6 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR padd: Need at least two input files");
     return 0;
   }
-
-
   if(sumNsub != 1 && poladd) {
     printerror(application.verbose_state.debug, "ERROR padd: Cannot use the -nsub and -poladd flag simultaneously.");
     return 0;
@@ -175,9 +152,6 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR padd: You must use the -n 0 option together with -poladd.");
     return 0;
   }
-
-
-
   fin = malloc(nrinputfiles*sizeof(datafile_definition *));
   if(fin == NULL) {
     printerror(application.verbose_state.debug, "ERROR padd: Memory allocation error");
@@ -189,18 +163,12 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR padd: Memory allocation error");
       return 0;
     }
-
   }
-
-
-
   currentfilenumber = 0;
   while((inputname = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
     verbose_definition verbose2;
     copyVerboseState(application.verbose_state, &verbose2);
     verbose2.indent = application.verbose_state.indent + 2;
-
-
     if(memsave == 0 || (currentfilenumber == 0 && noinput == 0)) {
       if(currentfilenumber == 0)
  printf("Read in input files:\n");
@@ -232,9 +200,6 @@ int main(int argc, char **argv)
  return 0;
       }
     }
-
-
-
     if(currentfilenumber == 0 && noinput == 0) {
       Iprofile_firstfile = (float *)malloc(fin[0]->NrPols*fin[0]->NrBins*sizeof(float));
       shiftedProfile = (float *)malloc(fin[0]->NrPols*fin[0]->NrBins*sizeof(float));
@@ -247,16 +212,12 @@ int main(int argc, char **argv)
  return 0;
       }
     }
-
-
     if(memsave) {
       if(closePSRData(fin[currentfilenumber], 1, application.verbose_state) != 0) {
  printerror(application.verbose_state.debug, "ERROR padd: Closing file %s failed\n", inputname);
  return 0;
       }
     }
-
-
     if(fin[currentfilenumber]->NrFreqChan != fin[0]->NrFreqChan) {
       printerror(application.verbose_state.debug, "ERROR padd: Nr of frequency channel are not equal in input files.");
       return 0;
@@ -282,16 +243,12 @@ int main(int argc, char **argv)
     currentfilenumber++;
   }
   printf("Reading of input files done\n");
-
-
-
   cleanPSRData(&fout, application.verbose_state);
   copy_params_PSRData(*(fin[0]), &fout, application.verbose_state);
   if(onlyI)
     fout.NrPols = 1;
   fout.format = application.oformat;
   fout.NrSubints = 0;
-
   subintslost = 0;
   if(poladd) {
     fout.NrPols = nrinputfiles;
@@ -299,16 +256,10 @@ int main(int argc, char **argv)
   }else {
     for(i = 0; i < nrinputfiles; i++) {
       fout.NrSubints += fin[i]->NrSubints;
-
-
       if(circularShift == 0) {
  fout.NrSubints -= 1;
  subintslost += 1;
-
       }
-
-
-
     }
   }
   printf("\nInput data contains %ld subints, %ld phase bins %ld frequency channels and %ld polarizations.\n", fout.NrSubints+subintslost, fout.NrBins, fout.NrFreqChan, fout.NrPols);
@@ -323,7 +274,6 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR padd: Memory allocation error");
     return 0;
   }
-
   currentOutputSubint = 0;
   fout.tsub_list[0] = 0;
   subintWritten = 0;
@@ -335,7 +285,6 @@ int main(int argc, char **argv)
   }else {
     for(i = 0; i < nrinputfiles; i++) {
       for(nsub = 0; nsub < fin[i]->NrSubints; nsub++) {
-
  if(currentOutputSubint < fout.NrSubints)
    fout.tsub_list[currentOutputSubint] += get_tsub(*(fin[i]), nsub, application.verbose_state);
  if(sumNsub == 1) {
@@ -354,7 +303,6 @@ int main(int argc, char **argv)
       }
     }
   }
-
   dummy_int = fout.NrSubints % sumNsub;
   fout.NrSubints = fout.NrSubints/sumNsub;
   printf("\nOutput data will contain %ld subints", fout.NrSubints);
@@ -363,17 +311,12 @@ int main(int argc, char **argv)
   if(dummy_int)
     printf(" (%d input subints lost because of incomplete last subint)", dummy_int);
   printf("\n\n");
-
-
   if(fout.gentype == GENTYPE_PULSESTACK && sumNsub != 1) {
     if(fout.NrSubints != 1)
       fout.gentype = GENTYPE_SUBINTEGRATIONS;
     else
       fout.gentype = GENTYPE_PROFILE;
   }
-
-
-
   if(openPSRData(&fout, output_fname, fout.format, 1, 0, 0, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR padd: Cannot open %s", output_fname);
     return 0;
@@ -382,9 +325,6 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR padd: Cannot write header to %s", output_fname);
     return 0;
   }
-
-
-
   Iprofile = (float *)malloc(fout.NrPols*fout.NrBins*sizeof(float));
   if(Iprofile == NULL) {
     printerror(application.verbose_state.debug, "ERROR padd: Cannot allocate memory.");
@@ -397,24 +337,17 @@ int main(int argc, char **argv)
       return 0;
     }
   }
-
-
   if(noinput == 0) {
-    deviceID = ppgopen(PlotDevice);
+    ppgopen(PlotDevice);
     ppgask(0);
     ppgslw(1);
   }
-
   currentfilenumber = 0;
   currentOutputSubint = 0;
   curNrInsubint = 0;
   subintWritten = 0;
   rewindFilenameList(&application);
   while((inputname = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
-
-
-
-
     if(memsave) {
       closePSRData(fin[currentfilenumber], 0, application.verbose_state);
       if(openPSRData(fin[currentfilenumber], inputname, application.iformat, 0, 1, 0, application.verbose_state) == 0) {
@@ -434,27 +367,19 @@ int main(int argc, char **argv)
  return 0;
       }
     }
-
-
-
     if(shift >= fout.NrBins)
       shift -= fout.NrBins;
     if(shift < 0)
       shift += fout.NrBins;
-
-
     if(noinput == 0 && currentfilenumber != 0) {
       if(read_profilePSRData(*fin[currentfilenumber], Iprofile, NULL, 0, application.verbose_state) != 1) {
  printerror(application.verbose_state.debug, "ERROR padd: Reading pulse profile failed.");
  return 0;
       }
       do {
-
  ShiftProfile(shift, fout.NrBins, Iprofile, shiftedProfile);
  PlotProfile(fout.NrBins, Iprofile_firstfile, "Bin number", "Intensity", "Click to shift profile, press s to stop", 0, 1, 1);
  PlotProfile(fout.NrBins, shiftedProfile, "", "", "", 0, 2, 0);
-
-
  j = 0;
  do {
    if(j == 0)
@@ -480,23 +405,16 @@ int main(int argc, char **argv)
  }
       }while(j < 10);
     }
-
-
     if(shift != 0) {
       if(continuous_shift(*fin[currentfilenumber], &clone, shift, circularShift, "padd", MEMORY_format, 0, NULL, application.verbose_state, application.verbose_state.debug) != 1) {
  printerror(application.verbose_state.debug, "ERROR padd: circular shift failed.");
       }
       swap_orig_clone(fin[currentfilenumber], &clone, application.verbose_state);
     }
-
     long nrPulsesInCurFile;
     nrPulsesInCurFile = fin[currentfilenumber]->NrSubints;
     if(shift == 0 && circularShift == 0)
       nrPulsesInCurFile -= 1;
-
-
-
-
     for(nsub = 0; nsub < nrPulsesInCurFile; nsub++) {
       int nrpolsinloop;
       nrpolsinloop = fout.NrPols;
@@ -509,7 +427,6 @@ int main(int argc, char **argv)
      return 0;
    }
    if(sumNsub == 1) {
-
      if(poladd == 0) {
        if(writePulsePSRData(&fout, currentOutputSubint, pol, fchan, 0, fout.NrBins, Iprofile, application.verbose_state) != 1) {
   printerror(application.verbose_state.debug, "ERROR padd: Write error");
@@ -562,15 +479,12 @@ int main(int argc, char **argv)
     if(application.verbose_state.nocounters == 0) {
       printf("Processing file %d is done.                                \n", currentfilenumber+1);
     }
-
     closePSRData(fin[currentfilenumber], 0, application.verbose_state);
     currentfilenumber++;
   }
-
   closePSRData(&fout, 0, application.verbose_state);
   if(noinput == 0)
     ppgend();
-
   free(Iprofile);
   if(noinput == 0) {
     free(shiftedProfile);
@@ -578,7 +492,6 @@ int main(int argc, char **argv)
   }
   if(sumNsub > 1)
     free(subint);
-
   for(i = 0; i < nrinputfiles; i++) {
     free(fin[i]);
   }
@@ -586,8 +499,6 @@ int main(int argc, char **argv)
   terminateApplication(&application);
   return 0;
 }
-
-
 int CheckOnPulse(int bin, int NrRegions, int Regions[MaxNrOnpulseRegions][2])
 {
   int i;
@@ -597,12 +508,10 @@ int CheckOnPulse(int bin, int NrRegions, int Regions[MaxNrOnpulseRegions][2])
   }
   return 0;
 }
-
 void PlotProfile(int NrBins, float *Ipulse, char *xlabel, char *ylabel, char *title, int Highlight, int color, int clearPage)
 {
   long j;
   float ymin, ymax;
-
   ymin = ymax = Ipulse[0];
   for(j = 1; j < NrBins; j++) {
     if(Ipulse[j] > ymax)
@@ -610,7 +519,6 @@ void PlotProfile(int NrBins, float *Ipulse, char *xlabel, char *ylabel, char *ti
     if(Ipulse[j] < ymin)
       ymin = Ipulse[j];
   }
-
   if(clearPage) {
     ppgpage();
     ppgsci(1);
@@ -630,8 +538,6 @@ void PlotProfile(int NrBins, float *Ipulse, char *xlabel, char *ylabel, char *ti
   }
   ppgsci(1);
 }
-
-
 void ShiftProfile(int shift, int NrBins, float *Iprofile, float *outputProfile)
 {
   int b, b2;

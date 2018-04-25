@@ -13,21 +13,12 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
 #define _FILE_OFFSET_BITS 64
 #define _USE_LARGEFILE 1
 #define _LARGEFILE_SOURCE 1
-
 #include <string.h>
 #include <math.h>
 #include "psrsalsa.h"
-
-
-
-
-
-
-
 void stripspaces(char *txt)
 {
   while(strlen(txt) > 0) {
@@ -37,13 +28,11 @@ void stripspaces(char *txt)
       break;
   }
 }
-
 void fillspaces(char *txt, int n)
 {
   memset(txt, ' ', n);
   txt[n] = 0;
 }
-
 double parse_unit_freq(char *txt, verbose_definition verbose)
 {
   int i;
@@ -63,20 +52,15 @@ double parse_unit_freq(char *txt, verbose_definition verbose)
     return 1000;
   }
 }
-
-
 void write_epn_longheader(datafile_definition datafile, int version, verbose_definition verbose)
 {
   int counter, nrlines, i;
   double dbl;
   char txt[100];
-
   nrlines = datafile.NrBins/20;
   if(datafile.NrBins > nrlines*20)
     nrlines++;
-
   counter=6+datafile.NrPols*datafile.NrFreqChan*(nrlines+2);
-
   if(version == 600) {
     fillspaces(txt, 68);
     sprintf(txt, "  Written using libpsrsalsa");
@@ -90,9 +74,6 @@ void write_epn_longheader(datafile_definition datafile, int version, verbose_def
     txt[66] = 0;
     fprintf(datafile.fptr, "EPN 6.30%6d%s", counter, txt);
   }
-
-
-
   fillspaces(txt, 12);
   if(strncmp(datafile.psrname, "PSR ", 4) == 0) {
     strncpy(txt, &datafile.psrname[4], 10);
@@ -106,7 +87,6 @@ void write_epn_longheader(datafile_definition datafile, int version, verbose_def
   txt[12] = 0;
   fprintf(datafile.fptr, "%12s", txt);
   fprintf(datafile.fptr, "%12s", txt);
-
   i = get_period(datafile, 0, &dbl, verbose);
   if(i == 2) {
     printerror(verbose.debug, "ERROR write_epn_longheader (%s): Cannot obtain period", datafile.filename);
@@ -130,23 +110,17 @@ void write_epn_longheader(datafile_definition datafile, int version, verbose_def
   fprintf(datafile.fptr, "%s", txt);
   fillspaces(txt, 8);
   fprintf(datafile.fptr, "%s", txt);
-
-
   converthms_string(txt, datafile.ra*12.0/M_PI, 3, 4);
   fprintf(datafile.fptr, "%s", txt);
   if(datafile.ra >= 0)
     fprintf(datafile.fptr, "+");
   converthms_string(txt, datafile.dec*180.0/M_PI, 3, 4);
   fprintf(datafile.fptr, "%s", txt);
-
   fillspaces(txt, 8);
   if(datafile.observatory != NULL) {
     strncpy(txt, datafile.observatory, 8);
-
-
   }
   fprintf(datafile.fptr, "%8s", txt);
-
   sprintf(txt, "%10.3Lf", datafile.mjd_start);
   fprintf(datafile.fptr, "%s", txt);
   sprintf(txt, "%8.3f", 0.0);
@@ -155,8 +129,6 @@ void write_epn_longheader(datafile_definition datafile, int version, verbose_def
   fprintf(datafile.fptr, " ");
   fillspaces(txt, 31);
   fprintf(datafile.fptr, "%s", txt);
-
-
   sprintf(txt, "%17.5lf", datafile.telescope_X);
   fprintf(datafile.fptr, "%s", txt);
   sprintf(txt, "%17.5lf", datafile.telescope_Y);
@@ -165,11 +137,8 @@ void write_epn_longheader(datafile_definition datafile, int version, verbose_def
   fprintf(datafile.fptr, "%s", txt);
   fillspaces(txt, 29);
   fprintf(datafile.fptr, "%s", txt);
-
-
   sprintf(txt, "01121978");
   fprintf(datafile.fptr, "%s", txt);
-
   i = 0;
   sscanf(datafile.scanID, "%d", &i);
   sprintf(txt, "%04d", i);
@@ -207,24 +176,17 @@ void write_epn_longheader(datafile_definition datafile, int version, verbose_def
   }
   fprintf(datafile.fptr, "--------------------------------------------------------------------------------");
 }
-
-
-
-
 void write_epn_shortheader(datafile_definition datafile, int version, char *idfield, int nband, verbose_definition verbose)
 {
   char txt[100];
-
   if(datafile.freqMode != FREQMODE_UNIFORM) {
     printerror(verbose.debug, "ERROR write_epn_shortheader (%s): Frequency channels do not appear to be uniformly distributed.", datafile.filename);
     exit(0);
   }
-
   fillspaces(txt, 8);
   strncpy(txt, idfield, 8);
   txt[8] = 0;
   fprintf(datafile.fptr, "%s", txt);
-
   sprintf(txt, "%04d", nband);
   fprintf(datafile.fptr, "%s", txt);
   sprintf(txt, "%04d", 1);
@@ -255,20 +217,17 @@ void write_epn_shortheader(datafile_definition datafile, int version, char *idfi
     fprintf(datafile.fptr, "%s", txt);
   }
 }
-
 void write_epn_data(datafile_definition datafile, float scale, float offset, float rms, unsigned int *iprofile, verbose_definition verbose)
 {
   int i;
   char txt[100];
   double dbl;
-
   sprintf(txt, "%#12G", scale);
   fprintf(datafile.fptr, "%s", txt);
   sprintf(txt, "%#12G", offset);
   fprintf(datafile.fptr, "%s", txt);
   sprintf(txt, "%#12G", rms);
   fprintf(datafile.fptr, "%s", txt);
-
   i = get_period(datafile, 0, &dbl, verbose);
   if(i == 2) {
     printerror(verbose.debug, "ERROR write_epn_data (%s): Cannot obtain period", datafile.filename);
@@ -282,10 +241,8 @@ void write_epn_data(datafile_definition datafile, float scale, float offset, flo
   }
   sprintf(txt, "%16.12lf", dbl);
   fprintf(datafile.fptr, "%s", txt);
-
   fillspaces(txt, 28);
   fprintf(datafile.fptr, "%s", txt);
-
   for(i = 0; i < datafile.NrBins; i++)
     fprintf(datafile.fptr, "%04X", iprofile[i]);
   for(i = 0; i < 20-(datafile.NrBins-(datafile.NrBins/20)*20); i++)

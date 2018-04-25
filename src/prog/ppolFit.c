@@ -13,10 +13,6 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
-
-
-
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
@@ -26,62 +22,37 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "gsl/gsl_randist.h"
 #include "psrsalsa.h"
 #include "cpgplot.h"
-
 #define M_PI 3.14159265358979323846
 #define MaxNrJumps 100
-
-
 void PrintHelp();
 void convertAlphaBeta(double *alpha, double *beta
         );
 void calcBeamWidths(int nalpha, int nbeta, double alphastart, double alphaend, double betastart, double betaend,
       int calculate_beam_widths, int calculate_interpulse_widths, double pulse_width2, float *rhogrid, float *rhogrid2, int nocounters);
-
 int internal_fit_pa_or_l0;
-
 void PlotGrid(float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, double level, double suppress_fac, int GridDeviceID, double alpha, double beta, double lwbox, double labelcharheight, double boxlabelcharheight, int drawCross, int draw_title, int drawcontours, int nogray,
        double chimax, double chimin, int maptype, int showwedge, char *showwedge_label);
-
 void DoFitting(double alpha0, double beta0, double pa0, double dpa0, double l0, double dl0, double dh0, double ddh0, double ftol, double *fit_pa0, double *fit_l0, double *fit_a, double *fit_b, double *fit_dh, double *chi, int *nfunk, int searchAll, int report, FILE *reportStream, int finderrors, double nrofsigmas, int *nfitparameters, int amoeba_algorithm, verbose_definition verbose);
-
 void PlotPAswing(double alpha, double beta, double pa0, double l0, int PlotFit, double leftPulseLongitude, double rightPulseLongitude, double dh);
-
 void PlotContours(float *rhogrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nrlevels, float *TR, int GridDeviceID, int contour_txt, int contourcolor, int fixedContours, int nruserContours, float *userContours, int lwbox, int dotted);
-
 void calcIntersectionRhoAndBanana(float *rhogrid, float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nruserContours, float *userContours, double chimax, double chimin, verbose_definition verbose);
-
 void print_steepness(double alpha, double beta, double l0, double pa0, int verbose, double dh, double *sina_b);
-
 double funk(double x[]);
-
 double internal_funk_gsl(double *x, void *params);
-
 double dy_180(double y1, double y2);
 double dy_90(double y1, double y2);
-
-
-
-
 struct {
-
   double *data_l;
   float *data_pa, *data_dpa;
   int NrDataPoints;
-
   double jump_longitude[MaxNrJumps], jump_offset[MaxNrJumps];
   int nrJumps, autojump;
-
   double add_height_longitude;
-
-
   double l0_start, max_l0_diff;
-
   int force_set;
   double force_l, force_pa, force_dpa;
   double pulse_width, sigma_width, rho_bcw, sigma_rho;
 }fitterinfo;
-
-
 int main(int argc, char **argv)
 {
   char dumpfile[1000], c, device1[100], device2[100], txt[MaxStringLength], *txtptr, *showwedge_label;
@@ -104,7 +75,7 @@ int main(int argc, char **argv)
   double labelcharheight, boxlabelcharheight, suppress_fac;
   double alphastart, alphaend, betastart, betaend, add_longitude_shift;
   double leftPulseLongitude, rightPulseLongitude, nrofsigmas;
-  double level, pulse_width2, bestl0, bestpa0, beshdh;
+  double level, pulse_width2, bestl0, bestpa0;
   double paErrorFac;
   FILE *fin, *macrofile, *beamwidth_params_fin;
   double sina_b;
@@ -115,15 +86,11 @@ int main(int argc, char **argv)
   int usegsl_error_grid_search;
   psrsalsaApplication application;
   verbose_definition beamwidth_params_vebose;
-
   initApplication(&application, "ppolFit", "[options] paswing_file");
-
   application.switch_verbose = 1;
   application.switch_nocounters = 1;
   application.switch_debug = 1;
   application.switch_history_cmd_only = 1;
-
-
   suppress_greyscale = 6;
   fitterinfo.pulse_width = 0;
   nogray = 0;
@@ -177,12 +144,10 @@ int main(int argc, char **argv)
   paDevice_resx = 680;
   paDevice_resy = 340;
   amoeba_algorithm = 0;
-
   usegsl_error_grid_search = 1;
   devicenores = 0;
   fixseed = 0;
   cleanVerboseState(&beamwidth_params_vebose);
-
   fin = NULL;
   rhogrid = rhogrid2 = NULL;
   bestalpha = bestbeta = -1e10;
@@ -192,7 +157,6 @@ int main(int argc, char **argv)
   paErrorFac = 1;
   sprintf(prefix, "chi2");
   doContourRange = 0;
-
   if(argc < 2) {
     printf("Program to fit the rotating vector model to a position angle swing as generated by ppol. Usage:\n\n");
     printApplicationHelp(&application);
@@ -378,11 +342,6 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR ppolFit: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
-
-
-
-
-
  doContourRange = 1;
  i++;
       }else if(strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "-l0") == 0) {
@@ -448,8 +407,6 @@ int main(int argc, char **argv)
  fixseed = 1;
       }else if(strcmp(argv[i], "-cont") == 0) {
  contour_plot = 1;
-
-
       }else if(strcmp(argv[i], "-best") == 0) {
  onlyshowbest = 1;
       }else if(strcmp(argv[i], "-autoopm") == 0) {
@@ -480,7 +437,6 @@ int main(int argc, char **argv)
  }
  i++;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "ppolFit: Unknown option: %s\n\nRun ppolFit without command line arguments to show help", argv[i]);
    terminateApplication(&application);
@@ -871,7 +827,6 @@ int main(int argc, char **argv)
    chi_old = chi;
    bestl0 = fit_l0;
    bestpa0 = fit_pa0;
-   beshdh = fit_dh0;
    if(doBruteForce) {
      int bruteForceSignPa0, bruteForceSignL0, pa0step, l0step;
      double newpa0, newl0;
@@ -886,7 +841,6 @@ int main(int argc, char **argv)
         chi_old = chi;
         bestl0 = fit_l0;
         bestpa0 = fit_pa0;
-        beshdh = fit_dh0;
       }
     }
   }

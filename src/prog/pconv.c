@@ -13,21 +13,14 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
 #define _FILE_OFFSET_BITS 64
 #define _USE_LARGEFILE 1
 #define _LARGEFILE_SOURCE 1
-
 #include <stdio.h>
 #include <string.h>
 #include <psrsalsa.h>
-
 int pumawrite(void *prptr, int size, int nelem,FILE *out);
-
-
-
 void print_help();
-
 int main(int argc, char **argv)
 {
   datafile_definition fin, fout;
@@ -36,8 +29,6 @@ int main(int argc, char **argv)
   float *pulseData, sample;
   char outputname[MaxFilenameLength], *dummy_ptr;
   psrsalsaApplication application;
-
-
   initApplication(&application, "pconv", "[options] inputfile(s)");
   application.switch_headerlist = 1;
   application.switch_header = 1;
@@ -62,6 +53,8 @@ int main(int argc, char **argv)
   application.switch_nskip = 1;
   application.switch_nread = 1;
   application.switch_noweights = 1;
+  application.switch_useweights = 1;
+  application.switch_uniformweights = 1;
   application.switch_norm = 1;
   application.switch_debase = 1;
   application.switch_onpulse = 1;
@@ -70,14 +63,7 @@ int main(int argc, char **argv)
   application.switch_stokes = 1;
   application.switch_deparang = 1;
   application.switch_history_cmd_only = 1;
-
-
-
-
   read_wholefile = 1;
-
-
-
   if(argc <= 1) {
     printApplicationHelp(&application);
     print_help();
@@ -89,7 +75,6 @@ int main(int argc, char **argv)
     }else if(strcmp(argv[indx], "-memsave") == 0) {
       read_wholefile = 0;
     }else {
-
       if(argv[indx][0] == '-') {
  printerror(application.verbose_state.debug, "ERROR pconv: Unknown option (%s).\n\nRun pconv without command line arguments to show help", argv[indx]);
  terminateApplication(&application);
@@ -98,37 +83,22 @@ int main(int argc, char **argv)
  if(applicationAddFilename(indx, application.verbose_state) == 0)
    return 0;
       }
-
-
-
-
     }
   }
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
-
   if(numberInApplicationFilenameList(&application, argv, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR pconv: No files specified");
     return 0;
   }
-
   if(isValidPSRDATA_format(application.oformat) == 0) {
     printerror(application.verbose_state.debug, "ERROR pconv: Please specify a valid output format with the -oformat option.");
     terminateApplication(&application);
     return 0;
   }
-
-
-
   cleanPSRData(&fout, application.verbose_state);
-
-
-
   while((dummy_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
-
-
   if(application.iformat <= 0)
     application.iformat = guessPSRData_format(dummy_ptr, 0, application.verbose_state);
   if(isValidPSRDATA_format(application.iformat) == 0) {

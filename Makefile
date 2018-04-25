@@ -21,12 +21,12 @@ FFLAGS = -fno-underscoring -O
 LIBS = -lm -lcfitsio -lcpgplot -lpgplot -lpng -lX11 -lgsl -lgslcblas -lfftw3f -lgfortran
 
 #Define directories where libraries can be found.
-LIBDIRS = -L$(PGPLOT_DIR)
+LIBDIRS = -L$(PGPLOT_DIR) -L/local/scratch/wltvrede/puma1soft/trunk/src/Soft/cfitsio/lib/
 
 #Define directories where include files can be found.
 #You can probably use something like: locate fitsio.h
 #to find the location of for instance the fitsio include files
-INCDIRS = -Isrc/lib/ -I$(PGPLOT_DIR) -I/usr/include/cfitsio/
+INCDIRS = -Isrc/lib/ -I$(PGPLOT_DIR) -I/local/scratch/wltvrede/puma1soft/trunk/src/Soft/cfitsio/include/
 
 #You may want to define the GSL version you're using during compilation. Version 1.15 would be 115 etc (100*major version + minor version).
 GSLFLAGS = -DGSL_VERSION_NUMBER=115

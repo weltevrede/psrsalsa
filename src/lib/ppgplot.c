@@ -17,13 +17,9 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <string.h>
 #include <stdlib.h>
 #include "cpgplot.h"
-
 static FILE *ppgdevice_internal = NULL;
-
 static char ppgdevicename_internal[1000];
 static int ppg_nextaux_internal;
-
-
 int ppgopen(const char *device)
 {
   fflush(stdout);
@@ -34,7 +30,6 @@ int ppgopen(const char *device)
     return 1;
   }
 }
-
 void ppgclos(void)
 {
   fflush(stdout);
@@ -44,7 +39,6 @@ void ppgclos(void)
     fprintf(ppgdevice_internal, "pgclos\n");
   }
 }
-
 void ppgend(void)
 {
   fflush(stdout);
@@ -54,7 +48,6 @@ void ppgend(void)
     fprintf(ppgdevice_internal, "pgend\n");
   }
 }
-
 void ppgbbuf(void)
 {
   if(ppgdevice_internal == NULL)
@@ -63,7 +56,6 @@ void ppgbbuf(void)
     fprintf(ppgdevice_internal, "pgbbuf\n");
   }
 }
-
 void ppgebuf(void)
 {
   if(ppgdevice_internal == NULL)
@@ -72,7 +64,6 @@ void ppgebuf(void)
     fprintf(ppgdevice_internal, "pgebuf\n");
   }
 }
-
 void ppgpap(float width, float aspect)
 {
   fflush(stdout);
@@ -82,8 +73,6 @@ void ppgpap(float width, float aspect)
     fprintf(ppgdevice_internal, "pgpap %f %f\n", width, aspect);
   }
 }
-
-
 void ppgsvp(float xleft, float xright, float ybot, float ytop)
 {
   if(ppgdevice_internal == NULL)
@@ -91,9 +80,7 @@ void ppgsvp(float xleft, float xright, float ybot, float ytop)
   else {
     fprintf(ppgdevice_internal, "pgsvp %f %f %f %f\n", xleft, xright, ybot, ytop);
   }
-
 }
-
 int ppgqvp(int units, float *xleft, float *xright, float *ybot, float *ytop)
 {
   if(ppgdevice_internal == NULL) {
@@ -105,8 +92,6 @@ int ppgqvp(int units, float *xleft, float *xright, float *ybot, float *ytop)
     return 0;
   }
 }
-
-
 void ppgqinf(const char *item, char *value, int *value_length)
 {
   if(ppgdevice_internal == NULL) {
@@ -118,8 +103,6 @@ void ppgqinf(const char *item, char *value, int *value_length)
     return;
   }
 }
-
-
 int ppgqwin(float *xleft, float *xright, float *ybot, float *ytop)
 {
   if(ppgdevice_internal == NULL) {
@@ -131,7 +114,6 @@ int ppgqwin(float *xleft, float *xright, float *ybot, float *ytop)
     return 0;
   }
 }
-
 void ppgswin(float x1, float x2, float y1, float y2)
 {
   if(ppgdevice_internal == NULL)
@@ -140,7 +122,6 @@ void ppgswin(float x1, float x2, float y1, float y2)
     fprintf(ppgdevice_internal, "pgswin %f %f %f %f\n", x1, x2, y1, y2);
   }
 }
-
 void ppglab(const char *xlbl, const char *ylbl, const char *toplbl)
 {
   if(ppgdevice_internal == NULL)
@@ -149,7 +130,6 @@ void ppglab(const char *xlbl, const char *ylbl, const char *toplbl)
     fprintf(ppgdevice_internal, "pglab '%s' '%s' '%s'\n", xlbl, ylbl, toplbl);
   }
 }
-
 void ppgbox(const char *xopt, float xtick, int nxsub, const char *yopt, float ytick, int nysub)
 {
   if(ppgdevice_internal == NULL)
@@ -158,7 +138,6 @@ void ppgbox(const char *xopt, float xtick, int nxsub, const char *yopt, float yt
     fprintf(ppgdevice_internal, "pgbox %s %f %d %s %f %d\n", xopt, xtick, nxsub, yopt, ytick, nysub);
   }
 }
-
 void ppgask(int flag)
 {
   if(ppgdevice_internal == NULL)
@@ -167,7 +146,6 @@ void ppgask(int flag)
     fprintf(ppgdevice_internal, "pgask %d\n", flag);
   }
 }
-
 void ppgsitf(int itf)
 {
   if(ppgdevice_internal == NULL)
@@ -176,8 +154,6 @@ void ppgsitf(int itf)
     fprintf(ppgdevice_internal, "pgsitf %d\n", itf);
   }
 }
-
-
 void ppgpage(void)
 {
   if(ppgdevice_internal == NULL)
@@ -186,7 +162,6 @@ void ppgpage(void)
     fprintf(ppgdevice_internal, "pgpage\n");
   }
 }
-
 void ppgaxis(const char *opt, float x1, float y1, float x2, float y2, float v1, float v2, float step, int nsub, float dmajl, float dmajr, float fmin, float disp, float orient)
 {
   if(ppgdevice_internal == NULL)
@@ -195,7 +170,6 @@ void ppgaxis(const char *opt, float x1, float y1, float x2, float y2, float v1, 
     fprintf(ppgdevice_internal, "pgaxis '%s' %f %f %f %f %f %f %f %d %f %f %f %f %f\n", opt, x1, y1, x2, y2, v1, v2, step, nsub, dmajl, dmajr, fmin, disp, orient);
   }
 }
-
 void ppgmtxt(const char *side, float disp, float coord, float fjust, const char *text)
 {
   if(ppgdevice_internal == NULL)
@@ -204,7 +178,6 @@ void ppgmtxt(const char *side, float disp, float coord, float fjust, const char 
     fprintf(ppgdevice_internal, "pgmtxt %s %f %f %f '%s'\n", side, disp, coord, fjust, text);
   }
 }
-
 void ppgtick(float x1, float y1, float x2, float y2, float v, float tikl, float tikr, float disp, float orient, const char *str)
 {
   if(ppgdevice_internal == NULL)
@@ -213,8 +186,6 @@ void ppgtick(float x1, float y1, float x2, float y2, float v, float tikl, float 
     fprintf(ppgdevice_internal, "pgtick %f %f %f %f %f %f %f %f %f '%s'\n", x1, y1, x2, y2, v, tikl, tikr, disp, orient, str);
   }
 }
-
-
 void ppgslw(int lw)
 {
   if(ppgdevice_internal == NULL)
@@ -223,8 +194,6 @@ void ppgslw(int lw)
     fprintf(ppgdevice_internal, "pgslw %d\n", lw);
   }
 }
-
-
 void ppgsci(int ci)
 {
   if(ppgdevice_internal == NULL)
@@ -233,7 +202,6 @@ void ppgsci(int ci)
     fprintf(ppgdevice_internal, "pgsci %d\n", ci);
   }
 }
-
 void ppgscr(int ci, float cr, float cg, float cb)
 {
   if(ppgdevice_internal == NULL)
@@ -242,7 +210,6 @@ void ppgscr(int ci, float cr, float cg, float cb)
     fprintf(ppgdevice_internal, "pgscr %d %f %f %f\n", ci, cr, cg, cb);
   }
 }
-
 void ppgsls(int ls)
 {
   if(ppgdevice_internal == NULL)
@@ -251,7 +218,6 @@ void ppgsls(int ls)
     fprintf(ppgdevice_internal, "pgsls %d\n", ls);
   }
 }
-
 void ppgsfs(int fs)
 {
   if(ppgdevice_internal == NULL)
@@ -260,7 +226,6 @@ void ppgsfs(int fs)
     fprintf(ppgdevice_internal, "pgsfs %d\n", fs);
   }
 }
-
 void ppgsch(float size)
 {
   if(ppgdevice_internal == NULL)
@@ -269,7 +234,6 @@ void ppgsch(float size)
     fprintf(ppgdevice_internal, "pgsch %f\n", size);
   }
 }
-
 void ppgqcs(int units, float *xch, float *ych)
 {
   if(ppgdevice_internal == NULL) {
@@ -281,7 +245,6 @@ void ppgqcs(int units, float *xch, float *ych)
     return;
   }
 }
-
 void ppgscf(int font)
 {
   if(ppgdevice_internal == NULL)
@@ -290,7 +253,6 @@ void ppgscf(int font)
     fprintf(ppgdevice_internal, "pgscf %d\n", font);
   }
 }
-
 void ppgshs(float angle, float sepn, float phase)
 {
   if(ppgdevice_internal == NULL)
@@ -299,7 +261,6 @@ void ppgshs(float angle, float sepn, float phase)
     fprintf(ppgdevice_internal, "pgshs %f %f %f\n", angle, sepn, phase);
   }
 }
-
 void ppgarro(float x1, float y1, float x2, float y2)
 {
   if(ppgdevice_internal == NULL)
@@ -308,8 +269,6 @@ void ppgarro(float x1, float y1, float x2, float y2)
     fprintf(ppgdevice_internal, "pgarro %f %f %f %f\n", x1, y1, x2, y2);
   }
 }
-
-
 void ppgmove(float x, float y)
 {
   if(ppgdevice_internal == NULL)
@@ -318,7 +277,6 @@ void ppgmove(float x, float y)
     fprintf(ppgdevice_internal, "pgmove %f %f\n", x, y);
   }
 }
-
 void ppgdraw(float x, float y)
 {
   if(ppgdevice_internal == NULL)
@@ -327,7 +285,6 @@ void ppgdraw(float x, float y)
     fprintf(ppgdevice_internal, "pgdraw %f %f\n", x, y);
   }
 }
-
 void ppgpt1(float xpt, float ypt, int symbol)
 {
   if(ppgdevice_internal == NULL)
@@ -336,7 +293,6 @@ void ppgpt1(float xpt, float ypt, int symbol)
     fprintf(ppgdevice_internal, "pgpt1 %f %f %d\n", xpt, ypt, symbol);
   }
 }
-
 void ppgerr1(int dir, float x, float y, float e, float t)
 {
   if(ppgdevice_internal == NULL)
@@ -345,7 +301,6 @@ void ppgerr1(int dir, float x, float y, float e, float t)
     fprintf(ppgdevice_internal, "pgerr1 %d %f %f %f %f\n", dir, x, y, e, t);
   }
 }
-
 void ppgcirc(float xcent, float ycent, float radius)
 {
   if(ppgdevice_internal == NULL)
@@ -354,7 +309,6 @@ void ppgcirc(float xcent, float ycent, float radius)
     fprintf(ppgdevice_internal, "pgcirc %f %f %f\n", xcent, ycent, radius);
   }
 }
-
 void ppgtext(float x, float y, const char *text)
 {
   if(ppgdevice_internal == NULL)
@@ -363,7 +317,6 @@ void ppgtext(float x, float y, const char *text)
     fprintf(ppgdevice_internal, "pgtext %f %f '%s'\n", x, y, text);
   }
 }
-
 void ppgptxt(float x, float y, float angle, float fjust, const char *text)
 {
   if(ppgdevice_internal == NULL)
@@ -372,7 +325,6 @@ void ppgptxt(float x, float y, float angle, float fjust, const char *text)
     fprintf(ppgdevice_internal, "pgptxt %f %f %f %f '%s'\n", x, y, angle, fjust, text);
   }
 }
-
 void ppgrect(float x1, float x2, float y1, float y2)
 {
   if(ppgdevice_internal == NULL)
@@ -381,8 +333,6 @@ void ppgrect(float x1, float x2, float y1, float y2)
     fprintf(ppgdevice_internal, "pgrect %f %f %f %f\n", x1, x2, y1, y2);
   }
 }
-
-
 void ppgimag(const float *a, int idim, int jdim, int i1, int i2, int j1, int j2, float a1, float a2, const float *tr)
 {
   FILE *fout;
@@ -408,8 +358,6 @@ void ppgimag(const float *a, int idim, int jdim, int i1, int i2, int j1, int j2,
     fprintf(ppgdevice_internal, "pgimag %s %d %d %d %d %d %d %f %f %f %f %f %f %f %f\n", filename, idim, jdim, i1, i2, j1, j2, a1, a2, tr[0], tr[1], tr[2], tr[3], tr[4], tr[5]);
   }
 }
-
-
 void ppgcont(const float *a, int idim, int jdim, int i1, int i2, int j1, int j2, const float *c, int nc, const float *tr)
 {
   FILE *fout;
@@ -436,15 +384,11 @@ void ppgcont(const float *a, int idim, int jdim, int i1, int i2, int j1, int j2,
     fprintf(ppgdevice_internal, "pgcont %s %d %d %d %d %d %d %d", filename, idim, jdim, i1, i2, j1, j2, nc);
     if(nc < 0)
       nc *= -1;
-
-
     for(i = 0; i < nc; i++)
       fprintf(ppgdevice_internal, " %f", c[i]);
     fprintf(ppgdevice_internal, " %f %f %f %f %f %f\n", tr[0], tr[1], tr[2], tr[3], tr[4], tr[5]);
   }
 }
-
-
 void ppgconl(const float *a, int idim, int jdim, int i1, int i2, int j1, int j2, float c, const float *tr, const char *label, int intval, int minint)
 {
   FILE *fout;
@@ -470,8 +414,6 @@ void ppgconl(const float *a, int idim, int jdim, int i1, int i2, int j1, int j2,
     fprintf(ppgdevice_internal, "pgconl %s %d %d %d %d %d %d %f %f %f %f %f %f %f %d %d '%s'\n", filename, idim, jdim, i1, i2, j1, j2, c, tr[0], tr[1], tr[2], tr[3], tr[4], tr[5], intval, minint, label);
   }
 }
-
-
 void ppgpoly(int n, const float *xpts, const float *ypts)
 {
   char filename[2000];
@@ -480,7 +422,6 @@ void ppgpoly(int n, const float *xpts, const float *ypts)
   if(ppgdevice_internal == NULL)
     cpgpoly(n, xpts, ypts);
   else {
-
     sprintf(filename, "%s.aux%03d", ppgdevicename_internal, ppg_nextaux_internal++);
     fout = fopen(filename, "wb");
     if(fout == NULL) {
@@ -504,9 +445,6 @@ void ppgpoly(int n, const float *xpts, const float *ypts)
     fprintf(ppgdevice_internal, "pgpoly %d %s\n", n, filename);
   }
 }
-
-
-
 int ppgcurs(float *x, float *y, char *ch)
 {
   fflush(stdout);
@@ -518,7 +456,6 @@ int ppgcurs(float *x, float *y, char *ch)
     return 0;
   }
 }
-
 int ppgband(int mode, int posn, float xref, float yref, float *x, float *y, char *ch_scalar)
 {
   fflush(stdout);
@@ -530,7 +467,6 @@ int ppgband(int mode, int posn, float xref, float yref, float *x, float *y, char
     return 0;
   }
 }
-
 void ppgscir(int icilo, int icihi)
 {
   if(ppgdevice_internal == NULL)
@@ -539,7 +475,6 @@ void ppgscir(int icilo, int icihi)
     fprintf(ppgdevice_internal, "pgscir %d %d\n", icilo, icihi);
   }
 }
-
 void ppgctab(float *l, float *r, float *g, float *b, int nc, float contra, float bright)
 {
   FILE *fout;
@@ -568,7 +503,6 @@ void ppgctab(float *l, float *r, float *g, float *b, int nc, float contra, float
     fprintf(ppgdevice_internal, "pgctab %s %d %f %f\n", filename, nc, contra, bright);
   }
 }
-
 void ppgwedg(const char *side, float disp, float width, float fg, float bg, const char *label)
 {
   if(ppgdevice_internal == NULL)
@@ -577,7 +511,6 @@ void ppgwedg(const char *side, float disp, float width, float fg, float bg, cons
     fprintf(ppgdevice_internal, "pgwedg %s %f %f %f %f '%s'\n", side, disp, width, fg, bg, label);
   }
 }
-
 int ppgqid(int *id)
 {
   if(ppgdevice_internal == NULL) {
@@ -589,7 +522,6 @@ int ppgqid(int *id)
     return 0;
   }
 }
-
 int ppgslct(int id)
 {
   if(ppgdevice_internal == NULL) {

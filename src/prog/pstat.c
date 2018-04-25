@@ -19,7 +19,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <gsl/gsl_sort.h>
 #include <gsl/gsl_statistics_double.h>
 #include "psrsalsa.h"
-
 #define KSTEST 1
 #define KSFLAT 2
 #define KSSIN 3
@@ -29,22 +28,16 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define MEDIAN 31
 #define CHI2TEST_HIST 50
 #define CHI2TEST_CDF 51
-
-
-
 int main(int argc, char **argv)
 {
   psrsalsaApplication application;
   long i, j;
   int file1_column1, file1_column2, file1_column3, file2_column1, file2_column2, file2_column3, typetest, read_log, output_idx;
   double threshold1, threshold2, threshold3;
-
   initApplication(&application, "pstat", "[options] inputfile(s)");
-
   application.switch_libversions = 1;
   application.switch_verbose = 1;
   application.switch_debug = 1;
-
   file1_column1 = 0;
   file1_column2 = 0;
   file1_column3 = 0;
@@ -57,7 +50,6 @@ int main(int argc, char **argv)
   threshold2 = 0;
   threshold3 = 0;
   output_idx = 0;
-
   if(argc < 2) {
     printf("Program to perform various statistical tests on input data. One or two input\n");
     printf("files are required depending on the statistical test to be performed. The input\n");

@@ -16,8 +16,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include <string.h>
 #include "psrsalsa.h"
-
-
 #define NrBoxCarWidths 29
 int BoxCars[NrBoxCarWidths] = {1,2,3,4,5,6,7,8,9,10,12,14,16,18,20,25,30,40,50,60,75,100,250,500,1000,1500,2000,2500,3000};
 float integratePulseEnergy(float *pulse, int bin1, int bin2, float baseline, int squared)

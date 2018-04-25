@@ -19,10 +19,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "gsl/gsl_errno.h"
 #include "gsl/gsl_randist.h"
 #include "psrsalsa.h"
-
-
-
-
 int preprocess_rebin(datafile_definition original, datafile_definition *clone, long NrBins, verbose_definition verbose)
 {
   long p, f, n;
@@ -51,7 +47,6 @@ int preprocess_rebin(datafile_definition original, datafile_definition *clone, l
     fflush(stdout);
     printwarning(verbose.debug, "WARNING preprocess_rebin: Rebinning from %ld to %ld bins implies that separate bins are not entirely independent.", original.NrBins, NrBins);
   }
-
   cleanPSRData(clone, verbose);
   copy_params_PSRData(original, clone, verbose);
   clone->fixedtsamp *= original.NrBins/(double)NrBins;
@@ -62,8 +57,6 @@ int preprocess_rebin(datafile_definition original, datafile_definition *clone, l
     printerror(verbose.debug, "ERROR preprocess_rebin: Memory allocation error.");
     return 0;
   }
-
-
   for(p = 0; p < clone->NrPols; p++) {
     for(f = 0; f < clone->NrFreqChan; f++) {
       for(n = 0; n < clone->NrSubints; n++) {
@@ -92,12 +85,6 @@ int preprocess_rebin(datafile_definition original, datafile_definition *clone, l
   }
   return 1;
 }
-
-
-
-
-
-
 int preprocess_checknan(datafile_definition original, int generate_warning, verbose_definition verbose)
 {
   long p, f, n, b;
@@ -113,8 +100,6 @@ int preprocess_checknan(datafile_definition original, int generate_warning, verb
     printerror(verbose.debug, "ERROR preprocess_checknan: only works if data is loaded into memory.");
     return 0;
   }
-
-
   for(p = 0; p < original.NrPols; p++) {
     for(f = 0; f < original.NrFreqChan; f++) {
       for(n = 0; n < original.NrSubints; n++) {
@@ -136,11 +121,6 @@ int preprocess_checknan(datafile_definition original, int generate_warning, verb
   }
   return 0;
 }
-
-
-
-
-
 int preprocess_checkinf(datafile_definition original, int generate_warning, verbose_definition verbose)
 {
   long p, f, n, b;
@@ -156,8 +136,6 @@ int preprocess_checkinf(datafile_definition original, int generate_warning, verb
     printerror(verbose.debug, "ERROR preprocess_checkinf: only works if data is loaded into memory.");
     return 0;
   }
-
-
   for(p = 0; p < original.NrPols; p++) {
     for(f = 0; f < original.NrFreqChan; f++) {
       for(n = 0; n < original.NrSubints; n++) {
@@ -594,9 +572,11 @@ int preprocess_addsuccessivepulses(datafile_definition original, datafile_defini
     return 0;
   }
   if(original.freqMode != FREQMODE_UNIFORM) {
-    fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_addsuccessivepulses: Frequency channels are not necessarily uniformly separated.");
-    return 0;
+    if(nrpulses != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_addsuccessivepulses: Frequency channels are not necessarily uniformly separated.");
+      return 0;
+    }
   }
   if(original.NrPols == 4 && original.isDePar == -1) {
     fflush(stdout);
@@ -1737,7 +1717,7 @@ int preprocess_dedisperse(datafile_definition *original, int update, double freq
   }
   return 2;
 }
-int preprocess_deFaraday(datafile_definition *original, int undo, int update, double freq_ref, verbose_definition verbose)
+int preprocess_deFaraday(datafile_definition *original, int undo, int update, double freq_ref, double *rm_table, verbose_definition verbose)
 {
   long f, n, b;
   int i, inffreq, inffreq_old;
@@ -1764,13 +1744,19 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
     if(undo == 0) {
-      printf("De-Faraday rotate frequency channels of %s with RM=%lf with reference frequency=", original->filename, original->rm);
+      if(rm_table == NULL)
+ printf("De-Faraday rotate frequency channels of %s with RM=%lf with reference frequency=", original->filename, original->rm);
+      else
+ printf("De-Faraday rotate frequency channels of %s with RM's from a table with reference frequency=", original->filename);
       if(inffreq)
  printf("infinity\n");
       else
  printf("%f MHz\n", original->freq_ref);
     }else {
-      printf("Undo de-Faraday rotation of frequency channels of %s with RM=%lf\n", original->filename, original->rm);
+      if(rm_table == NULL)
+ printf("Undo de-Faraday rotation of frequency channels of %s with RM=%lf\n", original->filename, original->rm);
+      else
+ printf("Undo de-Faraday rotation of frequency channels of %s with RM's from a table\n", original->filename);
     }
   }
   if(update && undo) {
@@ -1867,7 +1853,7 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
   }
   if(fabs(original->rm) < 1e-3) {
     fflush(stdout);
-    printwarning(verbose.debug, "WARNING preprocess_deFaraday (%s): RM does not appear to be set", original->filename);
+    printwarning(verbose.debug, "WARNING preprocess_deFaraday (%s): RM extremely small (%e). Is it really set? De-Faraday rotation is not applied.", original->filename, original->rm);
     return 1;
   }
   if(verbose.debug) {
@@ -1879,6 +1865,11 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
   }
   dphi = 0;
   if(update) {
+    if(rm_table != NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_deFaraday (%s): Cannot update the reference frequency when the RM is specified speperately for each pulse longitude bin.", original->filename);
+      return 0;
+    }
     double freq;
     freq = get_weighted_channel_freq(*original, 0, 0, verbose);
     dphi = -calcRMAngle(freq, freq_ref, inffreq_old, original->rm);
@@ -1887,9 +1878,13 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
-    if(update == 0)
-      dphi = calcRMAngle(get_weighted_channel_freq(*original, 0, original->NrFreqChan/2, verbose), original->freq_ref, inffreq, original->rm);
-    printf("  Rotating Q&U of central frequency channel of first subint (%f MHz) by %f rad = %f deg\n", get_weighted_channel_freq(*original, 0, original->NrFreqChan/2, verbose), 2.0*dphi, 2.0*dphi*180.0/M_PI);
+    if(rm_table == NULL) {
+      if(update == 0)
+ dphi = calcRMAngle(get_weighted_channel_freq(*original, 0, original->NrFreqChan/2, verbose), original->freq_ref, inffreq, original->rm);
+      printf("  Rotating Q&U of central frequency channel of first subint (%f MHz) by %f rad = %f deg\n", get_weighted_channel_freq(*original, 0, original->NrFreqChan/2, verbose), 2.0*dphi, 2.0*dphi*180.0/M_PI);
+    }else {
+      printf("  Rotating Q&U\n");
+    }
   }
   pulseQ = (float *)malloc(original->NrBins*sizeof(float));
   pulseU = (float *)malloc(original->NrBins*sizeof(float));
@@ -1901,7 +1896,8 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
   for(f = 0; f < original->NrFreqChan; f++) {
     for(n = 0; n < original->NrSubints; n++) {
       if(update == 0) {
- dphi = calcRMAngle(get_weighted_channel_freq(*original, n, f, verbose), original->freq_ref, inffreq, original->rm);
+ if(rm_table == NULL)
+   dphi = calcRMAngle(get_weighted_channel_freq(*original, n, f, verbose), original->freq_ref, inffreq, original->rm);
  if(undo)
    dphi *= -1.0;
       }
@@ -1916,6 +1912,13 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
  return 0;
       }
       for(b = 0; b < original->NrBins; b++) {
+ if(rm_table != NULL) {
+   if(update == 0) {
+     dphi = calcRMAngle(get_weighted_channel_freq(*original, n, f, verbose), original->freq_ref, inffreq, rm_table[b]);
+     if(undo)
+       dphi *= -1.0;
+   }
+ }
  L = sqrt(pulseQ[b]*pulseQ[b]+pulseU[b]*pulseU[b]);
  phi = atan2(pulseU[b], pulseQ[b]);
  phi -= 2.0*dphi;
@@ -2221,7 +2224,7 @@ int preprocess_changeRefFreq(datafile_definition *original, double freq_ref_new,
  printf(" ");
       printf("  Re-de-Farady rotating data.\n");
     }
-    if(preprocess_deFaraday(original, 0, 1, freq_ref_cur, verbose2) == 0) {
+    if(preprocess_deFaraday(original, 0, 1, freq_ref_cur, NULL, verbose2) == 0) {
       printerror(verbose.debug, "WARNING preprocess_changeRefFreq: Re-de-Faraday rotating data failed");
       return 0;
     }

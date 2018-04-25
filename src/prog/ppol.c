@@ -19,9 +19,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <string.h>
 #include <stdlib.h>
 #include "psrsalsa.h"
-
 #define MaxNrJumps 100
-
 int main(int argc, char **argv)
 {
   int index, firstfiletoopen, nokeypresses, compute_PA, extendedPol, writeout, writeoutFilename;
@@ -113,15 +111,15 @@ int main(int argc, char **argv)
   overlaypa0 = 0;
   overlayl0 = 0;
   if(argc < 2) {
-    printf("Program to convert Stokes parameters in other polarization products such as.\n");
+    printf("Program to convert Stokes parameters in other polarization products such as\n");
     printf("postition angle and linear intensity. The results can be written out and plotted\n");
     printf("using ppolFig or fitted using ppolFit.\n\n");
     printApplicationHelp(&application);
-    fprintf(stdout, "Other options affecting the output file:\n");
-
+    fprintf(stdout, "General input/output options:\n");
     fprintf(stdout, "-ext               Write out polarised profile to file with this extension.\n");
     fprintf(stdout, "-stdout            Like -ofile, but now write to stdout.\n");
     fprintf(stdout, "-ofile             Like -stdout, but now write to the specified file.\n");
+    fprintf(stdout, "\nOptions related to generating polimetric data:\n");
     fprintf(stdout, "-loffset           Shift longitudes by this amount.\n");
     fprintf(stdout, "-medianLdebias     Naively subtract the median L of offpulse region rather than\n");
     fprintf(stdout, "                   applying the better de-bias method of Wardle & Kronberg.\n");
@@ -133,14 +131,13 @@ int main(int argc, char **argv)
     fprintf(stdout, "-sigma             Set sigma limit on L required for PA calculation [def=%.1f].\n", sigma_limit);
     fprintf(stdout, "-2                 Write out two pulse periods (so there is duplicated data).\n");
     fprintf(stdout, "-extendedpol       Also generate the total amount of polarization\n");
-    fprintf(stdout, "\nOther options affecting the plotting:\n");
+    fprintf(stdout, "\nOptions affecting the plotting:\n");
     fprintf(stdout, "-1             Only plot PA-swing once (equivalent to -yrange \"0 180\").\n");
     fprintf(stdout, "-device        Specify plotting device for onpulse region selection.\n");
     fprintf(stdout, "-device2       Specify plotting device final plot.\n");
     fprintf(stdout, "-xrange        Specify longitude range covered in the plot in degrees.\n");
     fprintf(stdout, "-xrange_phase  Specify longitude range covered in the plot in phase.\n");
     fprintf(stdout, "-yrange        Specify PA-range covered in the plot.\n");
-
     printf("\n");
     printf("Please use the appropriate citation when using results of this software in your publications:\n\n");
     printf("More information about fitting position-angle swings and using the beam-width information can be found in:\n");
@@ -225,7 +222,6 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-noLdebias") == 0) {
  correctLbias = -1;
       }else {
-
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "ppol: Unknown option: %s", argv[i]);
    printerror(application.verbose_state.debug, "\nRun ppol without command line arguments to show help");
@@ -238,9 +234,6 @@ int main(int argc, char **argv)
       }
     }
   }
-
-
-
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
     return 0;
   }
@@ -249,11 +242,8 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR ppol: No files specified");
     return 0;
   }
-
-
   firstfiletoopen = 1;
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
-
     if(firstfiletoopen == 0) {
       if(nokeypresses == 0) {
  i = pgplot_device_type(PlotDevice2, application.verbose_state);
@@ -264,8 +254,6 @@ int main(int argc, char **argv)
  }
       }
     }
-
-
     cleanPSRData(&dataout, application.verbose_state);
     if(!openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.verbose_state))
       return 0;
@@ -273,17 +261,12 @@ int main(int argc, char **argv)
       fflush(stdout);
       printwarning(application.verbose_state.debug, "Input data contains %ld bins, %ld pulses, %ld polarizations and %ld frequencies.", (datain.NrBins), datain.NrSubints, (datain.NrPols), datain.NrFreqChan);
     }
-
-
-
     if(PSRDataHeader_parse_commandline(&datain, argc, argv, application.verbose_state) == 0)
       return 0;
-
     if(datain.poltype == POLTYPE_ILVPAdPA || datain.poltype == POLTYPE_PAdPA || datain.poltype == POLTYPE_ILVPAdPATEldEl) {
       printerror(application.verbose_state.debug, "ERROR ppol: File already contains PA data. You can use ppolFig to plot this data.");
       return 0;
     }
-
     compute_PA = 1;
     if(datain.isFolded && datain.foldMode == FOLDMODE_FIXEDPERIOD) {
       if(datain.fixedPeriod <= 0.0) {
@@ -309,8 +292,6 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR ppol: The sampling time does not appear to be set correctly in the header. Consider using the -header option.");
       return 0;
     }
-
-
     for(i = 1; i < argc; i++) {
       if(strcmp(argv[i], "-header") == 0) {
  fflush(stdout);
@@ -323,8 +304,6 @@ int main(int argc, char **argv)
       printwarning(application.verbose_state.debug, "WARNING ppol: Applying preprocess options failed.");
       return 0;
     }
-
-
     if(datain.poltype == POLTYPE_COHERENCY) {
       if(application.verbose_state.verbose) {
  printf("Data is written as coherency parameters. Going to convert them into Stokes parameters first.\n");
@@ -342,7 +321,6 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR ppol: The polarization type of the data cannot be handled by ppol.");
       return 0;
     }
-
     if(datain.NrSubints > 1) {
       if(application.oformat == PPOL_format) {
  printf("Data contains multiple subints. Data will be written out in FITS format.\n");
@@ -360,21 +338,20 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR ppol: Need Stokes IQUV data, but the number of polarization channels != 4!");
       return 0;
     }
-
-
-
-
-    region_frac_to_int(&(application.onpulse), datain.NrBins, 0);
-
+      region_frac_to_int(&(application.onpulse), datain.NrBins, 0);
+    long total_nr_offpulse_file_bins;
       strcpy(txt, "Select on-pulse region ");
       strcat(txt, datain.psrname);
-      profileI = (float *)malloc(datain.NrBins*sizeof(float));
+ total_nr_offpulse_file_bins = datain.NrBins;
+      profileI = (float *)malloc(total_nr_offpulse_file_bins*sizeof(float));
       if(profileI == NULL) {
  fflush(stdout);
  printerror(application.verbose_state.debug, "ERROR ppol: Memory allocation error.");
  return 0;
       }
-      if(read_profilePSRData(datain, profileI, NULL, 0, application.verbose_state) != 1) {
+      int ret;
+ ret = read_profilePSRData(datain, profileI, NULL, 0, application.verbose_state);
+      if(ret != 1) {
  fflush(stdout);
  printerror(application.verbose_state.debug, "ERROR ppol: Cannot form pulse profile");
  return 0;
@@ -385,7 +362,7 @@ int main(int argc, char **argv)
  strcpy(pgplot_options.box.xlabel, "Bin");
  strcpy(pgplot_options.box.ylabel, "Intensity");
  strcpy(pgplot_options.box.title, txt);
- selectRegions(profileI, datain.NrBins, &pgplot_options, 0, 0, 0, &(application.onpulse), application.verbose_state);
+ selectRegions(profileI, total_nr_offpulse_file_bins, &pgplot_options, 0, 0, 0, &(application.onpulse), application.verbose_state);
  if(firstfiletoopen == 0) {
    ppgslct(deviceID);
  }
@@ -395,37 +372,29 @@ int main(int argc, char **argv)
  strcpy(pgplot_options.box.ylabel, "Intensity");
  strcpy(pgplot_options.box.title, txt);
  strcpy(pgplot_options.viewport.plotDevice, PlotDevice);
- pgplotGraph1(&pgplot_options, profileI, NULL, NULL, datain.NrBins, 0, datain.NrBins, 0, 0, datain.NrBins, 0, 0, 0, 1, 0, 0, 1, 1, &(application.onpulse), application.verbose_state);
+ pgplotGraph1(&pgplot_options, profileI, NULL, NULL, total_nr_offpulse_file_bins, 0, total_nr_offpulse_file_bins, 0, 0, total_nr_offpulse_file_bins, 0, 0, 0, 1, 0, 0, 1, 1, &(application.onpulse), application.verbose_state);
  if(firstfiletoopen == 0) {
    ppgslct(deviceID);
  }
       }
-      region_int_to_frac(&(application.onpulse), 1.0/(float)datain.NrBins, 0);
+      region_int_to_frac(&(application.onpulse), 1.0/(float)total_nr_offpulse_file_bins, 0);
       regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
-
-
-
-
       verbose_definition verbose2;
       copyVerboseState(application.verbose_state, &verbose2);
       if(application.verbose_state.verbose && datain.NrSubints == 1 && datain.NrFreqChan == 1)
  verbose2.verbose = 1;
       else
  verbose2.verbose = 0;
-
       int nolongitudes;
       if(datain.NrFreqChan > 1 || datain.NrSubints > 1) {
  nolongitudes = 1;
       }else {
  nolongitudes = 0;
       }
-      if(make_paswing_fromIQUV(&datain, extendedPol, application.onpulse, normalize, correctLbias, correctQV, correctV, nolongitudes, loffset, PAoffset_data, verbose2) == 0)
- return 0;
-
-
+ if(make_paswing_fromIQUV(&datain, extendedPol, application.onpulse, normalize, correctLbias, correctQV, correctV, nolongitudes, loffset, PAoffset_data, NULL, 1.0, verbose2) == 0)
+   return 0;
       if(sigma_limit > 0
   ) {
-
  int pachannel;
  if(datain.poltype == POLTYPE_ILVPAdPATEldEl) {
    pachannel = 3;
@@ -435,9 +404,6 @@ int main(int argc, char **argv)
  for(i = 0; i < datain.NrSubints; i++) {
    for(f = 0; f < datain.NrFreqChan; f++) {
      for(j = 0; j < datain.NrBins; j++) {
-
-
-
        if(sigma_limit > 0) {
   if(datain.offpulse_rms == NULL) {
     if(i == 0 && f == 0 && j == 0) {

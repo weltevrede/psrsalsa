@@ -18,20 +18,16 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <fftw3.h>
 #include <string.h>
 #include "psrsalsa.h"
-
-
 void print_fftw_version_used(FILE *stream)
 {
   fprintf(stream, "%s (library)", fftwf_version);
 }
-
 int rotateSinglepulse(float *data, int npts, float epsilon, verbose_definition verbose)
 {
   int i, npts2;
   float fac, dtheta;
   fftwf_complex *dataFFT;
   fftwf_plan plan1, plan2;
-
   npts2 = npts/2+1;
   dataFFT = (fftwf_complex *)fftwf_malloc(npts2*sizeof(fftwf_complex));
   if(dataFFT == NULL) {
@@ -41,40 +37,24 @@ int rotateSinglepulse(float *data, int npts, float epsilon, verbose_definition v
   }
   plan1 = fftwf_plan_dft_r2c_1d(npts, data, dataFFT, FFTW_ESTIMATE);
   plan2 = fftwf_plan_dft_c2r_1d(npts, dataFFT, data, FFTW_ESTIMATE);
-
-
   fftwf_execute(plan1);
-
-
-
   fac = 1.0/(float)npts;
   dtheta = -2.0*M_PI*epsilon/(float)npts;
   for (i=0; i < npts2; i++) {
     dataFFT[i] *= fac*(cos(i*dtheta) + I*sin(i*dtheta));
   }
-
-
   fftwf_execute(plan2);
-
   fftwf_destroy_plan(plan1);
   fftwf_destroy_plan(plan2);
   fftwf_free(dataFFT);
   return 1;
 }
-
-
-
-
-
-
-
 int crosscorrelation_fft(float *data1, float *data2, int ndata, float *cc, verbose_definition verbose)
 {
   int i, npts2;
   float fac;
   fftwf_complex *dataFFT1, *dataFFT2;
   fftwf_plan plan1, plan2, plan3;
-
   npts2 = ndata/2+1;
   dataFFT1 = (fftwf_complex *)fftwf_malloc(npts2*sizeof(fftwf_complex));
   dataFFT2 = (fftwf_complex *)fftwf_malloc(npts2*sizeof(fftwf_complex));
@@ -86,26 +66,13 @@ int crosscorrelation_fft(float *data1, float *data2, int ndata, float *cc, verbo
   plan1 = fftwf_plan_dft_r2c_1d(ndata, data1, dataFFT1, FFTW_ESTIMATE);
   plan2 = fftwf_plan_dft_r2c_1d(ndata, data2, dataFFT2, FFTW_ESTIMATE);
   plan3 = fftwf_plan_dft_c2r_1d(ndata, dataFFT1, cc, FFTW_ESTIMATE);
-
-
   fftwf_execute(plan1);
   fftwf_execute(plan2);
-
-
-
   fac = 1.0/(float)ndata;
   for (i=0; i < npts2; i++) {
     dataFFT1[i] *= fac*conj(dataFFT2[i]);
   }
-
-
   fftwf_execute(plan3);
-
-
-
-
-
-
   fftwf_destroy_plan(plan1);
   fftwf_destroy_plan(plan2);
   fftwf_destroy_plan(plan3);
@@ -113,17 +80,11 @@ int crosscorrelation_fft(float *data1, float *data2, int ndata, float *cc, verbo
   fftwf_free(dataFFT2);
   return 1;
 }
-
-
-
-
-
 int crosscorrelation_fft_padding_cclength(int ndata, int extrazeropad)
 {
   int i, ndata_padded;
   i = (int) (log10(1.0 * (ndata+extrazeropad))/log10(2.0));
   ndata_padded = pow(2.0,(i+1));
-
   if(ndata_padded/2 == ndata)
     ndata_padded = ndata;
   return ndata_padded;

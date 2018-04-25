@@ -16,13 +16,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <stdio.h>
 #include <math.h>
 #include "psrsalsa.h"
-
-
-
-
-
-
-
 int rebinPulse(float *Ipulse, long NrBins, float *Ipulse2, long NrBins2, int noDependencyWarning, verbose_definition verbose)
 {
   long j, i1, i2;
@@ -33,7 +26,6 @@ int rebinPulse(float *Ipulse, long NrBins, float *Ipulse2, long NrBins2, int noD
       printwarning(verbose.debug, "WARNING rebinPulse: Rebinning from %ld to %ld bins implies that separate bins are not entirely independent.", NrBins, NrBins2);
     }
   }
-
   for(j = 0; j < NrBins2; j++)
     Ipulse2[j] = 0;
   for(j = 0; j < NrBins; j++) {

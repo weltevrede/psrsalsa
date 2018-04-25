@@ -16,19 +16,11 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define _FILE_OFFSET_BITS 64
 #define _USE_LARGEFILE 1
 #define _LARGEFILE_SOURCE 1
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include "psrsalsa.h"
-
-
-
-
-
-
-
 int readSigprocHeader_readParamID(FILE *fin, char **id, verbose_definition verbose)
 {
   int idlength;
@@ -55,15 +47,12 @@ int readSigprocHeader_readParamID(FILE *fin, char **id, verbose_definition verbo
   (*id)[idlength] = 0;
   return 1;
 }
-
 int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
 {
   char *id;
   int dummy_int, nifs;
   double freq_chan1, freq_chanbw, dummy_double;
   long int dummy_long;
-
-
   datafile->gentype = GENTYPE_SEARCHMODE;
   datafile->isFolded = 0;
   datafile->foldMode = FOLDMODE_UNKNOWN;
@@ -77,12 +66,10 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
     exit(-1);
   }
   datafile->tsub_list[0] = 0;
-
   id = NULL;
   freq_chan1 = -1;
   freq_chanbw = 0;
   nifs = 1;
-
   if(readSigprocHeader_readParamID(datafile->fptr, &id, verbose) == 0) {
     printerror(verbose.debug, "ERROR readSigprocHeader: Cannot read ID");
     return 0;
@@ -94,7 +81,6 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
     printerror(verbose.debug, "ERROR readSigprocHeader: First ID is not the expected ID (%s != HEADER_START).", id);
     return 0;
   }
-
   do {
     if(readSigprocHeader_readParamID(datafile->fptr, &id, verbose) == 0) {
       printerror(verbose.debug, "ERROR readSigprocHeader: Cannot read ID");
@@ -278,9 +264,6 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
       if(verbose.debug) {
  printf("DEBUG: %s=%ld\n", id, dummy_long);
       }
-
-
-
     }else if(strcmp(id, "nbins") == 0) {
       if(fread(&dummy_int, sizeof(int), 1, datafile->fptr) != 1) {
  printerror(verbose.debug,"ERROR readSigprocHeader: Read error");
@@ -324,13 +307,10 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
     }
   }while(strcmp(id, "HEADER_END") != 0);
   free(id);
-
   if(datafile->NrFreqChan <= 0) {
-
     printwarning(verbose.debug, "WARNING readSigprocHeader: The number of frequency channels do not appear to be defined. It is assumed only one frequency channel is present.");
     datafile->NrFreqChan = 1;
   }
-
   if(datafile->isFolded) {
     printwarning(verbose.debug, "WARNING readSigprocHeader: For folded data the full baseline is assumed to be stored.");
     datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
@@ -341,19 +321,12 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
     }
     datafile->fixedtsamp = datafile->fixedPeriod/(double)datafile->NrBins;
   }
-
   if(freq_chan1 > 0) {
     datafile->freqMode = FREQMODE_UNIFORM;
     if(datafile->freqlabel_list != NULL) {
       free(datafile->freqlabel_list);
       datafile->freqlabel_list = NULL;
     }
-
-
-
-
-
-
     if(set_bandwidth(datafile, datafile->NrFreqChan*freq_chanbw, verbose) == 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR readSigprocHeader: Bandwidth changing failed.");
@@ -363,19 +336,12 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
   }else {
     printwarning(verbose.debug, "WARNING readSigprocHeader: The frequency of the observation does not appear to be defined.");
     if(datafile->freq_ref > 0) {
-
       printwarning(verbose.debug, "WARNING readSigprocHeader: It is assumed that the frequency of the observationdefines the reference frequency.");
       datafile->freqMode = FREQMODE_UNIFORM;
       if(datafile->freqlabel_list != NULL) {
  free(datafile->freqlabel_list);
  datafile->freqlabel_list = NULL;
       }
-
-
-
-
-
-
       if(set_bandwidth(datafile, 0.0, verbose) == 0) {
  fflush(stdout);
  printerror(verbose.debug, "ERROR readSigprocHeader: Bandwidth changing failed.");
@@ -384,8 +350,6 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
       set_centre_frequency(datafile, datafile->freq_ref, verbose);
     }
   }
-
-
   off_t curpos, datasize;
   curpos = ftello(datafile->fptr);
   fseeko(datafile->fptr, 0, SEEK_END);
@@ -395,12 +359,10 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
   if(verbose.debug) {
     printf("DEBUG: data size=%ld byte\n", datasize);
   }
-
   if(datafile->isFolded && datafile->NrBins <= 0) {
     printwarning(verbose.debug, "WARNING readSigprocHeader: For folded data the number of bins should be defined in header. Assume the data is not folded");
     datafile->isFolded = 0;
   }
-
   if(datafile->isFolded == 0) {
     long double tmp;
     tmp = datasize*8.0;
@@ -411,10 +373,8 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
     if(verbose.debug) {
       printf("DEBUG: Implied number of bins = %ld\n", datafile->NrBins);
     }
-
     datafile->NrSubints = 1;
   }else {
-
     long double tmp;
     long double subintsize;
     subintsize = ((long double)(datafile->NrFreqChan)*(long double)(datafile->NrBins)*(long double)(datafile->NrBits)/8.0 + (long double)curpos);
@@ -422,8 +382,6 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
     tmp /= subintsize;
     datafile->NrSubints = roundl(tmp);
   }
-
-
   datafile->tsub_list[0] = datafile->NrBins * datafile->fixedtsamp;
   printwarning(verbose.debug, "WARNING readSigprocHeader: Assuming there is only one polarization channel in the data");
   datafile->NrPols = 1;
