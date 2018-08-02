@@ -98,7 +98,7 @@ int main(int argc, char **argv)
   s2dfs_p2_flag = 0;
   application.oformat = FITS_format;
   if(argv[argc-1][0] == '-' && strcmp(argv[argc-1], "-formatlist") != 0 && strcmp(argv[argc-1], "-headerlist") != 0) {
-    printerror(application.verbose_state.debug, "pspec: Last command line option is expected to be a file name.\nRun pspec without command line arguments to show help");
+    printerror(application.verbose_state.debug, "pspec: Last command line option is expected to be a file name (got %s).\nRun pspec without command line arguments to show help", argv[argc-1]);
     terminateApplication(&application);
     return 0;
   }
@@ -214,7 +214,7 @@ int main(int argc, char **argv)
  i++;
       }else if(strcmp(argv[i], "-w") == 0) {
  write_flag = 1;
-      }else if(strcmp(argv[i], "-prof") == 0) {
+      }else if(strcmp(argv[i], "-prof") == 0 || strcmp(argv[i], "-profile") == 0) {
  profile_flag = 1;
       }else if(strcmp(argv[i], "-stddev") == 0) {
  stddev_flag = 1;

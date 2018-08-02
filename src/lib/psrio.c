@@ -2791,6 +2791,16 @@ int setITRFlocation_by_name(datafile_definition *datafile, char *observatory, ve
     datafile->telescope_X = -1602196.60;
     datafile->telescope_Y = -5042313.47;
     datafile->telescope_Z = 3553971.51;
+  }else if(strcasecmp(observatory, "FAST") == 0) {
+    if(verbose.verbose) {
+      for(indent = 0; indent < verbose.indent; indent++)
+ printf(" ");
+      fflush(stdout);
+      printwarning(verbose.debug, "setITRFlocation_by_name: Guessing this is FAST data");
+    }
+    datafile->telescope_X = -1668557.0;
+    datafile->telescope_Y = 5506838.0;
+    datafile->telescope_Z = 2744934.0;
   }else {
     if(verbose.verbose) {
       for(indent = 0; indent < verbose.indent; indent++)
@@ -3027,7 +3037,9 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
   if(datafile->freq_ref < -0.9 && datafile->freq_ref >= -1.1) {
     datafile->freq_ref = 1e10;
   }
-  readHistoryPSRData(datafile, verbose2);
+  if(readHistoryPSRData(datafile, verbose2) == 0) {
+    printwarning(verbose.debug, "WARNING: Reading history failed.");
+  }
   if(verbose.verbose) {
     printHeaderPSRData(*datafile, 0, verbose2);
   }
@@ -3795,7 +3807,7 @@ void swap_orig_clone(datafile_definition *original, datafile_definition *clone, 
 int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, int cmdOnly, verbose_definition verbose)
 {
   int ret;
-  char txt[10000], txt2[1000], *username_ptr, username[1000], hostname[1000];
+  char txt[10000], txt2[1000], *username_ptr, hostname[1000];
   time_t curtime;
   datafile_history_entry_definition *curHistoryEntry;
   if(verbose.verbose)
@@ -3843,13 +3855,15 @@ int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, in
  return 0;
       }
       strcpy(curHistoryEntry->timestamp, txt2);
-      username_ptr = who_am_i();
-      if(username_ptr != NULL) {
- strcpy(username, username_ptr);
-      }else {
+      if(getUsername(&username_ptr, verbose) == 0) {
  fflush(stdout);
  printwarning(verbose.debug, "writeHistoryPSRData: Cannot identify user.");
- sprintf(username, "Unknown");
+ username_ptr = malloc(8);
+ if(username_ptr == NULL) {
+   printerror(verbose.debug, "ERROR writeHistoryPSRData: Memory allocation error");
+   return 0;
+ }
+ sprintf(username_ptr, "Unknown");
       }
       curHistoryEntry->user = malloc(strlen(username_ptr)+1);
       if(curHistoryEntry->user == NULL) {
@@ -3858,6 +3872,7 @@ int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, in
  return 0;
       }
       strcpy(curHistoryEntry->user, username_ptr);
+      free(username_ptr);
       getMachinename(hostname, 1000, verbose);
       curHistoryEntry->hostname = malloc(strlen(hostname)+1);
       if(curHistoryEntry->hostname == NULL) {
@@ -3885,23 +3900,37 @@ int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, in
 }
 int readHistoryPSRData(datafile_definition *datafile, verbose_definition verbose)
 {
-  int ret, indent;
+  int ret, indent, doread;
   if(verbose.verbose) {
     for(indent = 0; indent < verbose.indent; indent++)
       printf(" ");
     fprintf(stdout, "Reading history\n");
   }
+  doread = 0;
   if(datafile->format == FITS_format) {
     ret = readHistoryFITS(datafile, verbose);
+    doread = 1;
   }else if(datafile->format == PUMA_format) {
     ret = readHistoryPuma(datafile, verbose);
+    doread = 1;
   }else {
-    ret = 0;
+    ret = -1;
   }
-  if(verbose.verbose) {
-    for(indent = 0; indent < verbose.indent; indent++)
-      printf(" ");
-    fprintf(stdout, "  done\n");
+  if(doread) {
+    if(ret == 0) {
+      printwarning(verbose.debug, "WARNING: Reading history failed.");
+    }
+    if(verbose.verbose) {
+      for(indent = 0; indent < verbose.indent; indent++)
+ printf(" ");
+      fprintf(stdout, "  done\n");
+    }
+  }else {
+    if(verbose.verbose) {
+      for(indent = 0; indent < verbose.indent; indent++)
+ printf(" ");
+      fprintf(stdout, "  skipped\n");
+    }
   }
   return ret;
 }

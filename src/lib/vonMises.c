@@ -16,6 +16,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <gsl/gsl_sf.h>
 #include "psrsalsa.h"
 int readVonMisesModel(char *filename, vonMises_collection_definition *components, verbose_definition verbose)
 {
@@ -50,6 +51,12 @@ double calcVonMisesFunction2(double centre, double concentration, double height,
   double y;
   y = exp((cos(2.0*M_PI*(phase-centre-shift))-1.0)*concentration) * height;
   return y;
+}
+double integrateVonMisesFunction2(double concentration, double height)
+{
+  double area;
+  area = 2*M_PI*height*gsl_sf_bessel_I0(concentration)*exp(-concentration);
+  return area;
 }
 double calcVonMisesFunction(vonMises_collection_definition *components, double phase, double shift)
 {

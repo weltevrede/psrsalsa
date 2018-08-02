@@ -360,11 +360,6 @@ int preprocess_pulsesselect(datafile_definition original, datafile_definition *c
       printf(" ");
     printf("Selecting pulses %ld-%ld\n", nskip, nread+nskip-1);
   }
-  if(original.format != MEMORY_format) {
-    fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_pulsesselect: only works if data is loaded into memory.");
-    return 0;
-  }
   if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_pulsesselect: Cannot handle PA data.");
@@ -389,6 +384,7 @@ int preprocess_pulsesselect(datafile_definition original, datafile_definition *c
   copy_params_PSRData(original, clone, verbose);
   clone->NrSubints = nread;
   clone->data = (float *)malloc((clone->NrBins)*(clone->NrPols)*(clone->NrFreqChan)*(clone->NrSubints)*sizeof(float));
+  clone->format = MEMORY_format;
   pulse = (float *)malloc((clone->NrBins)*sizeof(float));
   if(clone->data == NULL || pulse == NULL) {
     fflush(stdout);
@@ -407,6 +403,20 @@ int preprocess_pulsesselect(datafile_definition original, datafile_definition *c
    fflush(stdout);
    printerror(verbose.debug, "ERROR preprocess_pulsesselect: Error writing pulse.");
    return 0;
+ }
+ if(original.format != MEMORY_format) {
+   if(verbose.verbose && verbose.nocounters == 0) {
+     long doprint;
+     doprint = 1;
+     if(clone->NrFreqChan > 4 && n != nskip)
+       doprint = 0;
+     if(doprint) {
+       for(i = 0; i < verbose.indent; i++)
+  printf(" ");
+       printf("  %.1f%%     \r", (100.0*(((n-nskip)+nread*f+p*nread*clone->NrFreqChan))/(float)(nread*clone->NrFreqChan*clone->NrPols)));
+       fflush(stdout);
+     }
+   }
  }
       }
     }

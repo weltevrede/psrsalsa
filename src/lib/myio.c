@@ -95,19 +95,55 @@ int pgetch_macro(psrsalsaApplication *application, verbose_definition verbose)
   }
   return key;
 }
-char *who_am_i (void)
+int getUsername(char **username, verbose_definition verbose)
 {
-  struct passwd *pw;
-  char *user = NULL;
-  pw = getpwuid (geteuid ());
-  if (pw) {
-    user = pw->pw_name;
-  }else if ((user = getenv ("USER")) == NULL) {
-    fflush(stdout);
-    fprintf (stderr, "ERROR: who_am_i failed to retrieve user name from USER environment variable.");
-    return NULL;
+  struct passwd pw, *result;
+  char *tmpmem;
+  tmpmem = malloc(MaxStringLength);
+  if(tmpmem == NULL) {
+    printwarning(verbose.debug, "ERROR getUsername: Memory allocation error.");
+    *username = malloc(8);
+    if(*username != NULL) {
+      sprintf(*username, "Unknown");
+    }
+    return 0;
   }
-  return user;
+  getpwuid_r(geteuid(), &pw, tmpmem, MaxStringLength, &result);
+  if(result != NULL) {
+    *username = malloc(strlen(pw.pw_name)+1);
+    if(*username == NULL) {
+      printwarning(verbose.debug, "ERROR getUsername: Memory allocation error.");
+      return 0;
+    }
+    strcpy(*username, pw.pw_name);
+    if(verbose.debug) {
+      printf("Username: %s\n", *username);
+    }
+    free(tmpmem);
+    return 1;
+  }
+  free(tmpmem);
+  char *user;
+  if((user = getenv ("USER")) == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR: getUsername failed to retrieve user name from USER environment variable.");
+    *username = malloc(8);
+    if(*username != NULL) {
+      sprintf(*username, "Unknown");
+    }
+    return 0;
+  }else {
+    *username = malloc(strlen(user)+1);
+    if(*username == NULL) {
+      printwarning(verbose.debug, "ERROR getUsername: Memory allocation error.");
+      return 0;
+    }
+    strcpy(*username, user);
+    if(verbose.debug) {
+      printf("Username: %s\n", *username);
+    }
+  }
+  return 1;
 }
 void constructCommandLineString(char *txt, int length, int argc, char **argv, verbose_definition verbose)
 {
@@ -131,12 +167,10 @@ void constructCommandLineString(char *txt, int length, int argc, char **argv, ve
 }
 int getMachinename(char *hostname, int size, verbose_definition verbose)
 {
-  struct hostent* h;
   hostname[size-1] = '\0';
   if(gethostname(hostname, size-1) == 0) {
-    h = gethostbyname(hostname);
-    if(h != NULL) {
-      strncpy(hostname, h->h_name, size-1);
+    if(verbose.debug) {
+      printf("Hostname: %s\n", hostname);
     }
     return 1;
   }else {
@@ -279,9 +313,15 @@ int ascii_file_stats(FILE *fin, char skipChar, long *nrlines, int maxlinelength,
     printerror(verbose.debug, "ascii_file_stats: Cannot allocate temporary memory");
     return 0;
   }
+  if(verbose.debug) {
+    printf("ascii_file_stats: skipChar=%c\n", skipChar);
+  }
   *nrlines = 0;
   do {
     ret = ascii_file_get_next_line(fin, txt, maxlinelength, skipChar, verbose);
+    if(verbose.debug) {
+      printf("ascii_file_stats: line %ld=%s\n", *nrlines, txt);
+    }
     if(ret != 0) {
       pickWordFromString(txt, 1, &nrwords, 1, ' ', verbose);
       if(autoNrColumns != 0 && *nrlines == 0) {

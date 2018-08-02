@@ -45,6 +45,7 @@ int main(int argc, char **argv)
   application.switch_formatlist = 1;
   application.switch_verbose = 1;
   application.switch_debug = 1;
+  application.switch_forceUniformFreqLabelling = 1;
   application.switch_onpulse = 1;
   application.switch_onpulsef = 1;
   application.switch_nocounters = 1;

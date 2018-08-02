@@ -480,7 +480,7 @@ int main(int argc, char **argv)
    }
    return 0;
  }
- data_y = malloc(datain.NrSubints*datain.NrFreqChan*datain.NrBins*sizeof(double));
+ data_y = malloc(ndata*sizeof(double));
  if(data_y == NULL) {
    printerror(application.verbose_state.debug, "ERROR pdist: Memory allocation error.\n");
    return 0;

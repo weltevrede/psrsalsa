@@ -91,6 +91,7 @@ int main(int argc, char **argv)
   application.switch_shuffle = 1;
   application.switch_rotateStokes = 1;
   application.switch_libversions = 1;
+  application.switch_forceUniformFreqLabelling = 1;
   debase_flag = 0;
   debase_offset_flag = 0;
   read_whole_file = 1;

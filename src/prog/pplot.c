@@ -161,6 +161,7 @@ int main(int argc, char **argv)
   application.switch_libversions = 1;
   application.cmap = PPGPLOT_INVERTED_HEAT;
   strcpy(application.pgplotdevice, "/xs");
+  application.switch_forceUniformFreqLabelling = 1;
   interactive_flag = 0;
   dxshift_start = 0;
   dyshift = 0;
@@ -260,7 +261,7 @@ int main(int argc, char **argv)
     printf("-nokeypress   Do not wait for key presses to go to next page in output plot\n");
     printf("-nopoly       Do not use filled polygons but only line drawing, which sometimes\n");
     printf("              could give better results (or worse).\n");
-    printf("-showwedge    Plot an annotated wedge to show color scale.\n");
+    printf("-showwedge    Plot an annotated wedge to show color scale (use with -map).\n");
     printf("-showtop      Show a panel at top of the map (use with -map).\n");
     printf("-showright    Show a panel at right of the map (use with -map).\n");
     printf("-showtwice    Plot the map twice above each other (use with -map).\n");
@@ -1405,10 +1406,11 @@ int main(int argc, char **argv)
  }
  if(ytitleset == 0) {
    if(ytitle_set_to_intensity) {
-     if(stack_state[current_stack_pos-1].grayscalemode != 1)
+     if(stack_state[current_stack_pos-1].grayscalemode != 1) {
        strcpy(ytitle, "Intensity");
-     else
+     }else {
        strcpy(ytitle, "Pulse number");
+     }
    }else if(ytitle_set_to_freqchannel && yUnitsSwitch == 0) {
      strcpy(ytitle, "Frequency channel");
    }else if(ytitle_set_to_pulsenumber && yUnitsSwitch == 0) {

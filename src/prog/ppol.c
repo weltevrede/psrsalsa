@@ -119,7 +119,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "-ext               Write out polarised profile to file with this extension.\n");
     fprintf(stdout, "-stdout            Like -ofile, but now write to stdout.\n");
     fprintf(stdout, "-ofile             Like -stdout, but now write to the specified file.\n");
-    fprintf(stdout, "\nOptions related to generating polimetric data:\n");
+    fprintf(stdout, "\nOptions related to generating polarimetric data:\n");
     fprintf(stdout, "-loffset           Shift longitudes by this amount.\n");
     fprintf(stdout, "-medianLdebias     Naively subtract the median L of offpulse region rather than\n");
     fprintf(stdout, "                   applying the better de-bias method of Wardle & Kronberg.\n");
@@ -446,7 +446,7 @@ int main(int argc, char **argv)
       pgplot_options.box.title_ch = titlech;
       pgplot_options.box.title_lw = titlelw;
       pgplotPAplot(datain, extendedPol, 0, 0
-     , &pgplot_options, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", "\\gx [deg]", plotl1, plotl2, plotI1, plotI2, plotp1, plotp2, 0.0, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-herrorbar", "-herrorbar2", "-verrorbar", "-verrorbar2", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, NULL, NULL, application.verbose_state);
+     , &pgplot_options, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", "\\gx [deg]", plotl1, plotl2, 0, plotI1, plotI2, plotp1, plotp2, 0.0, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-herrorbar", "-herrorbar2", "-verrorbar", "-verrorbar2", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, NULL, NULL, application.verbose_state);
       if(firstfiletoopen) {
  ppgqid(&deviceID);
       }

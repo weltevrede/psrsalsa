@@ -159,6 +159,7 @@ void initApplication(psrsalsaApplication *application, char *name, char *genusag
   application->switch_rotateStokes = 0;
   application->nr_rotateStokes = 0;
   application->switch_libversions = 0;
+  application->switch_forceUniformFreqLabelling = 0;
   application->fzapMask = NULL;
   application->doautot = 0;
 }
@@ -415,7 +416,7 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
 void printApplicationHelp(psrsalsaApplication *application)
 {
   fprintf(stdout, "%s %s\n", application->progname, application->genusage);
-  if(application->switch_iformat || application->switch_oformat || application->switch_formatlist || application->switch_headerlist || application->switch_header || application->switch_filelist || application->switch_noweights || application->switch_useweights || application->switch_uniformweights || application->switch_history_cmd_only || application->switch_ext || application->switch_output
+  if(application->switch_iformat || application->switch_oformat || application->switch_formatlist || application->switch_headerlist || application->switch_header || application->switch_filelist || application->switch_noweights || application->switch_useweights || application->switch_uniformweights || application->switch_history_cmd_only || application->switch_ext || application->switch_output || application->switch_forceUniformFreqLabelling
 ) {
     fprintf(stdout, "\nGeneral Input/Output options:\n");
     if(application->switch_filelist) {
@@ -649,6 +650,8 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     exit(0);
   }else if(strcmp(argv[*index], "-header") == 0 && application->switch_header) {
     (*index)++;
+    return 1;
+  }else if(strcmp(argv[*index], "-headerUFL") == 0 && application->switch_forceUniformFreqLabelling) {
     return 1;
   }else if((strcmp(argv[*index], "-libversions") == 0 || strcmp(argv[*index], "-libversion") == 0 || strcmp(argv[*index], "-libraryversions") == 0) && application->switch_libversions) {
     showlibraryversioninformation(stdout);

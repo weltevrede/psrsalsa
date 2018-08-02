@@ -173,6 +173,13 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
       if(fits_write_col(datafile.fits_fptr, TINT, 18, 1+pulsenr, i, nrSamples, data, &status) != 0) {
  fflush(stdout);
  printerror(verbose.debug, "ERROR writeFITSpulse: Error writing data: subint=%ld sample=%ld (pol=%ld freq=%ld bin=%d) nrSamples=%ld", pulsenr, i, polarization, freq, binnr, nrSamples);
+ if(verbose.debug) {
+   long sampnr;
+   printerror(verbose.debug, "ERROR writeFITSpulse: Samples are: ");
+   for(sampnr = 0; sampnr < nrSamples; sampnr++) {
+     fprintf(stderr, "%d ", data[sampnr]);
+   }
+ }
  fits_report_error(stderr, status);
  for(i = 0; i < nrSamples; i++) {
    if(isnan(pulse[i]) || isinf(pulse[i])) {
@@ -1126,7 +1133,7 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     dummy_double = datafile->fixedtsamp;
     if(fits_write_key(datafile->fits_fptr, TDOUBLE, "TBIN", &dummy_double, "[s] Time per bin or sample", &status) != 0) {
       fflush(stdout);
-      printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
+      printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword TBIN=%lf.", dummy_double);
       return 0;
     }
     double period_set;
@@ -2038,7 +2045,17 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     }
     if(periodnotset) {
       tmpfilename[0] = 0;
-      sprintf(tmpfilename, "/tmp/junk_mjd_%s", who_am_i());
+      char *username;
+      if(getUsername(&username, verbose) == 0) {
+ username = malloc(8);
+ if(username == NULL) {
+   printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Memory allocation error", datafile->filename);
+   return 0;
+ }
+ sprintf(username, "Unknown");
+      }
+      sprintf(tmpfilename, "/tmp/junk_mjd_%s", username);
+      free(username);
       sprintf(command, "rm -f %s", tmpfilename);
       if(verbose.verbose) printf("  Running: %s\n", command);
       system(command);
@@ -2381,7 +2398,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       }
     }
     if (status == END_OF_FILE) status = 0;
-    if(dmnotset || rmnotset) {
+    if((dmnotset || rmnotset) && issearch == 0) {
       if(fits_movnam_hdu(datafile->fits_fptr, BINARY_TBL, "PSREPHEM", 0, &status)) {
  fflush(stdout);
  printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): PSREPHEM table does not exist!", datafile->filename);
@@ -3157,14 +3174,14 @@ int readHistoryFITS_psrfits(datafile_definition *datafile, int surpressHDUerror,
     return 2;
   }
   if(fits_get_colnum(datafile->fits_fptr, CASEINSEN, "DATE_PRO", &colnum_date, &status)) {
-    if(surpressColumnNotPresent == 0) {
+    if(surpressColumnNotPresent == 0 || verbose.debug) {
       fflush(stdout);
       printwarning(verbose.debug, "WARNING readHistoryFITS_psrfits: No DATE_PRO column is history table?");
     }
     return 3;
   }
   if(fits_get_colnum(datafile->fits_fptr, CASEINSEN, "PROC_CMD", &colnum_cmd, &status)) {
-    if(surpressColumnNotPresent == 0) {
+    if(surpressColumnNotPresent == 0 || verbose.debug) {
       fflush(stdout);
       printwarning(verbose.debug, "WARNING readHistoryFITS_psrfits: No PROC_CMD column is history table?");
     }
@@ -3235,6 +3252,9 @@ int readHistoryFITS(datafile_definition *datafile, verbose_definition verbose)
     printerror(verbose.debug, "ERROR readHistoryFITS (%s): Cannot goto original HDU", datafile->filename);
     return 0;
   }
+  if(verbose.debug) {
+    printf("readHistoryFITS: ret=%d ret2=%d\n", ret, ret2);
+  }
   if(ret == 0 && ret2 == 0)
     return 1;
   if(ret == 0 && ret2 == 2)
@@ -3243,8 +3263,10 @@ int readHistoryFITS(datafile_definition *datafile, verbose_definition verbose)
     return 1;
   if(ret == 2 && ret2 == 2) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readHistoryFITS: File doesn't contain a history HDU.");
+    printwarning(verbose.debug, "ERROR readHistoryFITS: File doesn't contain a history HDU, so reading history failed.");
     return 0;
   }
+  if(ret == 3 && ret2 == 0)
+    return 1;
   return 0;
 }
