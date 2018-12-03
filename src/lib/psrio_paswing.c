@@ -427,7 +427,7 @@ int make_paswing_fromIQUV(datafile_definition *datafile, int extended, pulselong
    if(junk < 1)
      newdata[j+newindex_L] *= sqrt(1.0-junk*junk);
    else
-     newdata[j+newindex_L] = 0;
+     newdata[j+newindex_L] = 0.0;
  }else if(correctLbias == 0) {
    newdata[j+newindex_L] -= medianL;
  }

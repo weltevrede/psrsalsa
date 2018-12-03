@@ -26,7 +26,7 @@ int writePulseWSRTData(datafile_definition datafile, long pulsenr, int polarizat
 int writeWSRTHeader(datafile_definition datafile, verbose_definition verbose);
 int writePuMafile(datafile_definition datafile, float *data, verbose_definition verbose);
 int readPuMafile(datafile_definition datafile, float *data, verbose_definition verbose);
-int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_definition verbose);
+int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowarnings, verbose_definition verbose);
 int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose);
 int readFITSfile(datafile_definition *datafile, float *data, verbose_definition verbose);
 int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose);
@@ -2814,8 +2814,13 @@ int setITRFlocation_by_name(datafile_definition *datafile, char *observatory, ve
 }
 int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowarnings, verbose_definition verbose)
 {
-  int i, ret = 0;
+  int i, nowarnings2, ret = 0;
   verbose_definition verbose2;
+  if(nowarnings == 2) {
+    nowarnings2 = 1;
+  }else {
+    nowarnings2 = 0;
+  }
   if(verbose.debug) {
     printf("Entering readHeaderPSRData()\n");
   }
@@ -2860,7 +2865,7 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
  printf(" ");
       printf("Reading PSRFITS header\n");
     }
-    ret = readPSRFITSHeader(datafile, readnoscales, verbose);
+    ret = readPSRFITSHeader(datafile, readnoscales, nowarnings2, verbose);
     if(verbose.debug) {
       for(i = 0; i < verbose.indent; i++)
  printf(" ");
@@ -2910,9 +2915,10 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
   }
   if(datafile->format != FITS_format) {
     datafile->datastart = ftell(datafile->fptr);
-  }else
+  }else {
     datafile->datastart = 0;
-  if(convert_if_uniform_frequency_spacing(datafile, verbose) == 0) {
+  }
+  if(convert_if_uniform_frequency_spacing(datafile, nowarnings2, verbose) == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readHeaderPSRData (%s): Attempt to convert dataset in an equally spaced frequency channel format failed.", datafile->filename);
     return 0;
@@ -4204,7 +4210,7 @@ void copyVerboseState(verbose_definition verbose_state_src, verbose_definition *
   verbose_state_dst->nocounters = verbose_state_src.nocounters;
   verbose_state_dst->indent = verbose_state_src.indent;
 }
-int convert_if_uniform_frequency_spacing(datafile_definition *datafile, verbose_definition verbose)
+int convert_if_uniform_frequency_spacing(datafile_definition *datafile, int nowarnings, verbose_definition verbose)
 {
   long subint, freqchan;
   double freq, freq_first, freq_prev, df_expected, actual_centre_freq;
@@ -4232,13 +4238,17 @@ int convert_if_uniform_frequency_spacing(datafile_definition *datafile, verbose_
  freq_prev = freq;
       }else if(freqchan == 0 && subint != 0) {
  if(fabs(freq - freq_first) > 1e-6) {
-   printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf != %lf for first channels of subint 0 and %ld). Some operations might might not work with this data. Warnings for other channels are suppressed.", datafile->filename, freq, freq_first, subint);
+   if(nowarnings == 0) {
+     printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf != %lf for first channels of subint 0 and %ld). Some operations might might not work with this data. Warnings for other channels are suppressed.", datafile->filename, freq, freq_first, subint);
+   }
    return 2;
  }
  freq_prev = freq;
       }else {
  if(fabs(freq-freq_prev - df_expected) > 1e-6) {
-   printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf - %lf != %lf for channel %ld and subint %ld). Some operations might might not work with this data. Warnings for other channels are suppressed.", datafile->filename, freq, freq_prev, df_expected, freqchan, subint);
+   if(nowarnings == 0) {
+     printwarning(verbose.debug, "WARNING (%s): Frequency channels do not appear to be equally spaced (%lf - %lf != %lf for channel %ld and subint %ld). Some operations might might not work with this data. Warnings for other channels are suppressed.", datafile->filename, freq, freq_prev, df_expected, freqchan, subint);
+   }
    return 2;
  }
  freq_prev = freq;
@@ -4263,7 +4273,9 @@ int convert_if_uniform_frequency_spacing(datafile_definition *datafile, verbose_
    printf("  (%s): Updating centre frequency from %lf to %lf MHz as suggested by the frequency list in the fits table, corresponding to an offset expected from a dropped DC channel.\n", datafile->filename, hdr_freq_cent, actual_centre_freq);
  }
       }else {
- printwarning(verbose.debug, "WARNING (%s): Updating centre frequency from %lf to %lf MHz as suggested by the frequency list in the data.", datafile->filename, hdr_freq_cent, actual_centre_freq);
+ if(nowarnings == 0) {
+   printwarning(verbose.debug, "WARNING (%s): Updating centre frequency from %lf to %lf MHz as suggested by the frequency list in the data.", datafile->filename, hdr_freq_cent, actual_centre_freq);
+ }
       }
     }else {
       if(verbose.debug)
@@ -4283,7 +4295,9 @@ int convert_if_uniform_frequency_spacing(datafile_definition *datafile, verbose_
     }
     if(fabs(df_expected-chanbw) > 1e-6) {
       fflush(stdout);
-      printwarning(verbose.debug, "WARNING (%s): Updating channel bandwidth from %lf to %lf MHz suggested by the frequency list in the subint table.", datafile->filename, chanbw, df_expected);
+      if(nowarnings == 0) {
+ printwarning(verbose.debug, "WARNING (%s): Updating channel bandwidth from %lf to %lf MHz suggested by the frequency list in the subint table.", datafile->filename, chanbw, df_expected);
+      }
       if(set_bandwidth(datafile, df_expected*datafile->NrFreqChan, verbose) == 0) {
  printerror(verbose.debug, "ERROR (%s): Bandwidth changing failed.", datafile->filename);
  return 0;

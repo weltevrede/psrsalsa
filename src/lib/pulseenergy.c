@@ -76,18 +76,28 @@ void boxcarFindpeak_core(int width, float *pulse, int nrBins, int *bin, int *pul
  if(posOrNeg == 0) {
    if(snr > *snrbest || *firsttime == 1)
      ok = 1;
- }else {
+ }else if(posOrNeg == 1) {
    if(fabs(snr) > *snrbest || *firsttime == 1) {
      ok = 1;
      snr = fabs(snr);
    }
+ }else if(posOrNeg == 2) {
+   if((snr < 0 && fabs(snr) > *snrbest) || *firsttime == 1) {
+     ok = 1;
+     snr = -snr;
+   }
+ }else {
+   printerror(verbose.debug, "ERROR boxcarFindpeak: posOrNeg variable is set to an unrecognized value.");
+   exit(0);
  }
  if(ok) {
    *firsttime = 0;
    *bin = b;
    *pulsewidth = width;
    *snrbest = snr;
-   *E_best = E;
+   if(E_best != NULL) {
+     *E_best = E;
+   }
  }
       }
     }

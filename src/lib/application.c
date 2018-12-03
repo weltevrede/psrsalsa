@@ -160,13 +160,21 @@ void initApplication(psrsalsaApplication *application, char *name, char *genusag
   application->nr_rotateStokes = 0;
   application->switch_libversions = 0;
   application->switch_forceUniformFreqLabelling = 0;
+  application->dodebase_slope = 0;
   application->fzapMask = NULL;
   application->doautot = 0;
+  application->switch_onpulse2 = 0;
+  application->switch_onpulsef2 = 0;
+  if(initPulselongitudeRegion(&(application->onpulse2), verbose) == 0) {
+    printerror(0, "ERROR initApplication: Cannot initialise onpulse region.");
+    exit(0);
+  }
 }
 void terminateApplication(psrsalsaApplication *application)
 {
   free(application->genusage);
   freePulselongitudeRegion(&(application->onpulse));
+  freePulselongitudeRegion(&(application->onpulse2));
   closePSRData(&(application->template_file), 0, application->verbose_state);
  }
 void printCitationInfo()
@@ -270,6 +278,8 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
    maxsize += format[i] - '0';
  }
       }
+    }else {
+      expectnumber = 0;
     }
     if(expecttype && handlednumber == 0) {
       char *word_ptr, *word;
@@ -311,6 +321,9 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
  if(strlen(word) + 1 >= maxsize) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR parse_command_string: Command line option '%s' exceeds the maximum variable length %ld", word, maxsize);
+   if(maxsize == 0) {
+     printerror(verbose.debug, "ERROR parse_command_string: This might be a programming error where %%s is passed on to parse_command_string() rathern than for example %%100s.");
+   }
    free(word);
    return 0;
  }
@@ -585,13 +598,21 @@ void printApplicationHelp(psrsalsaApplication *application)
     if(application->switch_size)
       fprintf(stdout, "  -size         \"width height\". Specify resolution of plot device (in pixels).\n");
   }
-  if(application->switch_onpulse || application->switch_onpulsef || application->switch_onpulsegr
+  if(application->switch_onpulse || application->switch_onpulsef || application->switch_onpulsegr || application->switch_onpulse2 || application->switch_onpulsef2
 ) {
     fprintf(stdout, "\nGeneral data selection options:\n");
    if(application->switch_onpulse)
      fprintf(stdout, "  -onpulse      \"left right\" manually select on-pulse regions (in bins)\n");
    if(application->switch_onpulsef)
      fprintf(stdout, "  -onpulsef     \"left right\" manually select on-pulse regions (in phase)\n");
+   if(application->switch_onpulse2) {
+     fprintf(stdout, "  -onpulse2     \"left right\" manually select second type of\n");
+     fprintf(stdout, "                on-pulse regions (in bins)\n");
+   }
+   if(application->switch_onpulsef2) {
+     fprintf(stdout, "  -onpulsef2    \"left right\" manually select second type of\n");
+     fprintf(stdout, "                on-pulse regions (in phase)\n");
+   }
    if(application->switch_onpulsegr)
       fprintf(stdout, "  -onpulsegr    Graphically select (additional) onpulse regions\n");
   }
@@ -713,7 +734,7 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
       swap_orig_clone(&(application->template_file), &clone, application->verbose_state);
     }
     if(application->template_file.NrFreqChan > 1) {
-      if(!preprocess_dedisperse(&(application->template_file), 0, 0, application->verbose_state))
+      if(!preprocess_dedisperse(&(application->template_file), 0, 0, 0, application->verbose_state))
  return 0;
       if(!preprocess_addsuccessiveFreqChans(application->template_file, &clone, application->template_file.NrFreqChan, NULL, application->verbose_state))
  return 0;
@@ -740,6 +761,20 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
       exit(-1);
     }
     return 1;
+  }else if(strcmp(argv[*index], "-onpulse2") == 0 && application->switch_onpulse2) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, -1, "%d %d", &(application->onpulse2.left_bin[application->onpulse2.nrRegions]), &(application->onpulse2.right_bin[application->onpulse2.nrRegions]), NULL) == 0) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
+      exit(0);
+    }
+    application->onpulse2.bins_defined[application->onpulse2.nrRegions] = 1;
+    (application->onpulse2.nrRegions)++;
+    if(application->onpulse2.nrRegions == MAX_pulselongitude_regions) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "processCommandLine: To many regions selected.");
+      exit(-1);
+    }
+    return 1;
   }else if(strcmp(argv[*index], "-onpulsef") == 0 && application->switch_onpulsef) {
     if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, -1, "%f %f", &(application->onpulse.left_frac[application->onpulse.nrRegions]), &(application->onpulse.right_frac[application->onpulse.nrRegions]), NULL) == 0) {
       fflush(stdout);
@@ -748,6 +783,15 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     }
     application->onpulse.frac_defined[application->onpulse.nrRegions] = 1;
     (application->onpulse.nrRegions)++;
+    return 1;
+  }else if(strcmp(argv[*index], "-onpulsef2") == 0 && application->switch_onpulsef2) {
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, -1, "%f %f", &(application->onpulse2.left_frac[application->onpulse2.nrRegions]), &(application->onpulse2.right_frac[application->onpulse2.nrRegions]), NULL) == 0) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
+      exit(0);
+    }
+    application->onpulse2.frac_defined[application->onpulse2.nrRegions] = 1;
+    (application->onpulse2.nrRegions)++;
     return 1;
   }else if(strcmp(argv[*index], "-ext") == 0 && application->switch_ext) {
     application->extension = argv[++(*index)];
@@ -1080,8 +1124,13 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     }
   }
   if(application->do_dedisperse || application->dofscr) {
-    if(!preprocess_dedisperse(psrdata, 0, 0, verbose1))
-      return 0;
+    if(application->do_dedisperse == 2) {
+      if(!preprocess_dedisperse(psrdata, 1, 0, 0, verbose1))
+ return 0;
+    }else {
+      if(!preprocess_dedisperse(psrdata, 0, 0, 0, verbose1))
+ return 0;
+    }
   }
   if(application->do_deFaraday || application->dofscr) {
     int skip;
@@ -1137,7 +1186,7 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     }
     if(!preprocess_addsuccessivepulses(*psrdata, &clone, psrdata->NrSubints, application->tscr_complete, verbose2))
       return 0;
-    if(!preprocess_dedisperse(&clone, 0, 0, verbose2))
+    if(!preprocess_dedisperse(&clone, 0, 0, 0, verbose2))
       return 0;
     if(psrdata->NrPols == 4) {
       if(!preprocess_deFaraday(&clone, 0, 0, 0, NULL, verbose2))
@@ -1234,9 +1283,14 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     }
     free(pgplot_options);
   }
-  if(application->dodebase) {
-      if(!preprocess_debase(psrdata, application->onpulse, verbose1))
- return 0;
+  if(application->dodebase || application->dodebase_slope) {
+    if(application->dodebase == 2) {
+ if(!preprocess_debase(psrdata, &(application->onpulse2), NULL, 0, verbose1))
+   return 0;
+    }else {
+ if(!preprocess_debase(psrdata, &(application->onpulse), NULL, 0, verbose1))
+   return 0;
+    }
   }
   if(application->do_norm) {
     if(preprocess_norm(*psrdata, application->normvalue, &(application->onpulse), 0, verbose1) == 0)

@@ -337,6 +337,10 @@ void determineWeightsStat(datafile_definition *datafile, int *zeroweightfound, i
   *zeroweightfound = 0;
   *differentweights = 0;
   *negativeweights = 0;
+  if(datafile->weights == NULL) {
+    *weightvalue = 1.0;
+    return;
+  }
   for(n = 0; n < datafile->NrSubints*datafile->NrFreqChan; n++) {
     if(datafile->weights[n] < 0) {
       *negativeweights = 1;
@@ -1446,14 +1450,14 @@ void update_freqs_using_DAT_FREQ_column(datafile_definition *datafile, verbose_d
     }
   }
 }
-int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_definition verbose)
+int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowarnings, verbose_definition verbose)
 {
   char card[FLEN_CARD], comment[FLEN_COMMENT], value[FLEN_VALUE], value_tmp[FLEN_VALUE];
   int status = 0;
   int hdutype, nkeys, i, colnum, anynul, dmnotset, rmnotset, periodnotset, gentypenotset, tsubnotset, tsubsettotobs;
-  int nodata, issearch, samptimenotset, dummy_int;
+  int nodata, issearch, samptimenotset, dummy_int, ret;
   long numrows;
-  double f, dummy_double, f1, f2, freq_cent;
+  double f, dummy_double, f1, f2;
   char command[2000], tmpfilename[2000];
   char dummy_txt[2000];
   FILE *fin;
@@ -1475,7 +1479,9 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
   fits_get_hdrspace(datafile->fits_fptr, &nkeys, NULL, &status);
   if (fits_read_card(datafile->fits_fptr,"FITSTYPE", card, &status)) {
     fflush(stdout);
-    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FITSTYPE keyword does not exist. Not sure this is a PSRFITS file.", datafile->filename);
+    if(nowarnings == 0) {
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FITSTYPE keyword does not exist. Not sure this is a PSRFITS file.", datafile->filename);
+    }
     status = 0;
   }else {
     fits_parse_value(card, value, comment, &status);
@@ -1502,24 +1508,30 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     return 0;
   }
   if(fits_read_card(datafile->fits_fptr,"ANT_X", card, &status)) {
-    fflush(stdout);
-    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): ANT_X keyword does not exist", datafile->filename);
+    if(nowarnings == 0) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): ANT_X keyword does not exist", datafile->filename);
+    }
     datafile->telescope_X = datafile->telescope_Y = datafile->telescope_Z = 0;
     status = 0;
   }else {
     fits_parse_value(card, value, comment, &status);
     sscanf(value, "%lf", &(datafile->telescope_X));
     if(fits_read_card(datafile->fits_fptr,"ANT_Y", card, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): ANT_Y keyword does not exist", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): ANT_Y keyword does not exist", datafile->filename);
+      }
       datafile->telescope_X = datafile->telescope_Y = datafile->telescope_Z = 0;
       status = 0;
     }else {
       fits_parse_value(card, value, comment, &status);
       sscanf(value, "%lf", &(datafile->telescope_Y));
       if(fits_read_card(datafile->fits_fptr,"ANT_Z", card, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): ANT_Z keyword does not exist", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): ANT_Z keyword does not exist", datafile->filename);
+ }
  datafile->telescope_X = datafile->telescope_Y = datafile->telescope_Z = 0;
  status = 0;
       }else {
@@ -1568,7 +1580,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
   fits_parse_value(card, value, comment, &status);
   converthms(value+1, &(datafile->dec));
   datafile->dec *= M_PI/180.0;
-  if (fits_read_card(datafile->fits_fptr,"OBSFREQ", card, &status)) {
+  if(fits_read_card(datafile->fits_fptr,"OBSFREQ", card, &status)) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): OBSFREQ keyword does not exist", datafile->filename);
     return 0;
@@ -1579,19 +1591,26 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     free(datafile->freqlabel_list);
     datafile->freqlabel_list = NULL;
   }
-  sscanf(value, "%lf", &freq_cent);
-  set_centre_frequency(datafile, freq_cent, verbose);
-  if(freq_cent < 1 && (freq_cent < -1.1 || freq_cent > -0.9)) {
-    fflush(stdout);
-    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBSFREQ keyword is not defined or zero", datafile->filename);
+  ret = sscanf(value, "%lf", &dummy_double);
+  if(ret != 1) {
+    dummy_double = 0;
+  }
+  set_centre_frequency(datafile, dummy_double, verbose);
+  if(dummy_double < 1 && (dummy_double < -1.1 || dummy_double > -0.9)) {
+    if(nowarnings == 0) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBSFREQ keyword is not defined or zero", datafile->filename);
+    }
   }else {
-    datafile->freq_ref = freq_cent;
+    datafile->freq_ref = dummy_double;
   }
   if(verbose.debug)
-    printf("  readPSRFITSHeader (%s): OBSFREQ = %lf (-1 or 1e10 is interpreted as infinity)\n", datafile->filename, freq_cent);
+    printf("  readPSRFITSHeader (%s): OBSFREQ = %lf (-1 or 1e10 is interpreted as infinity)\n", datafile->filename, dummy_double);
   if(fits_read_card(datafile->fits_fptr,"FD_POLN", card, &status)) {
-    fflush(stdout);
-    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_POLN keyword does not exist", datafile->filename);
+    if(nowarnings == 0) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_POLN keyword does not exist", datafile->filename);
+    }
     status = 0;
   }else {
     fits_parse_value(card, value, comment, &status);
@@ -1601,13 +1620,17 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     }else if(strcmp(dummy_txt, "LIN") == 0) {
       datafile->feedtype = FEEDTYPE_LINEAR;
     }else {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_POLN '%s' not recognized", datafile->filename, dummy_txt);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_POLN '%s' not recognized", datafile->filename, dummy_txt);
+      }
     }
   }
   if (fits_read_card(datafile->fits_fptr,"FD_HAND", card, &status)) {
-    fflush(stdout);
-    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_HAND keyword does not exist", datafile->filename);
+    if(nowarnings == 0) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_HAND keyword does not exist", datafile->filename);
+    }
     status = 0;
   }else {
     fits_parse_value(card, value, comment, &status);
@@ -1615,8 +1638,10 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     if(i == 1 || i == -1)
       datafile->feedtype *= i;
     else {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_HAND '%d' not recognized", datafile->filename, i);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FD_HAND '%d' not recognized", datafile->filename, i);
+      }
     }
   }
   if (fits_read_card(datafile->fits_fptr,"STT_IMJD", card, &status)) {
@@ -1643,8 +1668,10 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
   sscanf(value, "%lf", &f);
   datafile->mjd_start += f/(24.0*3600.0);
   if(fits_read_card(datafile->fits_fptr,"OBS_MODE", card, &status)) {
-    fflush(stdout);
-    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBS_MODE keyword does not exist", datafile->filename);
+    if(nowarnings == 0) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBS_MODE keyword does not exist", datafile->filename);
+    }
     status = 0;
   }
   fits_parse_value(card, value, comment, &status);
@@ -1684,8 +1711,10 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     datafile->foldMode = FOLDMODE_FIXEDPERIOD;
     datafile->fixedPeriod = 0;
   }else {
-    fflush(stdout);
-    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBS_MODE keyword does not appear to be valid. It is set to %s.", datafile->filename, value);
+    if(nowarnings == 0) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBS_MODE keyword does not appear to be valid. It is set to %s.", datafile->filename, value);
+    }
     periodnotset = 1;
     datafile->isFolded = 1;
     datafile->foldMode = FOLDMODE_FIXEDPERIOD;
@@ -1777,8 +1806,10 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     datafile->isDebase = dummy_int;
   }
   if(fits_movnam_hdu(datafile->fits_fptr, BINARY_TBL, "HISTORY", 0, &status)) {
-    fflush(stdout);
-    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion and de-Faraday rotation state in file.", datafile->filename);
+    if(nowarnings == 0) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion and de-Faraday rotation state in file.", datafile->filename);
+    }
     datafile->isDeDisp = -1;
     datafile->isDeFarad = -1;
     datafile->isDePar = -1;
@@ -1792,14 +1823,18 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
   }else {
     fits_get_num_rows (datafile->fits_fptr, &numrows, &status);
     if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "DEDISP", &colnum, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion state in file.", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion state in file.", datafile->filename);
+      }
       datafile->isDeDisp = -1;
       status = 0;
     }else {
       if(fits_read_col(datafile->fits_fptr, TINT, colnum, numrows, 1, 1, NULL, &(dummy_int), &anynul, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion state in file.", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion state in file.", datafile->filename);
+ }
  datafile->isDeDisp = -1;
  status = 0;
       }else {
@@ -1807,14 +1842,18 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       }
     }
     if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "RM_CORR", &colnum, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find de-Faraday rotation state in file.", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find de-Faraday rotation state in file.", datafile->filename);
+      }
       datafile->isDeFarad = -1;
       status = 0;
     }else {
       if(fits_read_col(datafile->fits_fptr, TINT, colnum, numrows, 1, 1, NULL, &(dummy_int), &anynul, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find de-Faraday rotation state in file.", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find de-Faraday rotation state in file.", datafile->filename);
+ }
  datafile->isDeFarad = -1;
  status = 0;
       }else {
@@ -1822,14 +1861,18 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       }
     }
     if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "PR_CORR", &colnum, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find parallactic angle state in file.", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find parallactic angle state in file.", datafile->filename);
+      }
       datafile->isDePar = -1;
       status = 0;
     }else {
       if(fits_read_col(datafile->fits_fptr, TINT, colnum, numrows, 1, 1, NULL, &(dummy_int), &anynul, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find parallactic angle state in file.", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find parallactic angle state in file.", datafile->filename);
+ }
  datafile->isDePar = -1;
  status = 0;
       }else {
@@ -1838,14 +1881,18 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     }
     if(periodnotset) {
       if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "TBIN", &colnum, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find TBIN in history table to obtain period.", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find TBIN in history table to obtain period.", datafile->filename);
+ }
  periodnotset = 1;
  status = 0;
       }else {
  if(fits_read_col(datafile->fits_fptr, TDOUBLE, colnum, numrows, 1, 1, NULL, &(datafile->fixedPeriod), &anynul, &status)) {
-   fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read TBIN in history table to obtain period.", datafile->filename);
+   if(nowarnings == 0) {
+     fflush(stdout);
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read TBIN in history table to obtain period.", datafile->filename);
+   }
    periodnotset = 1;
    status = 0;
  }else {
@@ -1909,14 +1956,18 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       }
     }
     if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "CTR_FREQ", &colnum, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find centre frequency in history table.", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find centre frequency in history table.", datafile->filename);
+      }
       status = 0;
     }else {
       double freq_history;
       if(fits_read_col(datafile->fits_fptr, TDOUBLE, colnum, numrows, 1, 1, NULL, &(freq_history), &anynul, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find centre frequency in history table.", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find centre frequency in history table.", datafile->filename);
+ }
  set_centre_frequency(datafile, 0.0, verbose);
  status = 0;
       }
@@ -1935,7 +1986,9 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
  if(verbose.debug)
    printf("  readPSRFITSHeader (%s): Use history table frequency as reference frequency.\n", datafile->filename);
       }else if(fabs(datafile->freq_ref - freq_history) > 0.001) {
-  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBSFREQ != Frequency defined in history table. Reference frequency set to %lf MHz", datafile->filename, freq_history);
+ if(nowarnings == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBSFREQ != Frequency defined in history table. Reference frequency set to %lf MHz", datafile->filename, freq_history);
+ }
  datafile->freq_ref = freq_history;
       }
     }
@@ -1960,7 +2013,9 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
    status = 0;
  }else {
    set_centre_frequency(datafile, dummy_double, verbose);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FREQUENCY=%f according to polyco", datafile->filename, dummy_double);
+   if(nowarnings == 0) {
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FREQUENCY=%f according to polyco", datafile->filename, dummy_double);
+   }
  }
       }
     }
@@ -1977,11 +2032,15 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       fflush(stdout);
       fits_get_num_rows (datafile->fits_fptr, &numrows, &status);
       if(numrows == 0) {
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): No rows in T2predictor", datafile->filename);
+ if(nowarnings == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): No rows in T2predictor", datafile->filename);
+ }
  status = 0;
       }else {
  if(fits_get_colnum (datafile->fits_fptr, CASEINSEN, "PREDICT", &colnum, &status)) {
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): PREDICT keyword does not exist", datafile->filename);
+   if(nowarnings == 0) {
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): PREDICT keyword does not exist", datafile->filename);
+   }
    status = 0;
  }
  sprintf(command, "XXX");
@@ -1992,7 +2051,9 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
    if(strcmp(dummy_txt, "FREQ_RANGE") == 0) {
      sscanf(command, "%s %lf %lf", dummy_txt, &f1, &f2);
      set_centre_frequency(datafile, 0.5*(f1+f2), verbose);
-     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FREQUENCY=%lf according to tempo2 predictor", datafile->filename, get_centre_frequency(*datafile, verbose));
+     if(nowarnings == 0) {
+       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FREQUENCY=%lf according to tempo2 predictor", datafile->filename, get_centre_frequency(*datafile, verbose));
+     }
    }
  }
       }
@@ -2017,14 +2078,18 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       fits_get_num_rows(datafile->fits_fptr, &nrows, &status);
       fits_get_num_cols(datafile->fits_fptr, &ncols, &status);
       if(fits_get_colnum (datafile->fits_fptr, CASEINSEN, "PERIOD", &colnum, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find PERIOD in subint table, will use PSRCHIVE to obtain period.", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find PERIOD in subint table, will use PSRCHIVE to obtain period.", datafile->filename);
+ }
  status = 0;
  periodnotset = 1;
       }else {
  if(fits_read_col(datafile->fits_fptr, TDOUBLE, colnum, nrows, 1, 1, NULL, &(datafile->fixedPeriod), &anynul, &status)) {
-   fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read PERIOD in subint table, will use PSRCHIVE to obtain period.", datafile->filename);
+   if(nowarnings == 0) {
+     fflush(stdout);
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read PERIOD in subint table, will use PSRCHIVE to obtain period.", datafile->filename);
+   }
    periodnotset = 1;
    status = 0;
  }else {
@@ -2056,9 +2121,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       }
       sprintf(tmpfilename, "/tmp/junk_mjd_%s", username);
       free(username);
-      sprintf(command, "rm -f %s", tmpfilename);
-      if(verbose.verbose) printf("  Running: %s\n", command);
-      system(command);
+      remove(tmpfilename);
       sprintf(command, "vap -n -c period %s > %s", datafile->filename, tmpfilename);
       if(verbose.verbose) printf("  Running: %s\n", command);
       system(command);
@@ -2089,9 +2152,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
  datafile->foldMode = FOLDMODE_FIXEDPERIOD;
       }
       fclose(fin);
-      sprintf(command, "rm -f %s", tmpfilename);
-      if(verbose.verbose) printf("  Running: %s\n", command);
-      system(command);
+      remove(tmpfilename);
     }
     fits_get_hdrspace(datafile->fits_fptr, &nkeys, NULL, &status);
     if (fits_read_card(datafile->fits_fptr,"NPOL", card, &status)) {
@@ -2102,8 +2163,10 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     fits_parse_value(card, value, comment, &status);
     sscanf(value, "%ld", &(datafile->NrPols));
     if (fits_read_card(datafile->fits_fptr,"POL_TYPE", card, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE keyword does not exist", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE keyword does not exist", datafile->filename);
+      }
       status = 0;
     }else {
       fits_parse_value(card, value, comment, &status);
@@ -2130,8 +2193,10 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
  datafile->poltype = POLTYPE_UNKNOWN;
       }else {
  datafile->poltype = POLTYPE_UNKNOWN;
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE '%s' not recognized", datafile->filename, dummy_txt);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE '%s' not recognized", datafile->filename, dummy_txt);
+ }
       }
     }
     if (fits_read_card(datafile->fits_fptr,"NBIN", card, &status)) {
@@ -2143,8 +2208,10 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     sscanf(value, "%ld", &(datafile->NrBins));
     if(datafile->NrBins == 1) {
       if(fits_read_card(datafile->fits_fptr,"NSBLK", card, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NSBLK keyword does not exist, while NrBins=1 suggests this is a search-mode file. Proceed with reading file as being in folded mode.", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NSBLK keyword does not exist, while NrBins=1 suggests this is a search-mode file. Proceed with reading file as being in folded mode.", datafile->filename);
+ }
  datafile->NrBits = 16;
       }else {
  fits_parse_value(card, value, comment, &status);
@@ -2173,10 +2240,14 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       period = -1;
     }
     if(fits_read_card(datafile->fits_fptr,"TBIN", card, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): SUBINT:TBIN keyword does not exist, assuming whole period is stored and using period to get sampling time.", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): SUBINT:TBIN keyword does not exist, assuming whole period is stored and using period to get sampling time.", datafile->filename);
+      }
       if(periodnotset || period <= 0) {
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period is not set, so cannot use period to get sampling time.", datafile->filename);
+ if(nowarnings == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period is not set, so cannot use period to get sampling time.", datafile->filename);
+ }
       }else {
  datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
  datafile->fixedtsamp = period/(double)datafile->NrBins;
@@ -2185,10 +2256,14 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
     }else {
       fits_parse_value(card, value, comment, &status);
       if(value[1] == '*') {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Sampling time not set, assuming whole period is stored to obtain sampling time.", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Sampling time not set, assuming whole period is stored to obtain sampling time.", datafile->filename);
+ }
  if(periodnotset || period <= 0) {
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period is not set, so cannot use period to get sampling time.", datafile->filename);
+   if(nowarnings == 0) {
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period is not set, so cannot use period to get sampling time.", datafile->filename);
+   }
  }else {
    if(verbose.debug) {
      fflush(stdout);
@@ -2210,12 +2285,16 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       }
     }
     if(fits_read_card(datafile->fits_fptr,"NCHAN", card, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NCHAN keyword does not exist", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NCHAN keyword does not exist", datafile->filename);
+      }
       status = 0;
       if(fits_read_card(datafile->fits_fptr,"NCH_FILE", card, &status)) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NCHAN and NCH_FILE keywords do not exist", datafile->filename);
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NCHAN and NCH_FILE keywords do not exist", datafile->filename);
+ }
  return 0;
       }else {
  fits_parse_value(card, value, comment, &status);
@@ -2252,8 +2331,10 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       }
     }
     if (fits_read_card(datafile->fits_fptr,"DM", card, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): DM not in SUBINT HDU", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): DM not in SUBINT HDU", datafile->filename);
+      }
       status = 0;
       dmnotset = 1;
     }else {
@@ -2261,8 +2342,10 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
       sscanf(value, "%lf", &(datafile->dm));
     }
     if (fits_read_card(datafile->fits_fptr,"RM", card, &status)) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): RM not in SUBINT HDU", datafile->filename);
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): RM not in SUBINT HDU", datafile->filename);
+      }
       status = 0;
       rmnotset = 1;
     }else {
@@ -2284,10 +2367,14 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
  status = 0;
  fflush(stdout);
  if(gentypenotset) {
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find TSUBINT in subint table. Gentype cannot be determined.", datafile->filename);
+   if(nowarnings == 0) {
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find TSUBINT in subint table. Gentype cannot be determined.", datafile->filename);
+   }
  }
  if(tsubnotset) {
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find TSUBINT in subint table. Observation duration cannot be determined.", datafile->filename);
+   if(nowarnings == 0) {
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find TSUBINT in subint table. Observation duration cannot be determined.", datafile->filename);
+   }
  }
       }else {
  if(verbose.debug) fprintf(stderr, "  readPSRFITSHeader (%s): start determining total duration of observation\n", datafile->filename);
@@ -2313,14 +2400,18 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
  for(i = 0; i < datafile->NrSubints; i++) {
    if(fits_read_col(datafile->fits_fptr, TDOUBLE, colnum, 1+i, 1, 1, NULL, &(subint_duration), &anynul, &status)) {
      if(tsubnotset) {
-       fflush(stdout);
-       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read TSUBINT in subint table to determine observation duration.", datafile->filename);
+       if(nowarnings == 0) {
+  fflush(stdout);
+  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read TSUBINT in subint table to determine observation duration.", datafile->filename);
+       }
      }
      ok = 0;
      status = 0;
      if(gentypenotset) {
-       fflush(stdout);
-       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read TSUBINT in subint table to determine observation duration. The gentype is not determined.", datafile->filename);
+       if(nowarnings == 0) {
+  fflush(stdout);
+  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read TSUBINT in subint table to determine observation duration. The gentype is not determined.", datafile->filename);
+       }
      }
      break;
    }else {
@@ -2379,14 +2470,18 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, verbose_d
        return 0;
      }
      if(period != 0) {
-       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Total duration of observation (%lf sec) implies the nr of periods < nr of subintegrations. Something is wrong.", datafile->filename, tot_duration);
+       if(nowarnings == 0) {
+  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Total duration of observation (%lf sec) implies the nr of periods < nr of subintegrations. Something is wrong.", datafile->filename, tot_duration);
+       }
        datafile->tsubMode = TSUBMODE_UNKNOWN;
        if(gentypenotset) {
   fflush(stdout);
   printf("readPSRFITSHeader (%s): Without an observation duration the gentype is not determined.\n", datafile->filename);
        }
      }else {
-       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period does not appear to be set. Observation duration cannot be compared to number of subints.", datafile->filename);
+       if(nowarnings == 0) {
+  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period does not appear to be set. Observation duration cannot be compared to number of subints.", datafile->filename);
+       }
        if(gentypenotset) {
   fflush(stdout);
   printf("readPSRFITSHeader (%s): Without an observation duration the gentype is not determined.\n", datafile->filename);
@@ -2636,7 +2731,7 @@ int writeFITSsubint(datafile_definition datafile, long subintnr, unsigned char *
       scales[i] = 0;
       if(showErrorMessage) {
  fflush(stdout);
-        printwarning(verbose.debug, "writeFITSsubint: Caught an NaN in an offset (duplicate messages are suppressed)");
+ printwarning(verbose.debug, "writeFITSsubint: Caught an NaN in an offset (duplicate messages are suppressed)");
       }
       showErrorMessage = 0;
     }

@@ -25,7 +25,7 @@ int main(int argc, char **argv)
   int index, firstfiletoopen, nokeypresses, compute_PA, extendedPol, writeout, writeoutFilename;
   int manualOnpulseSelection, deviceID, normalize, correctLbias, nxsub, boxlinewidth;
   int titleset, titlelw, dashed, datalinewidth, noylabel, overlayPA, overlayFine, nrJumps;
-  int outline, outline_color, extended, onlysignificantPA, twoprofiles;
+  int outline, outline_color, extended, onlysignificantPA, twoprofiles, sigmaI;
   long i, j, f;
   float *profileI, loffset, correctQV, correctV, sigma_limit;
   float xsize, ysize, ysizepa, xtick, plotI1, plotI2, titlech;
@@ -110,6 +110,7 @@ int main(int argc, char **argv)
   overlaybeta = 0;
   overlaypa0 = 0;
   overlayl0 = 0;
+  sigmaI = 0;
   if(argc < 2) {
     printf("Program to convert Stokes parameters in other polarization products such as\n");
     printf("postition angle and linear intensity. The results can be written out and plotted\n");
@@ -129,6 +130,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "-selectonpulse     Enables manual graphical selection of more on-pulse regions\n");
     fprintf(stdout, "                   in addition to any provided on the command line.\n");
     fprintf(stdout, "-sigma             Set sigma limit on L required for PA calculation [def=%.1f].\n", sigma_limit);
+    fprintf(stdout, "                   Here sigma is defined as the RMS of the unbiased off-pulse L.\n");
     fprintf(stdout, "-2                 Write out two pulse periods (so there is duplicated data).\n");
     fprintf(stdout, "-extendedpol       Also generate the total amount of polarization\n");
     fprintf(stdout, "\nOptions affecting the plotting:\n");
@@ -411,9 +413,16 @@ int main(int argc, char **argv)
       printwarning(application.verbose_state.debug, "WARNING ppol: Cannot apply sigma limit on PA-points for this type of input file. The used sigma limit will be the same as when the input file was generated.");
     }
   }else {
-    if(datain.data[j+datain.NrBins*(1+datain.NrPols*(f+i*datain.NrFreqChan))] < sigma_limit*datain.offpulse_rms[1+datain.NrPols*(f + datain.NrFreqChan*i)]) {
-      datain.data[j+datain.NrBins*(pachannel + datain.NrPols*(f+datain.NrFreqChan*i))] = 0;
-      datain.data[j+datain.NrBins*(pachannel+1 + datain.NrPols*(f+datain.NrFreqChan*i))] = -1;
+    if(sigmaI == 0) {
+      if(datain.data[j+datain.NrBins*(1+datain.NrPols*(f+i*datain.NrFreqChan))] < sigma_limit*datain.offpulse_rms[1+datain.NrPols*(f + datain.NrFreqChan*i)]) {
+        datain.data[j+datain.NrBins*(pachannel + datain.NrPols*(f+datain.NrFreqChan*i))] = 0;
+        datain.data[j+datain.NrBins*(pachannel+1 + datain.NrPols*(f+datain.NrFreqChan*i))] = -1;
+      }
+    }else {
+      if(datain.data[j+datain.NrBins*(1+datain.NrPols*(f+i*datain.NrFreqChan))] < sigma_limit*datain.offpulse_rms[0+datain.NrPols*(f + datain.NrFreqChan*i)]) {
+        datain.data[j+datain.NrBins*(pachannel + datain.NrPols*(f+datain.NrFreqChan*i))] = 0;
+        datain.data[j+datain.NrBins*(pachannel+1 + datain.NrPols*(f+datain.NrFreqChan*i))] = -1;
+      }
     }
   }
        }

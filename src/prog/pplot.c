@@ -99,7 +99,6 @@ int main(int argc, char **argv)
   pgplot_text_state_def title_font;
   pgplot_text_state_def label_font;
   pgplot_text_state_def box_font;
-  pgplot_text_state_def copy_font;
   int plotlw;
   int notitleset;
   char title[1000];
@@ -184,9 +183,6 @@ int main(int argc, char **argv)
   label_font.characterheight = 1;
   label_font.linewidth = 1;
   label_font.font = 1;
-  copy_font.characterheight = 1.3;
-  copy_font.linewidth = 1;
-  copy_font.font = 3;
   notitleset = 1;
   title[0] = 0;
   xtitle_set = 0;

@@ -144,7 +144,7 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "freq") == 0) {
       }else if(strcasecmp(cmd, "freqlist") == 0) {
       }else if(strcasecmp(cmd, "reffreq") == 0) {
-      }else if(strcasecmp(cmd, "npulses") == 0 || strcasecmp(cmd, "nsub") == 0 || strcasecmp(cmd, "nsubint") == 0) {
+      }else if(strcasecmp(cmd, "npulses") == 0 || strcasecmp(cmd, "nsub") == 0 || strcasecmp(cmd, "nsubint") == 0 || strcasecmp(cmd, "nsubints") == 0 || strcasecmp(cmd, "nrsubint") == 0 || strcasecmp(cmd, "nrsubints") == 0 || strcasecmp(cmd, "nrpulses") == 0) {
       }else if(strcasecmp(cmd, "nbin") == 0 || strcasecmp(cmd, "nbins") == 0) {
       }else if(strcasecmp(cmd, "npol") == 0) {
       }else if(strcasecmp(cmd, "nchan") == 0 || strcasecmp(cmd, "nfreq") == 0) {
@@ -344,7 +344,7 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "reffreq") == 0) {
  printf("  Ref freq");
  extra_precision = 1;
-      }else if(strcasecmp(cmd, "npulses") == 0 || strcasecmp(cmd, "nsub") == 0 || strcasecmp(cmd, "nsubint") == 0) {
+      }else if(strcasecmp(cmd, "npulses") == 0 || strcasecmp(cmd, "nsub") == 0 || strcasecmp(cmd, "nsubint") == 0 || strcasecmp(cmd, "nsubints") == 0 || strcasecmp(cmd, "nrsubint") == 0 || strcasecmp(cmd, "nrsubints") == 0 || strcasecmp(cmd, "nrpulses") == 0) {
  printf("      nsub");
       }else if(strcasecmp(cmd, "nbin") == 0 || strcasecmp(cmd, "nbins") == 0) {
  printf("      nbin");
@@ -471,7 +471,7 @@ int main(int argc, char **argv)
    printf(" %*.*lf", 9+precision, 4+precision, get_centre_frequency(datain[index], application.verbose_state));
  }else if(strcasecmp(cmd, "reffreq") == 0) {
    printf(" %*.*lf", 9+precision, 4+precision, datain[index].freq_ref);
- }else if(strcasecmp(cmd, "npulses") == 0 || strcasecmp(cmd, "nsub") == 0 || strcasecmp(cmd, "nsubint") == 0) {
+ }else if(strcasecmp(cmd, "npulses") == 0 || strcasecmp(cmd, "nsub") == 0 || strcasecmp(cmd, "nsubint") == 0 || strcasecmp(cmd, "nsubints") == 0 || strcasecmp(cmd, "nrsubint") == 0 || strcasecmp(cmd, "nrsubints") == 0 || strcasecmp(cmd, "nrpulses") == 0) {
    printf(" %9ld", datain[index].NrSubints);
  }else if(strcasecmp(cmd, "nbin") == 0 || strcasecmp(cmd, "nbins") == 0) {
    printf(" %9ld", datain[index].NrBins);

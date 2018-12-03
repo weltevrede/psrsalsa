@@ -22,6 +22,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define KSTEST 1
 #define KSFLAT 2
 #define KSSIN 3
+#define KSFLAT_WITH_MINMAX 4
 #define CORREL 20
 #define PEARSON 21
 #define MOMENTS 30
@@ -33,7 +34,7 @@ int main(int argc, char **argv)
   psrsalsaApplication application;
   long i, j;
   int file1_column1, file1_column2, file1_column3, file2_column1, file2_column2, file2_column3, typetest, read_log, output_idx, skiplines;
-  double threshold1, threshold2, threshold3;
+  double threshold1, threshold2, threshold3, ksflat_min, ksflat_max;
   initApplication(&application, "pstat", "[options] inputfile(s)");
   application.switch_libversions = 1;
   application.switch_verbose = 1;
@@ -106,6 +107,8 @@ int main(int argc, char **argv)
     printf("-ksflat          Like -ks, but compare single input distribution with a flat\n");
     printf("                 distribution covering the range of input values.\n");
     printf("                 Example:  pstat -ksflat -col 1 file1\n");
+    printf("-ksflat2 \"min max\"  Like -ksflat, but set the range to the specified values.\n");
+    printf("                 Example:  pstat -ksflat2 \"0 1\" -col 1 file1\n");
     printf("-kssin           Like -ks, but compare single input distribution with a\n");
     printf("                 sinusoidal distribution between 0 and 90 deg.\n");
     printf("                 Example:  pstat -kssin -col 1 file1\n");
@@ -189,6 +192,19 @@ int main(int argc, char **argv)
    return 0;
  }
  typetest = KSFLAT;
+      }else if(strcmp(argv[i], "-ksflat2") == 0) {
+ if(typetest != 0) {
+   printerror(application.verbose_state.debug, "pstat: Cannot specify more than one type of statistical test at the time");
+   return 0;
+ }
+ int ret;
+ ret = parse_command_string(application.verbose_state, argc, argv, i+1, 0, 1, "%lf %lf", &ksflat_min, &ksflat_max, NULL);
+ if(ret != 2) {
+   printerror(application.verbose_state.debug, "ERROR pstat: Cannot parse '%s' option, 2 values were expected.", argv[i]);
+   return 0;
+ }
+ typetest = KSFLAT_WITH_MINMAX;
+ i++;
       }else if(strcmp(argv[i], "-moments") == 0) {
  if(typetest != 0) {
    printerror(application.verbose_state.debug, "pstat: Cannot specify more than one type of statistical test at the time");
@@ -332,6 +348,11 @@ int main(int argc, char **argv)
  printerror(application.verbose_state.debug, "ERROR pstat: KS-test comparison with a flat distribution requires one columns of data to be read in. Example: pstat -ksflat -col 1 file1");
  return 0;
       }
+    }else if(typetest == KSFLAT_WITH_MINMAX) {
+      if(nrInputColumns != 1) {
+ printerror(application.verbose_state.debug, "ERROR pstat: KS-test comparison with a flat distribution requires one columns of data to be read in. Example: pstat -ksflat2 \"0 1\" -col 1 file1");
+ return 0;
+      }
     }else if(typetest == KSSIN) {
       if(nrInputColumns != 1) {
  printerror(application.verbose_state.debug, "ERROR pstat: KS-test comparison with a sinusoidal distribution requires one columns of data to be read in. Example: pstat -kssin -col 1 file1");
@@ -434,7 +455,7 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pstat: KS-test requires two input arrays to be specified");
       return 0;
     }
-    kstest(input_array[0], number_values[0], input_array[1], number_values[1], 0, NULL, &max_diff, &prob, application.verbose_state);
+    kstest(input_array[0], number_values[0], input_array[1], number_values[1], 0, 0, 0, NULL, &max_diff, &prob, application.verbose_state);
     if(application.verbose_state.verbose == 0) {
       fprintf(fout, "probability = %e\n", prob);
     }
@@ -444,7 +465,17 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pstat: KS-test comparison with a flat distribution requires one input array to be specified");
       return 0;
     }
-    kstest(input_array[0], number_values[0], NULL, 0, 1, NULL, &max_diff, &prob, application.verbose_state);
+    kstest(input_array[0], number_values[0], NULL, 0, 1, 0, 0, NULL, &max_diff, &prob, application.verbose_state);
+    if(application.verbose_state.verbose == 0) {
+      fprintf(fout, "probability = %e\n", prob);
+    }
+  }else if(typetest == KSFLAT_WITH_MINMAX) {
+    double max_diff, prob;
+    if(number_input_arrays != 1) {
+      printerror(application.verbose_state.debug, "ERROR pstat: KS-test comparison with a flat distribution requires one input array to be specified");
+      return 0;
+    }
+    kstest(input_array[0], number_values[0], NULL, 0, 3, ksflat_min, ksflat_max, NULL, &max_diff, &prob, application.verbose_state);
     if(application.verbose_state.verbose == 0) {
       fprintf(fout, "probability = %e\n", prob);
     }
@@ -454,7 +485,7 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pstat: KS-test comparison with a sinusoidal distribution requires one input array to be specified");
       return 0;
     }
-    kstest(input_array[0], number_values[0], NULL, 0, 2, NULL, &max_diff, &prob, application.verbose_state);
+    kstest(input_array[0], number_values[0], NULL, 0, 2, 0, 0, NULL, &max_diff, &prob, application.verbose_state);
     if(application.verbose_state.verbose == 0) {
       fprintf(fout, "probability = %e\n", prob);
     }

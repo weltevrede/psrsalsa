@@ -265,7 +265,7 @@ double kstest_cdf_sin(double x)
     return 1;
   return 1-cos(x*M_PI/180.0);
 }
-void kstest(double *data1, long n1, double *data2, long n2, int cdf_type, double (*cdf)(double), double *max_diff, double *prob, verbose_definition verbose)
+void kstest(double *data1, long n1, double *data2, long n2, int cdf_type, double input_value1, double input_value2, double (*cdf)(double), double *max_diff, double *prob, verbose_definition verbose)
 {
   long i1, i2;
   double effective_n, ks_statistic, sign, cur_term, last_term, coeff;
@@ -304,6 +304,8 @@ void kstest(double *data1, long n1, double *data2, long n2, int cdf_type, double
  if(i1 == 0) {
    printwarning(verbose.debug, "WARNING kstest: Probability will be overestimated, since the minimum/maximum of the uniform distribution is based on the input values.");
  }
+      }else if(cdf_type == 3) {
+ cdf_model = kstest_cdf_flat(data1[i1], input_value1, input_value2);
       }else if(cdf_type == 2) {
  cdf_model = kstest_cdf_sin(data1[i1]);
       }else {

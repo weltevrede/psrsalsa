@@ -21,7 +21,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
-#include <stdlib.h>
 #include "psrsalsa.h"
 #include "gsl/gsl_randist.h"
 int readZapFile(char *zaplistname, int *zapMask, int zapSkipLines, int nrZapCols, int zapColumn, int zapColumn2, int inverseZap, verbose_definition verbose);
@@ -161,7 +160,7 @@ int main(int argc, char **argv)
     printf("-memsave          Don't read the file in as a whole at the start of the program\n");
     printf("\n");
     printCitationInfo();
-   terminateApplication(&application);
+    terminateApplication(&application);
     return 0;
   }else {
     for(i = 1; i < argc; i++) {

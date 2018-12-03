@@ -18,6 +18,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_errno.h"
 #include "gsl/gsl_randist.h"
+#include "gsl/gsl_fit.h"
 #include "psrsalsa.h"
 int preprocess_rebin(datafile_definition original, datafile_definition *clone, long NrBins, verbose_definition verbose)
 {
@@ -871,9 +872,9 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
   }
   return 1;
 }
-int preprocess_debase(datafile_definition *original, pulselongitude_regions_definition onpulse, verbose_definition verbose)
+int preprocess_debase(datafile_definition *original, pulselongitude_regions_definition *onpulse, float **baseline, int remove_shape, verbose_definition verbose)
 {
-  long p, f, n, j, nrOffpulseBins;
+  long p, f, n, j, nrOffpulseBins, offpulse_bin_nr;
   int i;
   float avrg, *pulse;
   if(verbose.verbose) {
@@ -881,7 +882,9 @@ int preprocess_debase(datafile_definition *original, pulselongitude_regions_defi
       printf(" ");
     printf("Subtracting baseline\n");
   }
-  region_frac_to_int(&onpulse, original->NrBins, 0);
+  if(onpulse != NULL) {
+    region_frac_to_int(onpulse, original->NrBins, 0);
+  }
   if(original->format != MEMORY_format) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR preprocess_debase: only works if data is loaded into memory.");
@@ -898,6 +901,36 @@ int preprocess_debase(datafile_definition *original, pulselongitude_regions_defi
     printerror(verbose.debug, "ERROR preprocess_debase: Memory allocation error.");
     return 0;
   }
+  if(baseline != NULL) {
+    *baseline = (float *)malloc((original->NrPols)*(original->NrFreqChan)*(original->NrSubints)*sizeof(float));
+    if(*baseline == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_debase: Memory allocation error.");
+      return 0;
+    }
+  }
+  double *profilex_double, *profile_double;
+  if(remove_shape != 0) {
+    profilex_double = (double *)malloc((original->NrBins)*sizeof(double));
+    profile_double = (double *)malloc((original->NrBins)*sizeof(double));
+    if(profilex_double == NULL || profile_double == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_debase: Memory allocation error.");
+      return 0;
+    }
+    offpulse_bin_nr = 0;
+    for(j = 0; j < original->NrBins; j++) {
+      if(onpulse != NULL) {
+ if(checkRegions(j, onpulse, 0, verbose) == 0) {
+   profilex_double[offpulse_bin_nr++] = j;
+ }
+      }else {
+ profilex_double[offpulse_bin_nr++] = j;
+      }
+    }
+  }
+  long baseline_index = 0;
+  int ok;
   for(p = 0; p < original->NrPols; p++) {
     for(f = 0; f < original->NrFreqChan; f++) {
       for(n = 0; n < original->NrSubints; n++) {
@@ -908,21 +941,49 @@ int preprocess_debase(datafile_definition *original, pulselongitude_regions_defi
  }
  nrOffpulseBins = 0;
  avrg = 0;
+ offpulse_bin_nr = 0;
  for(j = 0; j < original->NrBins; j++) {
-   if(checkRegions(j, &onpulse, 0, verbose) == 0 || onpulse.nrRegions == 0) {
+   ok = 0;
+   if(onpulse != NULL) {
+     if(checkRegions(j, onpulse, 0, verbose) == 0 || onpulse->nrRegions == 0) {
+       ok = 1;
+     }
+   }else {
+     ok = 1;
+   }
+   if(ok) {
      avrg += pulse[j];
      nrOffpulseBins++;
+     if(remove_shape != 0) {
+       profile_double[offpulse_bin_nr++] = pulse[j];
+     }
    }
  }
  if(nrOffpulseBins > 0) {
-   avrg /= (float)nrOffpulseBins;
-   for(j = 0; j < original->NrBins; j++) {
-     pulse[j] -= avrg;
+   if(remove_shape == 0) {
+     avrg /= (float)nrOffpulseBins;
+     for(j = 0; j < original->NrBins; j++) {
+       pulse[j] -= avrg;
+     }
+   }else if(remove_shape == 1) {
+     double a, b, cov00, cov01, cov11, sumsq;
+     gsl_fit_linear(profilex_double, 1, profile_double, 1, offpulse_bin_nr, &a, &b, &cov00, &cov01, &cov11, &sumsq);
+     for(j = 0; j < original->NrBins; j++) {
+       pulse[j] -= a+(float)j*b;
+     }
+     avrg = 0;
    }
    if(writePulsePSRData(original, n, p, f, 0, original->NrBins, pulse, verbose) != 1) {
      fflush(stdout);
      printerror(verbose.debug, "ERROR preprocess_debase: Error writing data.");
      return 0;
+   }
+   if(baseline != NULL) {
+     (*baseline)[baseline_index++] = avrg;
+   }
+ }else {
+   if(baseline != NULL) {
+     (*baseline)[baseline_index++] = 0.0;
    }
  }
         if(verbose.verbose && verbose.nocounters == 0) {
@@ -942,6 +1003,10 @@ int preprocess_debase(datafile_definition *original, pulselongitude_regions_defi
   }
   original->isDebase = 1;
   free(pulse);
+  if(remove_shape != 0) {
+    free(profilex_double);
+    free(profile_double);
+  }
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
@@ -1604,15 +1669,24 @@ int preprocess_scale(datafile_definition original, float factor, float offset, v
   }
   return 1;
 }
-int preprocess_dedisperse(datafile_definition *original, int update, double freq_ref, verbose_definition verbose)
+int preprocess_dedisperse(datafile_definition *original, int undo, int update, double freq_ref, verbose_definition verbose)
 {
   long p, f, n;
   int i, inffreq, inffreq_old;
   long double dt, dt_samples;
   double freq;
+  if(undo && update) {
+    printerror(verbose.debug, "ERROR preprocess_dedisperse (%s): Cannot update the reference frequency and re-dedisperse the data simultaneously.", original->filename);
+    return 0;
+  }
   if(original->freq_ref < -1.1) {
-    printwarning(verbose.debug, "WARNING preprocess_dedisperse (%s): Reference frequency is unknown. The reference frequency is set to infinite frequency.", original->filename);
-    original->freq_ref = 1e10;
+    if(undo == 0) {
+      printwarning(verbose.debug, "WARNING preprocess_dedisperse (%s): Reference frequency is unknown. The reference frequency is set to infinite frequency.", original->filename);
+      original->freq_ref = 1e10;
+    }else {
+      printerror(verbose.debug, "ERROR preprocess_dedisperse (%s): Cannot re-dedisperse the data if the reference frequency of the current dedispersion is unknown.", original->filename);
+      return 0;
+    }
   }
   if((original->freq_ref > -1.1 && original->freq_ref < -0.9) || (original->freq_ref > 0.99e10 && original->freq_ref < 1.01e10))
     inffreq = 1;
@@ -1621,57 +1695,77 @@ int preprocess_dedisperse(datafile_definition *original, int update, double freq
   if((freq_ref > -1.1 && freq_ref < -0.9) || (freq_ref > 0.99e10 && freq_ref < 1.01e10))
     inffreq_old = 1;
   else if(freq_ref < 0) {
-    printerror(verbose.debug, "ERROR preprocess_dedisperse (%s): Requested frequency is invalid (%f).", freq_ref);
+    printerror(verbose.debug, "ERROR preprocess_dedisperse (%s): Requested frequency is invalid (%f).", original->filename, freq_ref);
     return 0;
   }else
     inffreq_old = 0;
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
-    printf("De-dispersing %s with DM=%f with reference frequency=", original->filename, original->dm);
+    if(undo == 0) {
+      printf("De-dispersing %s with DM=%f with reference frequency=", original->filename, original->dm);
+    }else {
+      printf("Re-dedispersing %s with DM=%f with reference frequency=", original->filename, original->dm);
+    }
     if(inffreq)
       printf("infinity\n");
     else
       printf("%f MHz\n", original->freq_ref);
   }
-  if(original->isDeDisp == 1) {
+  if(original->isDeDisp == 1 && undo == 0) {
     if(verbose.verbose) {
       for(i = 0; i < verbose.indent; i++)
  printf(" ");
       printf("  Data in %s is already dedispersed\n", original->filename);
     }
+  }else if(original->isDeDisp == 0 && undo) {
+    if(verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      printf("  Data in %s is already dispersed\n", original->filename);
+    }
   }else if(original->isDeDisp == -1) {
     fflush(stdout);
-    printwarning(verbose.debug, "WARNING preprocess_dedisperse (%s): unknown dedispersion state. Data is assumed to be already dedispersed.", original->filename);
+    if(undo == 0) {
+      printwarning(verbose.debug, "WARNING preprocess_dedisperse (%s): unknown dedispersion state. Data is assumed to be already dedispersed.", original->filename);
+    }else {
+      printwarning(verbose.debug, "WARNING preprocess_dedisperse (%s): unknown dedispersion state. Data is assumed to be already dispersed.", original->filename);
+    }
   }
-  if(original->isDeDisp == 1 || original->isDeDisp == -1) {
-    if(update) {
-      if(verbose.verbose) {
- for(i = 0; i < verbose.indent; i++)
-   printf(" ");
- printf("  Updating reference frequency from ");
- if(inffreq_old)
-   printf("infinity");
- else
-   printf("%f MHz", freq_ref);
- if(inffreq)
-   printf(" to infinity\n");
- else
-   printf(" to %f MHz\n", original->freq_ref);
-      }
-      if((inffreq == 1 && inffreq_old == 1) || fabs(original->freq_ref - freq_ref) < 0.001) {
+  if(undo == 0) {
+    if(original->isDeDisp == 1 || original->isDeDisp == -1) {
+      if(update) {
  if(verbose.verbose) {
    for(i = 0; i < verbose.indent; i++)
      printf(" ");
-   printf("  Reference frequency is the same, nothing done\n");
+   printf("  Updating reference frequency from ");
+   if(inffreq_old)
+     printf("infinity");
+   else
+     printf("%f MHz", freq_ref);
+   if(inffreq)
+     printf(" to infinity\n");
+   else
+     printf(" to %f MHz\n", original->freq_ref);
  }
+ if((inffreq == 1 && inffreq_old == 1) || fabs(original->freq_ref - freq_ref) < 0.001) {
+   if(verbose.verbose) {
+     for(i = 0; i < verbose.indent; i++)
+       printf(" ");
+     printf("  Reference frequency is the same, nothing done\n");
+   }
+   return 1;
+ }
+      }else {
  return 1;
       }
     }else {
-      return 1;
+      update = 0;
     }
   }else {
-    update = 0;
+    if(original->isDeDisp == 0 || original->isDeDisp == -1) {
+      return 1;
+    }
   }
   dt_samples = 0;
   if(update) {
@@ -1690,10 +1784,15 @@ int preprocess_dedisperse(datafile_definition *original, int update, double freq
       printf(" ");
     f = original->NrFreqChan/2;
     freq = get_weighted_channel_freq(*original, 0, f, verbose);
-    if(update == 0)
-      printf("  Rotating central frequency channel of first subint (%lf MHz) by %Lf phase\n", freq, calcDMDelay(freq, original->freq_ref, inffreq, original->dm)/(original->NrBins*get_tsamp(*original, 0, verbose)));
-    else
+    if(update == 0) {
+      if(undo == 0) {
+ printf("  Rotating central frequency channel of first subint (%lf MHz) by %Lf phase\n", freq, calcDMDelay(freq, original->freq_ref, inffreq, original->dm)/(original->NrBins*get_tsamp(*original, 0, verbose)));
+      }else {
+ printf("  Rotating central frequency channel of first subint (%lf MHz) by %Lf phase\n", freq, -calcDMDelay(freq, original->freq_ref, inffreq, original->dm)/(original->NrBins*get_tsamp(*original, 0, verbose)));
+      }
+    }else {
       printf("  Rotating central frequency channel of first subint (%lf MHz) by %Lf phase\n", freq, dt_samples/(double)(original->NrBins));
+    }
   }
   if(original->format != MEMORY_format) {
     fflush(stdout);
@@ -1710,6 +1809,8 @@ int preprocess_dedisperse(datafile_definition *original, int update, double freq
       for(n = 0; n < original->NrSubints; n++) {
  if(update == 0) {
    dt = calcDMDelay(get_weighted_channel_freq(*original, n, f, verbose), original->freq_ref, inffreq, original->dm);
+   if(undo)
+     dt *= -1.0;
    dt /= get_tsamp(*original, 0, verbose);
  }else {
    dt = dt_samples;
@@ -1719,7 +1820,11 @@ int preprocess_dedisperse(datafile_definition *original, int update, double freq
       }
     }
   }
-  original->isDeDisp = 1;
+  if(undo == 0) {
+    original->isDeDisp = 1;
+  }else {
+    original->isDeDisp = 0;
+  }
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
@@ -2143,7 +2248,7 @@ int preprocess_make_profile(datafile_definition original, datafile_definition *p
     }
   }
   if(clone.NrFreqChan > 1) {
-    if(preprocess_dedisperse(&clone, 0, 0, verbose) == 0) {
+    if(preprocess_dedisperse(&clone, 0, 0, 0, verbose) == 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR preprocess_make_profile: de-dispersing failed, cannot construct profile");
       return 0;
@@ -2217,7 +2322,7 @@ int preprocess_changeRefFreq(datafile_definition *original, double freq_ref_new,
  printf(" ");
       printf("  Re-dedispersing data.\n");
     }
-    if(preprocess_dedisperse(original, 1, freq_ref_cur, verbose2) == 0) {
+    if(preprocess_dedisperse(original, 0, 1, freq_ref_cur, verbose2) == 0) {
       printerror(verbose.debug, "WARNING preprocess_changeRefFreq: Re-dedispersion failed");
       return 0;
     }

@@ -100,6 +100,9 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define FEEDTYPE_INV_CIRCULAR -2
 #define MaxNrApplicationFilenames 1025
 #define maxNrRotateStokes 10
+#define MaxNrFitFunctions 100
+#define MaxNrFitParameters 10
+#define FUNC_POLYNOMAL 1
 #ifndef NAN
   #define NAN (0.0/0.0)
 #endif
