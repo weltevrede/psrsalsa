@@ -57,6 +57,7 @@ int main(int argc, char **argv)
   application.switch_circshift= 1;
   application.switch_shuffle = 1;
   application.switch_libversions = 1;
+  application.switch_history_cmd_only = 1;
   fft_size = 512;
   powertwo = 0;
   lrfs_flag = 0;
@@ -141,6 +142,7 @@ int main(int argc, char **argv)
     printf("                      (for first selected region only).\n");
     printf("  -freq               Define which fluctuation frequencies (in cpp) are used for\n");
     printf("                      the subpulse phase track/amplitude calculation\n");
+    printf("                      Can only be used once on the command-line.\n");
     printf("  -p2zap              \"P2min P2max\" Zap fluctuations in this P2 range in cpp.\n");
     printf("  -p3zap              \"P3min P3max\" Zap fluctuations in this P3 range.\n");
     printf("                      P3min and P3max can be specified as bins or in cpp.\n");
@@ -290,10 +292,13 @@ int main(int argc, char **argv)
   }
   for(i = 0; i < MaxNrPolarizations; i++)
     cleanPSRData(&fin[i], application.verbose_state);
-  if(application.iformat <= 0)
+  if(application.iformat <= 0) {
     application.iformat = guessPSRData_format(argv[argc-1], 0, application.verbose_state);
-  if(application.iformat < 1) {
-    printerror(application.verbose_state.debug, "ERROR pspec: Unknown input file format.\n");
+    if(application.iformat == -2 || application.iformat == -3)
+      return 0;
+  }
+  if(isValidPSRDATA_format(application.iformat) == 0) {
+    printerror(application.verbose_state.debug, "ERROR pspec: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", argv[argc-1]);
     return 0;
   }
   closePSRData(&fin[0], 0, application.verbose_state);
@@ -385,7 +390,7 @@ int main(int argc, char **argv)
     strcpy(pgplot_options.box.xlabel, "Phase[deg]");
     strcpy(pgplot_options.box.ylabel, "Intensity");
     strcpy(pgplot_options.box.title, fin[0].psrname);
-    if(pgplotGraph1(&pgplot_options, profileI, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin, xmax, 0, 0, 0, 1, 0, 0, 1, 1, &application.onpulse, application.verbose_state) == 0) {
+    if(pgplotGraph1(&pgplot_options, profileI, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin, xmax, 0, 0, 0, 1, 0, 1, 0, 1, 1, &application.onpulse, -1, application.verbose_state) == 0) {
       printerror(application.verbose_state.debug, "ERROR pspec: Unable to open plotdevice.\n");
       return 0;
     }
@@ -726,9 +731,9 @@ int main(int argc, char **argv)
       strcpy(pgplot_options.box.ylabel, "Subpulse phase");
       strcpy(pgplot_options.box.title, "Subpulse phase track");
       if(bootstrap > 0) {
- pgplotGraph1(&pgplot_options, phase_track, NULL, &phase_track[fin[0].NrBins], fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 0, 1, 1, NULL, application.verbose_state);
+ pgplotGraph1(&pgplot_options, phase_track, NULL, &phase_track[fin[0].NrBins], fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 1, 0, 1, 1, NULL, -1, application.verbose_state);
       }else {
- pgplotGraph1(&pgplot_options, phase_track, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 0, 1, 1, NULL, application.verbose_state);
+ pgplotGraph1(&pgplot_options, phase_track, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 1, 0, 1, 1, NULL, -1, application.verbose_state);
       }
       if(write_flag) {
   if(change_filename_extension(argv[argc-1], outputname, "track", 1000, application.verbose_state) == 0)
@@ -763,7 +768,7 @@ int main(int argc, char **argv)
    profileI[i] /= imax;
  }
       }
-      pgplotGraph1(&pgplot_options, profileI, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 0, 1, 1, NULL, application.verbose_state);
+      pgplotGraph1(&pgplot_options, profileI, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 1, 0, 1, 1, NULL, -1, application.verbose_state);
       ppgsci(2);
       for(i = 0; i < fin[0].NrBins; i++) {
  float x;

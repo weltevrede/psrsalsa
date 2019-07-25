@@ -584,9 +584,11 @@ int preprocess_addsuccessivepulses(datafile_definition original, datafile_defini
   }
   if(original.freqMode != FREQMODE_UNIFORM) {
     if(nrpulses != 1) {
-      fflush(stdout);
-      printerror(verbose.debug, "ERROR preprocess_addsuccessivepulses: Frequency channels are not necessarily uniformly separated.");
-      return 0;
+      if(preprocess_dedisperse(&original, 0, 1, -1.0, verbose) != 2) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR preprocess_addsuccessivepulses: Dedispersion failed.");
+ return 0;
+      }
     }
   }
   if(original.NrPols == 4 && original.isDePar == -1) {

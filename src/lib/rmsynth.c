@@ -315,6 +315,10 @@ int rmSynthesis_fitInstrumentalResponds(float *singlespectrum, float rmmin, floa
   fixed[1] = 0;
   fixed[2] = 0;
   ret = doAmoeba_d(0, xstart, dx, fixed, xfit, &chi2, 3, funk_fitInstrumentalResponds, ftol, &nfunk, verbose.verbose, 0, 0, NULL, NULL);
+  if(internal_internal_fitInstrumentalResponds.rmsynth_responds != NULL) {
+    free(internal_internal_fitInstrumentalResponds.rmsynth_responds);
+    internal_internal_fitInstrumentalResponds.rmsynth_responds = NULL;
+  }
   if(ret == 0) {
     *rm = xfit[0];
     *scale = xfit[1];

@@ -26,6 +26,14 @@ include:
   - gsl
 See below for a description of those dependencies.
 
+If you have a Mac OSX you might want to install homebrew (see
+https://brew.sh/) and then run the following commands:
+brew install gcc
+brew install cfitsio
+brew install fftw
+brew install gsl
+brew install pgplot
+
 The entries in the Makefile that might need editing are:
 
 * The LIBS variable.

@@ -22,7 +22,7 @@ double f2_min, f2_max, f3_min, f3_max, fl_min, fl_max, oversaturize, oversaturiz
 double f2_min2, f2_max2, f3_min2, f3_max2, Imin, Imax;
 double P3IntegrateLow, P3IntegrateHigh, P2RegionLow, P2RegionHigh, LRegionLow, LRegionHigh;
 double P3IntegrateLow2, P3IntegrateHigh2, P2RegionLow2, P2RegionHigh2;
-float labelscale;
+float labelscale, titlescale;
 char title2[100];
 datafile_definition twodfs, twodfs2, lrfs, AverageProfile, VarianceProfile, ModProfile, VarianceProfileErr, ModProfileErr;
 void Plot2dfs(int Number, int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, int nomain, double scaleFig_x, double scaleFig_y, int showwedge, int normaliseSide, int nointegrateNumbers, verbose_definition verbose);
@@ -95,6 +95,7 @@ int main(int argc, char **argv)
     printf("-device  \"...\"    Plot device\n");
     printf("-inside           Place tick marks inside\n");
     printf("-labelscale       Set size of labels (default is 1)\n");
+    printf("-titlescale       Set size of title (default is 1), but -labalscale affects size as well.\n");
     printf("-noylabels        Don't show ylabels\n");
     printf("-linestyle        Set the PGPLOT line style of the pulse profile\n");
     printf("-linecolor        Set the PGPLOT line color of the pulse profile\n");
@@ -177,6 +178,7 @@ int main(int argc, char **argv)
   overlaypp = 0;
   inside = 0;
   labelscale = 1.0;
+  titlescale = 1.0;
   noylabels = 0;
   noxlabels = 0;
   plot_ylabel = 0;
@@ -303,6 +305,12 @@ int main(int argc, char **argv)
       i++;
     }else if(strcmp(argv[i], "-labelscale") == 0) {
       if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &labelscale, NULL) == 0) {
+ printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
+ return 0;
+      }
+      i++;
+    }else if(strcmp(argv[i], "-titlescale") == 0) {
+      if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &titlescale, NULL) == 0) {
  printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
  return 0;
       }
@@ -822,7 +830,7 @@ int main(int argc, char **argv)
   ppgscf(1);
   ppgsch(0.38*labelscale);
   if(notop == 0) {
-    ppgsch(0.55*labelscale);
+    ppgsch(0.55*labelscale*titlescale);
     ppgscf(2);
     ppgslw(2);
     ppgsvp(0.2, 0.2+0.11*scaleFig_x, 0.95-0.15*scaleFig_y, 0.95);
@@ -1426,7 +1434,7 @@ void IntegrateSubsetHorizontal(int Number, double scaleFig_x, double scaleFig_y,
   ppgbox("",0.0,0,"c",0.0,0);
   if(Number == -1) {
     if(title2[0] != 0) {
-      ppgsch(0.55*labelscale);
+      ppgsch(0.55*labelscale*titlescale);
       ppgscf(2);
       ppgslw(2);
       if (notop == 1) {
@@ -1518,7 +1526,7 @@ void IntegrateSubsetHorizontal_2dfsOnly(int Number, double scaleFig_x, double sc
   ppgbox("",0.0,0,"c",0.0,0);
   if(Number == 0) {
     if(strlen(title2) != 0 && notop == 0) {
-      ppgsch(0.55*labelscale);
+      ppgsch(0.55*labelscale*titlescale);
       ppgscf(2);
       ppgslw(2);
       ppgtext(Imin, (f3_max-f3_min)+0.65, title2);
@@ -1526,7 +1534,7 @@ void IntegrateSubsetHorizontal_2dfsOnly(int Number, double scaleFig_x, double sc
       ppgscf(1);
       ppgsch(0.38*labelscale);
     }else if (strlen(title2) != 0 && notop == 1) {
-      ppgsch(0.55*labelscale);
+      ppgsch(0.55*labelscale*titlescale);
       ppgscf(2);
       ppgslw(2);
       ppgtext(Imin, (f3_max-f3_min)+0.1, title2);
@@ -1581,7 +1589,7 @@ void PlotLRFS(int plot_xlabel, int plot_ylabel, int noside, int plot_ylabeltop, 
   int xi, i;
   ppgsvp(0.2, 0.2+0.11*scaleFig_x, 0.95-0.3*scaleFig_y, 0.95-0.15*scaleFig_y);
   if(title != NULL) {
-    ppgsch(0.55*labelscale);
+    ppgsch(0.55*labelscale*titlescale);
     ppgscf(2);
     ppgslw(2);
     ppgmtxt("t",1,0.5,0.5,title);
@@ -1950,7 +1958,7 @@ void Plot2dfsOnly(int Number, int plot_xlabel, int plot_ylabel, int noside, int 
   offset = 0+0.03*(labelscale-1.0)*((float)Number+1.0);
   ppgsvp(0.2, 0.2+0.11*scaleFig_x, 0.95-0.33*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y, 0.95-0.18*scaleFig_y-0.22*Number*scaleFig_y-offset*scaleFig_y);
   if(title != NULL) {
-    ppgsch(0.55*labelscale);
+    ppgsch(0.55*labelscale*titlescale);
     ppgscf(2);
     ppgslw(2);
     ppgmtxt("t",1,0.5,0.5,title);

@@ -127,6 +127,11 @@ typedef struct
   float *data;
   float *offpulse_rms;
   float *scales, *offsets, *weights;
+  int weight_stats_set;
+  int weight_stats_zeroweightfound;
+  int weight_stats_differentweights;
+  int weight_stats_negativeweights;
+  float weight_stats_weightvalue;
   long long datastart;
 }datafile_definition;
 typedef struct {

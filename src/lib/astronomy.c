@@ -174,9 +174,9 @@ void converthms(char *hms, double *h)
   ret = sscanf(hms, "%d:%d:%lf", &i1, &i2, &f1);
   *h = 0;
   if(ret >= 1) {
-    *h += fabs(i1);
+    *h += abs(i1);
     if(ret >= 2)
-      *h += +fabs(i2)/60.0;
+      *h += +abs(i2)/60.0;
     if(ret >= 3)
       *h += fabs(f1)/3600.0;
     if(hms[0] == '-')

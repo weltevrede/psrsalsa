@@ -20,6 +20,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define MaxFilenameLength 10000
 #define MaxPgplotDeviceLength 2000
 #define MaxStringLength 10000
+#define MaxNrfitReceiverModelFitParameters 11
 #define PUMA_format 1
 #define PSRCHIVE_ASCII_format 5
 #define EPN_format 6
@@ -52,6 +53,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define PPGPLOT_INVERTED_HEAT4 35
 #define PPGPLOT_DIVREDBLUE 36
 #define PPGPLOT_INVERTED_DIVREDBLUE 37
+#define PPGPLOT_INFERNO 38
 #define GENTYPE_UNDEFINED 0
 #define GENTYPE_PROFILE 1
 #define GENTYPE_PULSESTACK 2
@@ -107,7 +109,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
   #define NAN (0.0/0.0)
 #endif
 #ifndef M_PI
-  #define M_PI 3.14159265358979323846
+  #define M_PI 3.14159265358979323846264338327950288
 #endif
 #define printerror(debug_flag,...) \
   { fflush(stdout); fprintf_color(stderr, 2, __VA_ARGS__); \

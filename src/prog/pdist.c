@@ -17,7 +17,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
-#include <malloc.h>
 #include <gsl/gsl_sort.h>
 #include "psrsalsa.h"
 int main(int argc, char **argv)
@@ -27,7 +26,7 @@ int main(int argc, char **argv)
   float *cmap, *distr_float;
   double *data_x, *data_y, min_x_data, max_x_data, min_y_data, max_y_data;
   double min_x, max_x, min_y, max_y, dx, dy, x, y, s, rangex_min, rangex_max, rangey_min, rangey_max, extra_phase, select1, select2;
-  int nrbins_specified, dx_specified, dy_specified, output_sigma, output_fraction, nrbins_specifiedy, twoDmode, showGraphics, rangex_set, rangey_set, plotlog, file_column2_defined, xlabelset;
+  int nrbins_specified, dx_specified, dy_specified, output_sigma, output_fraction, nrbins_specifiedy, twoDmode, showGraphics, rangex_set, rangey_set, plotlog, file_column2_defined, xlabelset, linewidth;
   char title[500], *filename_ptr, output_suffix[100], *oname;
   FILE *ofile;
   double min, max;
@@ -70,6 +69,7 @@ int main(int argc, char **argv)
   truncate = 0;
   cdf = 0;
   select = 0;
+  linewidth = 1;
   if(argc < 2) {
     printf("Program to generate or plot a histogram by binning data. Also a cummulative\n");
     printf("distribution can be generated. Usage:\n\n");
@@ -124,6 +124,11 @@ int main(int argc, char **argv)
     printf("                 are determined by first input file.\n");
     printf("-title  'title'  Set the title of the plot.\n");
     printf("-xlabel 'label'  Set label on horizontal axis.\n");
+    printf("-labels           \"label_ch label_lw label_f box_ch box_lw box_f\"\n");
+    printf("                  default is \"%.1f %d %d %.1f %d %d\"\n", pgplot_options.box.label_ch, pgplot_options.box.label_lw, pgplot_options.box.label_f, pgplot_options.box.box_labelsize, pgplot_options.box.box_lw, pgplot_options.box.box_f);
+    printf("-lw              Set line width of the histogram.\n");
+    printf("-vp              \"left right bottom top\"\n");
+    printf("                 Modify the dimensions of the plot. Default is \"%.2f %.2f %.2f %.2f\"\n", pgplot_options.viewport.dxplot, pgplot_options.viewport.xsize, pgplot_options.viewport.dyplot, pgplot_options.viewport.ysize);
     printf("\n");
     printf("Please use the appropriate citation when using results of this software in your publications:\n\n");
     printf("More information about fitting distributions (in the context of pulse energies) can be found in:\n");
@@ -158,6 +163,24 @@ int main(int argc, char **argv)
  i++;
       }else if(strcmp(argv[i], "-ext") == 0) {
  strcpy(output_suffix, argv[i+1]);
+ i++;
+      }else if(strcmp(argv[i], "-labels") == 0) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %d %d %f %d %d", &(pgplot_options.box.label_ch), &(pgplot_options.box.label_lw), &(pgplot_options.box.label_f), &(pgplot_options.box.box_labelsize), &(pgplot_options.box.box_lw), &(pgplot_options.box.box_f), NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
+ i++;
+      }else if(strcmp(argv[i], "-lw") == 0) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &linewidth, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
+ i++;
+      }else if(strcmp(argv[i], "-vp") == 0) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %f %f %f", &(pgplot_options.viewport.dxplot), &(pgplot_options.viewport.xsize), &(pgplot_options.viewport.dyplot), &(pgplot_options.viewport.ysize), NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pdist: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
  i++;
       }else if(strcmp(argv[i], "-col") == 0 || strcmp(argv[i], "-pol") == 0) {
  if(strcmp(argv[i], "-pol") == 0)
@@ -334,12 +357,15 @@ int main(int argc, char **argv)
   initial_iformat = application.iformat;
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
     application.iformat = initial_iformat;
-    if(application.iformat <= 0 && colspecified == 0)
+    if(application.iformat <= 0 && colspecified == 0) {
       application.iformat = guessPSRData_format(filename_ptr, 1, application.verbose_state);
+      if(application.iformat == -2 || application.iformat == -3)
+ return 0;
+    }
     if(colspecified)
       application.iformat = -1;
     if(polspecified && application.iformat <= 0) {
-      printerror(application.verbose_state.debug, "ERROR pdist: Data is not recognized as pulsar data, but -pol was used. Use -col for ascii files or -iformat to force the use of a input format.\n");
+      printerror(application.verbose_state.debug, "ERROR pdist: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized. Data is not recognized as pulsar data, but -pol was used. Use -col for ascii files.\n", filename_ptr);
       return 0;
     }
     if(application.iformat > 0) {
@@ -838,7 +864,7 @@ int main(int argc, char **argv)
      dontsetranges,
      calculate_bin_location(0, dx, min_x, centered_at_zero, extra_phase) - dx,
      calculate_bin_location(nrbins-1, dx, min_x, centered_at_zero, extra_phase) + dx,
-     0, 0, forceMinZero, 1, 0, 0, colour, 1, NULL, application.verbose_state) == 0) {
+     0, 0, forceMinZero, 1, 0, linewidth, 0, colour, 1, NULL, -1, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR pdist: Cannot plot graph\n");
      return 0;
    }
@@ -849,7 +875,7 @@ int main(int argc, char **argv)
      dontsetranges,
      0,
      0,
-     0, 0, forceMinZero, 1*0, 0, 0, colour, 1, NULL, application.verbose_state) == 0) {
+     0, 0, forceMinZero, 1*0, 0, linewidth, 0, colour, 1, NULL, -1, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR pdist: Cannot plot graph\n");
      return 0;
    }

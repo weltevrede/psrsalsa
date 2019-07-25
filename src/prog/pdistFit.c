@@ -695,10 +695,13 @@ int main(int argc, char **argv)
     return 0;
   }
   if(polspecified || fitter_info.colspecified == 0) {
-    if(application.iformat <= 0)
+    if(application.iformat <= 0) {
       application.iformat = guessPSRData_format(fitter_info.measurement_file, 1, application.verbose_state);
+      if(application.iformat == -2 || application.iformat == -3)
+ return 0;
+    }
     if(polspecified && application.iformat <= 0) {
-      printerror(application.verbose_state.debug, "ERROR pdistFit: Data is not recognized as pulsar data, but -pol was used. Use -col for ascii files or -iformat to force the use of a input format.\n");
+      printerror(application.verbose_state.debug, "ERROR pdistFit: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized. Data is not recognized as pulsar data, but -pol was used. Use -col for ascii files.\n", fitter_info.measurement_file);
       return 0;
     }
   }

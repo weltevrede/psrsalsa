@@ -330,38 +330,11 @@ int readFITSpulse_receivermodel(datafile_definition *datafile, long pulsenr, int
   }
   return 1;
 }
-void determineWeightsStat(datafile_definition *datafile, int *zeroweightfound, int *differentweights, int *negativeweights, float *weightvalue)
-{
-  int firstnonzeroweight = 1;
-  long n;
-  *zeroweightfound = 0;
-  *differentweights = 0;
-  *negativeweights = 0;
-  if(datafile->weights == NULL) {
-    *weightvalue = 1.0;
-    return;
-  }
-  for(n = 0; n < datafile->NrSubints*datafile->NrFreqChan; n++) {
-    if(datafile->weights[n] < 0) {
-      *negativeweights = 1;
-    }
-    if(datafile->weights[n] == 0.0) {
-      *zeroweightfound = 1;
-    }else {
-      if(firstnonzeroweight) {
- *weightvalue = datafile->weights[n];
- firstnonzeroweight = 0;
-      }else if(datafile->weights[n] != *weightvalue) {
- *differentweights = 1;
-      }
-    }
-  }
-}
 int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose)
 {
   int status = 0;
-  int ncols, anynul, ret, colnum;
-  long nrows, i, istart, bstart, bsample;
+  int anynul, ret, colnum;
+  long i, istart, bstart, bsample;
   int *data;
   unsigned char singlebyte;
   if(datafile->gentype == GENTYPE_RECEIVERMODEL || datafile->gentype == GENTYPE_RECEIVERMODEL2) {
@@ -369,11 +342,6 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
   }
   int weightmode;
   weightmode = 0;
-  int zeroweightfound;
-  int differentweights;
-  int negativeweights;
-  float weightvalue;
-  determineWeightsStat(datafile, &zeroweightfound, &differentweights, &negativeweights, &weightvalue);
   if(pulsenr == 0 && polarization == 0 && freq == 0 && binnr == 0) {
     if(psrfits_weightmode == 1) {
       printwarning(verbose.debug, "WARNING: The data is NOT multiplied with the weight, even when set to zero. This might undo any zapping done and avoids introducing artificial intensity fluctuations IF the data is written as the weighted average rather than the sum. This will not be ideal when summing data at a later stage.");
@@ -385,7 +353,7 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
   }
   if(datafile->NrFreqChan == 1) {
     if(psrfits_weightmode == 0) {
-      if(differentweights && pulsenr == 0 && polarization == 0 && freq == 0 && binnr == 0) {
+      if(datafile->weight_stats_differentweights && pulsenr == 0 && polarization == 0 && freq == 0 && binnr == 0) {
  printwarning(verbose.debug, "WARNING: FITS file contains data with different weights. For data with only one frequency channel the data is NOT multiplied with the weight if it is nonzero. This avoids introducing artificial intensity fluctuations IF the data is written as the weighted average rather than the sum. This will not be ideal when summing data at a later stage. Use the -useweights option to multiply the data with the weights.");
       }
       weightmode = 2;
@@ -394,7 +362,7 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
     }
   }else {
     if(psrfits_weightmode == 0) {
-      if(differentweights && pulsenr == 0 && polarization == 0 && freq == 0 && binnr == 0) {
+      if(datafile->weight_stats_differentweights && pulsenr == 0 && polarization == 0 && freq == 0 && binnr == 0) {
  printwarning(verbose.debug, "WARNING: FITS file contains data with different weights. For data with multiple frequency channels the data is multiplied with the weight. This might be benificial when summing data at a later stage IF the data is written as the weighted average rather than the sum. However, it might introduce artificial intensity fluctuations as well. Use the -uniformweights to take the weights equal.");
       }
       weightmode = 3;
@@ -408,8 +376,6 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
     printerror(verbose.debug, "ERROR readFITSpulse: Cannot allocate memory");
     return 0;
   }
-  fits_get_num_rows(datafile->fits_fptr, &nrows, &status);
-  fits_get_num_cols(datafile->fits_fptr, &ncols, &status);
   if(psrfits_use_weighted_freq) {
     if(fits_get_colnum(datafile->fits_fptr, CASEINSEN, "DAT_FREQ", &colnum, &status)) {
       fflush(stdout);
@@ -449,9 +415,13 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
     printerror(verbose.debug, "ERROR readFITSpulse: Unsupported number of bits.");
   }
   if(ret == 1) {
+    float scale, offset;
+    long index = pulsenr*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq;
+    scale = datafile->scales[index];
+    offset = datafile->offsets[index];
     for(i = 0; i < nrSamples; i++) {
       if(datafile->NrBits == 16) {
- pulse[i] = datafile->scales[pulsenr*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq]*(data[i]) + datafile->offsets[pulsenr*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq];
+ pulse[i] = scale*(data[i]) + offset;
       }else if(datafile->NrBits == 2 || datafile->NrBits == 4 || datafile->NrBits == 8) {
  istart = (binnr+i)*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq;
  bstart = istart*datafile->NrBits;
@@ -488,7 +458,7 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
      return 0;
    }
  }
- pulse[i] = datafile->scales[pulsenr*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq]*(singlebyte) + datafile->offsets[pulsenr*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq];
+ pulse[i] = scale*(singlebyte) + offset;
       }
       if(weightmode == 3 && psrfits_absweights == 0) {
  pulse[i] *= datafile->weights[pulsenr*datafile->NrFreqChan+freq];
@@ -665,29 +635,6 @@ int readPSRFITSscales(datafile_definition *datafile, verbose_definition verbose)
  break;
       }
     }
-  }
-  int zeroweightfound;
-  int differentweights;
-  int negativeweights;
-  float weightvalue;
-  determineWeightsStat(datafile, &zeroweightfound, &differentweights, &negativeweights, &weightvalue);
-  if(negativeweights) {
-    fflush(stdout);
-    printwarning(verbose.debug, "WARNING: Found negative weights in fits file, so probably fits file is corrupted. You might want to use the -absweights option.");
-  }
-  if(zeroweightfound && verbose.verbose) {
-    printf("FITS file contains zero-weighted data. By default this is applied, unless the -noweights option is used.\n");
-  }
-  if(differentweights == 0 && (verbose.debug || weightvalue != 1.0)) {
-    printf("FITS file contains uniform weights with a value %f", weightvalue);
-    if(zeroweightfound)
-      printf(" (appart from zero weights).\n");
-    else
-      printf("\n");
-  }
-  if(differentweights) {
-    fflush(stdout);
-    printwarning(verbose.debug, "WARNING: FITS file contains data with different weights. Make sure it is used as desired.");
   }
   return ret;
 }
@@ -1403,6 +1350,37 @@ void fits_strip_quotes(char *src, char *dst)
     }
   }
 }
+int parse_poltype_psrfits(char *poltypstr, int nowarnings, datafile_definition *datafile, verbose_definition verbose)
+{
+  long i;
+  for(i = strlen(poltypstr)-1; i >= 0; i--) {
+    if(i >= 0) {
+      if(poltypstr[i] == '\'')
+ poltypstr[i] = 0;
+    }
+  }
+  if(strcmp(poltypstr, "STOKES") == 0 || strcmp(poltypstr, "STOKE") == 0 || strcmp(poltypstr, "INTEN") == 0) {
+    return POLTYPE_STOKES;
+  }else if(strcmp(poltypstr, "IQUV") == 0) {
+    return POLTYPE_STOKES;
+  }else if(strcmp(poltypstr, "AABBCRCI") == 0) {
+    return POLTYPE_COHERENCY;
+  }else if(strcmp(poltypstr, "ILVPAdPA") == 0 || strcmp(poltypstr, "ILVPADPA") == 0 || strcmp(poltypstr, "ILVPA") == 0) {
+    return POLTYPE_ILVPAdPA;
+  }else if(strcmp(poltypstr, "ILVPATEL") == 0 || strcmp(poltypstr, "PAELL+") == 0) {
+    return POLTYPE_ILVPAdPATEldEl;
+  }else if(strcmp(poltypstr, "PAdPA") == 0 || strcmp(poltypstr, "PADPA") == 0 || strcmp(poltypstr, "PA") == 0) {
+    return POLTYPE_PAdPA;
+  }else if(strcmp(poltypstr, "UNKNOWN") == 0) {
+    return POLTYPE_UNKNOWN;
+  }else {
+    if(nowarnings == 0) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE '%s' not recognized", datafile->filename, poltypstr);
+    }
+    return POLTYPE_UNKNOWN;
+  }
+}
 void update_freqs_using_DAT_FREQ_column(datafile_definition *datafile, verbose_definition verbose)
 {
   int colnum, anynul;
@@ -1456,8 +1434,9 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
   int status = 0;
   int hdutype, nkeys, i, colnum, anynul, dmnotset, rmnotset, periodnotset, gentypenotset, tsubnotset, tsubsettotobs;
   int nodata, issearch, samptimenotset, dummy_int, ret;
-  long numrows;
-  double f, dummy_double, f1, f2;
+  int version_major, version_minor;
+  long numrows, dummy_long;
+  double f, dummy_double, f1, f2, bandwidth;
   char command[2000], tmpfilename[2000];
   char dummy_txt[2000];
   FILE *fin;
@@ -1471,16 +1450,43 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
   tsubnotset = 1;
   issearch = 0;
   tsubsettotobs = 0;
-  if (fits_movabs_hdu(datafile->fits_fptr, 1, &hdutype, &status)) {
+  version_major = 0;
+  version_minor = 0;
+  datafile->NrPols = -1;
+  datafile->NrBins = -1;
+  datafile->NrFreqChan = -1;
+  bandwidth = 0.0;
+  if(fits_movabs_hdu(datafile->fits_fptr, 1, &hdutype, &status)) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot move to primary HDU", datafile->filename);
     return 0;
   }
   fits_get_hdrspace(datafile->fits_fptr, &nkeys, NULL, &status);
-  if (fits_read_card(datafile->fits_fptr,"FITSTYPE", card, &status)) {
+  if(fits_read_card(datafile->fits_fptr, "HDRVER", card, &status)) {
     fflush(stdout);
     if(nowarnings == 0) {
-      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FITSTYPE keyword does not exist. Not sure this is a PSRFITS file.", datafile->filename);
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): HDRVER keyword does not exist. This could mean the version of the psrfits file is < 2.13, or this data is not in PSRFITS format.", datafile->filename);
+    }
+    status = 0;
+  }else {
+    fits_parse_value(card, value, comment, &status);
+    ret = sscanf(value, "'%d.%d", &version_major, &version_minor);
+    if(ret != 2) {
+      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): HDRVER = '%s' cannot be interpreted as a major.minor version number.", datafile->filename, value);
+      version_major = 0;
+      version_minor = 0;
+    }else if (verbose.debug) {
+      printf("    Version is %d.%d\n", version_major, version_minor);
+    }
+  }
+  if(fits_read_card(datafile->fits_fptr, "FITSTYPE", card, &status)) {
+    fflush(stdout);
+    if(nowarnings == 0) {
+      if((version_major > 2) || (version_major == 2 && version_minor >= 13)) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FITSTYPE keyword does not exist, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+      }else if(version_major == 0 && version_minor == 0) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FITSTYPE keyword does not exist. Not sure this is a PSRFITS file.", datafile->filename);
+      }
     }
     status = 0;
   }else {
@@ -1495,7 +1501,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
       return 0;
     }
   }
-  if(fits_read_card(datafile->fits_fptr,"TELESCOP", card, &status)) {
+  if(fits_read_card(datafile->fits_fptr, "TELESCOP", card, &status)) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): TELESCOP keyword does not exist", datafile->filename);
     return 0;
@@ -1564,36 +1570,58 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
     printerror(verbose.debug, "ERROR readEPNHeader: Setting instrument name failed.");
     return 0;
   }
-  if (fits_read_card(datafile->fits_fptr,"RA", card, &status)) {
+  if(fits_read_card(datafile->fits_fptr, "RA", card, &status)) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): RA keyword does not exist", datafile->filename);
-    return 0;
+    if(nowarnings == 0) {
+      if((version_major > 2) || (version_major == 2 && version_minor >= 8)) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): RA keyword does not exist, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+      }else if(version_major == 0 && version_minor == 0) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): RA keyword does not exist. Not sure this is a PSRFITS file.", datafile->filename);
+      }
+    }
+    status = 0;
+  }else {
+    fits_parse_value(card, value, comment, &status);
+    converthms(value+1, &(datafile->ra));
+    datafile->ra *= M_PI/12.0;
   }
-  fits_parse_value(card, value, comment, &status);
-  converthms(value+1, &(datafile->ra));
-  datafile->ra *= M_PI/12.0;
-  if (fits_read_card(datafile->fits_fptr,"DEC", card, &status)) {
+  if(fits_read_card(datafile->fits_fptr, "DEC", card, &status)) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): DEC keyword does not exist", datafile->filename);
-    return 0;
+    if(nowarnings == 0) {
+      if((version_major > 2) || (version_major == 2 && version_minor >= 8)) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): DEC keyword does not exist, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+      }else if(version_major == 0 && version_minor == 0) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): DEC keyword does not exist. Not sure this is a PSRFITS file.", datafile->filename);
+      }
+    }
+    status = 0;
+  }else {
+    fits_parse_value(card, value, comment, &status);
+    converthms(value+1, &(datafile->dec));
+    datafile->dec *= M_PI/180.0;
   }
-  fits_parse_value(card, value, comment, &status);
-  converthms(value+1, &(datafile->dec));
-  datafile->dec *= M_PI/180.0;
   if(fits_read_card(datafile->fits_fptr,"OBSFREQ", card, &status)) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): OBSFREQ keyword does not exist", datafile->filename);
-    return 0;
+    if(nowarnings == 0) {
+      if((version_major > 2) || (version_major == 2 && version_minor >= 8)) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBSFREQ keyword does not exist, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+      }else if(version_major == 0 && version_minor == 0) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBSFREQ keyword does not exist. Not sure this is a PSRFITS file.", datafile->filename);
+      }
+    }
+    status = 0;
+    dummy_double = 0;
+  }else {
+    fits_parse_value(card, value, comment, &status);
+    ret = sscanf(value, "%lf", &dummy_double);
+    if(ret != 1) {
+      dummy_double = 0;
+    }
   }
-  fits_parse_value(card, value, comment, &status);
   datafile->freqMode = FREQMODE_UNIFORM;
   if(datafile->freqlabel_list != NULL) {
     free(datafile->freqlabel_list);
     datafile->freqlabel_list = NULL;
-  }
-  ret = sscanf(value, "%lf", &dummy_double);
-  if(ret != 1) {
-    dummy_double = 0;
   }
   set_centre_frequency(datafile, dummy_double, verbose);
   if(dummy_double < 1 && (dummy_double < -1.1 || dummy_double > -0.9)) {
@@ -1825,7 +1853,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
     if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "DEDISP", &colnum, &status)) {
       if(nowarnings == 0) {
  fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion state in file.", datafile->filename);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion state in history table.", datafile->filename);
       }
       datafile->isDeDisp = -1;
       status = 0;
@@ -1833,7 +1861,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
       if(fits_read_col(datafile->fits_fptr, TINT, colnum, numrows, 1, 1, NULL, &(dummy_int), &anynul, &status)) {
  if(nowarnings == 0) {
    fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion state in file.", datafile->filename);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find dedispersion state in history table.", datafile->filename);
  }
  datafile->isDeDisp = -1;
  status = 0;
@@ -1844,7 +1872,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
     if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "RM_CORR", &colnum, &status)) {
       if(nowarnings == 0) {
  fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find de-Faraday rotation state in file.", datafile->filename);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find de-Faraday rotation state in history table.", datafile->filename);
       }
       datafile->isDeFarad = -1;
       status = 0;
@@ -1852,7 +1880,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
       if(fits_read_col(datafile->fits_fptr, TINT, colnum, numrows, 1, 1, NULL, &(dummy_int), &anynul, &status)) {
  if(nowarnings == 0) {
    fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find de-Faraday rotation state in file.", datafile->filename);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find de-Faraday rotation state in history table.", datafile->filename);
  }
  datafile->isDeFarad = -1;
  status = 0;
@@ -1860,10 +1888,23 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
  datafile->isDeFarad = dummy_int;
       }
     }
-    if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "PR_CORR", &colnum, &status)) {
+    int ok = 0;
+    if(numrows != 0) {
+      ret = fits_get_colnum(datafile->fits_fptr, CASEINSEN, "PR_CORR", &colnum, &status);
+      status = 0;
+      if(ret == 0) {
+ ok = 1;
+      }else {
+ ret = fits_get_colnum(datafile->fits_fptr, CASEINSEN, "PAR_CORR", &colnum, &status);
+ if(ret == 0) {
+   ok = 1;
+ }
+      }
+    }
+    if(ok == 0) {
       if(nowarnings == 0) {
  fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find parallactic angle state in file.", datafile->filename);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find parallactic angle state in history table.", datafile->filename);
       }
       datafile->isDePar = -1;
       status = 0;
@@ -1871,12 +1912,110 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
       if(fits_read_col(datafile->fits_fptr, TINT, colnum, numrows, 1, 1, NULL, &(dummy_int), &anynul, &status)) {
  if(nowarnings == 0) {
    fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find parallactic angle state in file.", datafile->filename);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find parallactic angle state in history table.", datafile->filename);
  }
  datafile->isDePar = -1;
  status = 0;
       }else {
  datafile->isDePar = dummy_int;
+      }
+    }
+    if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "NPOL", &colnum, &status)) {
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find number polarizations in the history table.", datafile->filename);
+      }
+      datafile->NrPols = -1;
+      status = 0;
+    }else {
+      if(fits_read_col(datafile->fits_fptr, TINT, colnum, numrows, 1, 1, NULL, &(dummy_int), &anynul, &status)) {
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find NPOL om the history table.", datafile->filename);
+ }
+ datafile->NrPols = -1;
+ status = 0;
+      }else {
+ datafile->NrPols = dummy_int;
+      }
+    }
+    if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "NBIN", &colnum, &status)) {
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find number of bins in the history table.", datafile->filename);
+      }
+      datafile->NrBins = -1;
+      status = 0;
+    }else {
+      if(fits_read_col(datafile->fits_fptr, TINT, colnum, numrows, 1, 1, NULL, &(dummy_int), &anynul, &status)) {
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find NBIN in the history table.", datafile->filename);
+ }
+ datafile->NrBins = -1;
+ status = 0;
+      }else {
+ datafile->NrBins = dummy_int;
+      }
+    }
+    if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "NCHAN", &colnum, &status)) {
+      if(nowarnings == 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find number of frequency channels in the history table.", datafile->filename);
+      }
+      datafile->NrFreqChan = -1;
+      status = 0;
+    }else {
+      if(fits_read_col(datafile->fits_fptr, TINT, colnum, numrows, 1, 1, NULL, &(dummy_int), &anynul, &status)) {
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find NCHAN in the history table.", datafile->filename);
+ }
+ datafile->NrFreqChan = -1;
+ status = 0;
+      }else {
+ datafile->NrFreqChan = dummy_int;
+      }
+    }
+    if(datafile->NrFreqChan != -1) {
+      if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "CHAN_BW", &colnum, &status)) {
+ fflush(stdout);
+ if(nowarnings == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): CHAN_BW keyword does not exist in history table. Not sure this is a PSRFITS file.", datafile->filename);
+ }
+ bandwidth = 0.0;
+ status = 0;
+      }else {
+ if(fits_read_col(datafile->fits_fptr, TDOUBLE, colnum, numrows, 1, 1, NULL, &(bandwidth), &anynul, &status)) {
+   if(nowarnings == 0) {
+     fflush(stdout);
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot find CHAN_BW in the history table.", datafile->filename);
+   }
+   bandwidth = 0.0;
+   status = 0;
+ }else {
+   bandwidth *= datafile->NrFreqChan;
+ }
+      }
+    }
+    if(numrows == 0 || fits_get_colnum (datafile->fits_fptr, CASEINSEN, "POL_TYPE", &colnum, &status)) {
+      fflush(stdout);
+      if(nowarnings == 0) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE keyword does not exist in history table. Not sure this is a PSRFITS file.", datafile->filename);
+      }
+      datafile->poltype = POLTYPE_UNKNOWN;
+      status = 0;
+    }else {
+      char_ptrptr[0] = dummy_txt;
+      if(fits_read_col(datafile->fits_fptr, TSTRING, colnum, numrows, 1, 1, NULL, char_ptrptr, &anynul, &status)) {
+ if(nowarnings == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Cannot read POL_TYPE from the history table.", datafile->filename);
+ }
+ datafile->poltype = POLTYPE_UNKNOWN;
+ status = 0;
+      }else {
+ datafile->poltype = parse_poltype_psrfits(dummy_txt, nowarnings, datafile, verbose);
       }
     }
     if(periodnotset) {
@@ -2155,57 +2294,82 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
       remove(tmpfilename);
     }
     fits_get_hdrspace(datafile->fits_fptr, &nkeys, NULL, &status);
-    if (fits_read_card(datafile->fits_fptr,"NPOL", card, &status)) {
+    if(fits_read_card(datafile->fits_fptr, "NPOL", card, &status)) {
       fflush(stdout);
-      printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): NPOL keyword does not exist", datafile->filename);
-      return 0;
+      if(datafile->NrPols == -1) {
+ printerror(verbose.debug, "WARNING readPSRFITSHeader (%s): NPOL keyword does not exist in the subint table, and it was not found in a HISTORY table either. This file cannot be interpreted.", datafile->filename);
+ return 0;
+      }
+      if(nowarnings == 0) {
+ if((version_major > 2) || (version_major == 2 && version_minor >= 7)) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NPOL keyword does not exist in the subint table, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+ }else if(version_major == 0 && version_minor == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NPOL keyword does not exist in the subint table. Not sure this is a PSRFITS file.", datafile->filename);
+ }
+      }
+      status = 0;
+    }else {
+      fits_parse_value(card, value, comment, &status);
+      long nrpols;
+      sscanf(value, "%ld", &(nrpols));
+      if(datafile->NrPols == -1) {
+ datafile->NrPols = nrpols;
+      }else if(datafile->NrPols != nrpols) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Updating the %ld polsarization channels as reported in the history table to %ld as suggested by the SUBINT table.", datafile->filename, datafile->NrPols, nrpols);
+ datafile->NrPols = nrpols;
+      }
     }
-    fits_parse_value(card, value, comment, &status);
-    sscanf(value, "%ld", &(datafile->NrPols));
-    if (fits_read_card(datafile->fits_fptr,"POL_TYPE", card, &status)) {
+    if(fits_read_card(datafile->fits_fptr, "POL_TYPE", card, &status)) {
       if(nowarnings == 0) {
  fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE keyword does not exist", datafile->filename);
+ if((version_major > 3) || (version_major == 3 && version_minor >= 0)) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE keyword does not exist, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+ }else if(version_major == 0 && version_minor == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE keyword does not exist. Not sure this is a PSRFITS file.", datafile->filename);
+ }
       }
       status = 0;
     }else {
       fits_parse_value(card, value, comment, &status);
       sscanf(value, "'%s'", dummy_txt);
-      for(i = strlen(dummy_txt)-1; i >= 0; i--) {
- if(i >= 0) {
-   if(dummy_txt[i] == '\'')
-     dummy_txt[i] = 0;
- }
-      }
-      if(strcmp(dummy_txt, "STOKES") == 0 || strcmp(dummy_txt, "STOKE") == 0 || strcmp(dummy_txt, "INTEN") == 0) {
- datafile->poltype = POLTYPE_STOKES;
-      }else if(strcmp(dummy_txt, "IQUV") == 0) {
- datafile->poltype = POLTYPE_STOKES;
-      }else if(strcmp(dummy_txt, "AABBCRCI") == 0) {
- datafile->poltype = POLTYPE_COHERENCY;
-      }else if(strcmp(dummy_txt, "ILVPAdPA") == 0 || strcmp(dummy_txt, "ILVPADPA") == 0 || strcmp(dummy_txt, "ILVPA") == 0) {
- datafile->poltype = POLTYPE_ILVPAdPA;
-      }else if(strcmp(dummy_txt, "ILVPATEL") == 0 || strcmp(dummy_txt, "PAELL+") == 0) {
- datafile->poltype = POLTYPE_ILVPAdPATEldEl;
-      }else if(strcmp(dummy_txt, "PAdPA") == 0 || strcmp(dummy_txt, "PADPA") == 0 || strcmp(dummy_txt, "PA") == 0) {
- datafile->poltype = POLTYPE_PAdPA;
-      }else if(strcmp(dummy_txt, "UNKNOWN") == 0) {
- datafile->poltype = POLTYPE_UNKNOWN;
-      }else {
- datafile->poltype = POLTYPE_UNKNOWN;
- if(nowarnings == 0) {
+    }
+    int newpoltype = parse_poltype_psrfits(dummy_txt, nowarnings, datafile, verbose);
+    if(datafile->poltype == POLTYPE_UNKNOWN) {
+      datafile->poltype = newpoltype;
+    }else {
+      if(nowarnings == 0) {
+ if(datafile->poltype != newpoltype) {
    fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): POL_TYPE '%s' not recognized", datafile->filename, dummy_txt);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Changing POL_TYPE from %d to %d, as suggested by the subint table.", datafile->filename, datafile->poltype, newpoltype);
  }
       }
+      datafile->poltype = newpoltype;
     }
-    if (fits_read_card(datafile->fits_fptr,"NBIN", card, &status)) {
+    if(fits_read_card(datafile->fits_fptr, "NBIN", card, &status)) {
       fflush(stdout);
-      printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): NBIN keyword does not exist", datafile->filename);
-      return 0;
+      if(datafile->NrBins == -1) {
+ printerror(verbose.debug, "WARNING readPSRFITSHeader (%s): NBIN keyword does not exist in the subint table, and it was not found in a HISTORY table either. This file cannot be interpreted.", datafile->filename);
+ return 0;
+      }
+      if(nowarnings == 0) {
+ if((version_major > 2) || (version_major == 2 && version_minor >= 7)) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NBIN keyword does not exist in the subint table, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+ }else if(version_major == 0 && version_minor == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NBIN keyword does not exist in the subint table. Not sure this is a PSRFITS file.", datafile->filename);
+ }
+      }
+      status = 0;
+    }else {
+      fits_parse_value(card, value, comment, &status);
+      long nrbins;
+      sscanf(value, "%ld", &(nrbins));
+      if(datafile->NrBins == -1) {
+ datafile->NrBins = nrbins;
+      }else if(datafile->NrBins != nrbins) {
+ printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Updating the %ld bins as reported in the history table to %ld as suggested by the SUBINT table.", datafile->filename, datafile->NrBins, nrbins);
+ datafile->NrBins = nrbins;
+      }
     }
-    fits_parse_value(card, value, comment, &status);
-    sscanf(value, "%ld", &(datafile->NrBins));
     if(datafile->NrBins == 1) {
       if(fits_read_card(datafile->fits_fptr,"NSBLK", card, &status)) {
  if(nowarnings == 0) {
@@ -2240,43 +2404,89 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
       period = -1;
     }
     if(fits_read_card(datafile->fits_fptr,"TBIN", card, &status)) {
-      if(nowarnings == 0) {
- fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): SUBINT:TBIN keyword does not exist, assuming whole period is stored and using period to get sampling time.", datafile->filename);
-      }
-      if(periodnotset || period <= 0) {
+      if(samptimenotset == 0) {
  if(nowarnings == 0) {
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period is not set, so cannot use period to get sampling time.", datafile->filename);
+   fflush(stdout);
+   if((version_major > 3) || (version_major == 3 && version_minor >= 0)) {
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+   }else if(version_major == 0 && version_minor == 0) {
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table. Not sure this is a PSRFITS file.", datafile->filename);
+   }
  }
       }else {
- datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
- datafile->fixedtsamp = period/(double)datafile->NrBins;
+ if(periodnotset || period <= 0) {
+   if(nowarnings == 0) {
+     fflush(stdout);
+     if((version_major > 3) || (version_major == 3 && version_minor >= 0)) {
+       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data. Period is not set, so cannot use period to get sampling time.", datafile->filename);
+     }else if(version_major == 0 && version_minor == 0) {
+       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table. Not sure this is a PSRFITS file. Period is not set, so cannot use period to get sampling time.", datafile->filename);
+     }
+   }
+ }else {
+   if(nowarnings == 0) {
+     fflush(stdout);
+     if((version_major > 3) || (version_major == 3 && version_minor >= 0)) {
+       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data. Assuming whole period is stored and using period to get sampling time.", datafile->filename);
+     }else if(version_major == 0 && version_minor == 0) {
+       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table. Not sure this is a PSRFITS file. Assuming whole period is stored and using period to get sampling time.", datafile->filename);
+     }
+   }
+   datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
+   datafile->fixedtsamp = period/(double)datafile->NrBins;
+   samptimenotset = 0;
+   if(verbose.debug) {
+     fflush(stdout);
+     printf("  readPSRFITSHeader (%s): Set sampling time to %lf.\n", datafile->filename, datafile->fixedtsamp);
+   }
+ }
       }
       status = 0;
     }else {
       fits_parse_value(card, value, comment, &status);
       if(value[1] == '*') {
- if(nowarnings == 0) {
-   fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Sampling time not set, assuming whole period is stored to obtain sampling time.", datafile->filename);
- }
- if(periodnotset || period <= 0) {
+ if(samptimenotset == 0) {
    if(nowarnings == 0) {
-     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Period is not set, so cannot use period to get sampling time.", datafile->filename);
+     fflush(stdout);
+     if((version_major > 3) || (version_major == 3 && version_minor >= 0)) {
+       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data. It is assumed that stored in the history table is correct.", datafile->filename);
+     }else if(version_major == 0 && version_minor == 0) {
+       printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table. Not sure this is a PSRFITS file. It is assumed that stored in the history table is correct.", datafile->filename);
+     }
    }
  }else {
-   if(verbose.debug) {
-     fflush(stdout);
-     printf("  readPSRFITSHeader (%s): Setting sampling time to %lf/%ld.\n", datafile->filename, period, datafile->NrBins);
+   if(periodnotset || period <= 0) {
+     if(nowarnings == 0) {
+       fflush(stdout);
+       if((version_major > 3) || (version_major == 3 && version_minor >= 0)) {
+  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data. Period is not set, so cannot use period to get sampling time.", datafile->filename);
+       }else if(version_major == 0 && version_minor == 0) {
+  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table. Not sure this is a PSRFITS file. Period is not set, so cannot use period to get sampling time.", datafile->filename);
+       }
+     }
+   }else {
+     if(nowarnings == 0) {
+       fflush(stdout);
+       if((version_major > 3) || (version_major == 3 && version_minor >= 0)) {
+  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data. Assuming whole period is stored and using period to get sampling time.", datafile->filename);
+       }else if(version_major == 0 && version_minor == 0) {
+  printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): TBIN keyword does not exist in the subint table. Not sure this is a PSRFITS file. Assuming whole period is stored and using period to get sampling time.", datafile->filename);
+       }
+     }
+     datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
+     datafile->fixedtsamp = period/(double)datafile->NrBins;
+     samptimenotset = 0;
+     if(verbose.debug) {
+       fflush(stdout);
+       printf("  readPSRFITSHeader (%s): Set sampling time to %lf.\n", datafile->filename, datafile->fixedtsamp);
+     }
    }
-   datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
-   datafile->fixedtsamp = period/(double)datafile->NrBins;
-   samptimenotset = 0;
  }
       }else {
  if(samptimenotset) {
    datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
    sscanf(value, "%lf", &(datafile->fixedtsamp));
+   samptimenotset = 0;
    if(verbose.debug) {
      fflush(stdout);
      printf("  readPSRFITSHeader (%s): Setting sampling time SUBINT:TBIN = %lf.\n", datafile->filename, get_tsamp(*datafile, 0, verbose));
@@ -2284,25 +2494,50 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
  }
       }
     }
-    if(fits_read_card(datafile->fits_fptr,"NCHAN", card, &status)) {
+    ret = -1;
+    if(fits_read_card(datafile->fits_fptr, "NCHAN", card, &status)) {
       if(nowarnings == 0) {
  fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NCHAN keyword does not exist", datafile->filename);
+ if((version_major > 3) || (version_major == 3 && version_minor >= 2)) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NCHAN keyword does not exist in subint table, while this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+ }else if(version_major == 0 && version_minor == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NCHAN keyword does not exist in subint table, which might be true for old versions of PSRFITS.", datafile->filename);
+ }
       }
       status = 0;
       if(fits_read_card(datafile->fits_fptr,"NCH_FILE", card, &status)) {
- if(nowarnings == 0) {
-   fflush(stdout);
-   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): NCHAN and NCH_FILE keywords do not exist", datafile->filename);
- }
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): NCHAN and NCH_FILE keywords do not exist in subint table", datafile->filename);
  return 0;
       }else {
  fits_parse_value(card, value, comment, &status);
- sscanf(value, "%ld", &(datafile->NrFreqChan));
+ ret = sscanf(value, "%ld", &(dummy_long));
       }
     }else {
       fits_parse_value(card, value, comment, &status);
-      sscanf(value, "%ld", &(datafile->NrFreqChan));
+      ret = sscanf(value, "%ld", &(dummy_long));
+    }
+    if(ret != -1) {
+      if(ret != 1) {
+ if(datafile->NrFreqChan > 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Parsing NCHAN or NCH_FILE keyword in subint table failed, assume %ld from history table is correct.", datafile->filename, datafile->NrFreqChan);
+ }else {
+   fflush(stdout);
+   printerror(verbose.debug, "WARNING readPSRFITSHeader (%s): Parsing NCHAN or NCH_FILE keyword in subint table failed, and it was not defined in history table either.", datafile->filename);
+   return 0;
+ }
+      }else {
+ if(datafile->NrFreqChan == -1) {
+   datafile->NrFreqChan = dummy_long;
+ }else {
+   if(datafile->NrFreqChan != dummy_long) {
+     fflush(stdout);
+     printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): The NCHAN or NCH_FILE keyword in subint table is different from that in the history table. Updating the number of frequency channels from %ld to %ld.", datafile->filename, datafile->NrFreqChan, dummy_long);
+     datafile->NrFreqChan = dummy_long;
+   }
+ }
+      }
     }
     if (fits_read_card(datafile->fits_fptr,"NAXIS2", card, &status)) {
       fflush(stdout);
@@ -2315,25 +2550,48 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
       datafile->tsub_list[0] /= (double)datafile->NrSubints;
       tsubsettotobs = 0;
     }
-    if (fits_read_card(datafile->fits_fptr,"CHAN_BW", card, &status)) {
+    if(fits_read_card(datafile->fits_fptr, "CHAN_BW", card, &status)) {
       fflush(stdout);
-      printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): CHAN_BW keyword does not exist", datafile->filename);
-      return 0;
+      if(nowarnings == 0) {
+ if((version_major > 3) || (version_major == 3 && version_minor >= 2)) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): CHAN_BW keyword does not exist in the subint table, but this was expected to exist for claimed version of the PSRFITS file. Something might be wrong with the format data.", datafile->filename);
+ }
+      }
+      if(bandwidth == 0.0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): CHAN_BW keyword does not exist in the subint table, and it was not set in the history table either. Header cannot be interpreted.", datafile->filename);
+ return 0;
+      }
+      if(set_bandwidth(datafile, bandwidth, verbose) == 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Changing bandwidth failed.", datafile->filename);
+ return 0;
+      }
+      status = 0;
     }else {
       fits_parse_value(card, value, comment, &status);
       double bw;
       sscanf(value, "%lf", &bw);
       bw *= datafile->NrFreqChan;
+      if(bandwidth != 0.0) {
+ if(fabs(bw/bandwidth -1.0) > 1e-5) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): Bandwidth as reported by subint table (%lf MHz) is different from that in the history table (%lf MHz). Updating bandwidth to %lf MHz. Something might be wrong with the format data.", datafile->filename, bw, bandwidth);
+ }
+      }
       if(set_bandwidth(datafile, bw, verbose) == 0) {
  fflush(stdout);
- printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Bandwidth changing failed.", datafile->filename);
+ printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Changing bandwidth failed.", datafile->filename);
  return 0;
       }
     }
-    if (fits_read_card(datafile->fits_fptr,"DM", card, &status)) {
+    if(fits_read_card(datafile->fits_fptr, "DM", card, &status)) {
       if(nowarnings == 0) {
  fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): DM not in SUBINT HDU", datafile->filename);
+ if((version_major > 4) || (version_major == 4 && version_minor >= 0)) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): DM not in SUBINT HDU, but this was expected to be set for the claimed PSRFITS version of this file.", datafile->filename);
+ }else if(version_major == 0 && version_minor == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): DM not in SUBINT HDU, which could be true for older versions of PSRFITS data type.", datafile->filename);
+ }
       }
       status = 0;
       dmnotset = 1;
@@ -2341,10 +2599,14 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
       fits_parse_value(card, value, comment, &status);
       sscanf(value, "%lf", &(datafile->dm));
     }
-    if (fits_read_card(datafile->fits_fptr,"RM", card, &status)) {
+    if(fits_read_card(datafile->fits_fptr, "RM", card, &status)) {
       if(nowarnings == 0) {
  fflush(stdout);
- printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): RM not in SUBINT HDU", datafile->filename);
+ if((version_major > 4) || (version_major == 4 && version_minor >= 0)) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): RM not in SUBINT HDU, but this was expected to be set for the claimed PSRFITS version of this file.", datafile->filename);
+ }else if(version_major == 0 && version_minor == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): RM not in SUBINT HDU, which could be true for older versions of PSRFITS data type.", datafile->filename);
+ }
       }
       status = 0;
       rmnotset = 1;
@@ -2735,7 +2997,7 @@ int writeFITSsubint(datafile_definition datafile, long subintnr, unsigned char *
       }
       showErrorMessage = 0;
     }
-    if(finite(offsets[i]) == 0) {
+    if(isfinite(offsets[i]) == 0) {
       offsets[i] = 0;
       scales[i] = 0;
       if(showErrorMessage) {
@@ -2753,7 +3015,7 @@ int writeFITSsubint(datafile_definition datafile, long subintnr, unsigned char *
       }
       showErrorMessage = 0;
     }
-    if(finite(scales[i]) == 0) {
+    if(isfinite(scales[i]) == 0) {
       offsets[i] = 0;
       scales[i] = 0;
       if(showErrorMessage) {
@@ -3346,9 +3608,6 @@ int readHistoryFITS(datafile_definition *datafile, verbose_definition verbose)
     fflush(stdout);
     printerror(verbose.debug, "ERROR readHistoryFITS (%s): Cannot goto original HDU", datafile->filename);
     return 0;
-  }
-  if(verbose.debug) {
-    printf("readHistoryFITS: ret=%d ret2=%d\n", ret, ret2);
   }
   if(ret == 0 && ret2 == 0)
     return 1;

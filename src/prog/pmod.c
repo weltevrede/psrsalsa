@@ -130,7 +130,7 @@ int main(int argc, char **argv)
     printf("-list                List the zap list to a file\n");
     printf("-addnoise rms        Add white noise with RMS rms to the data.\n");
     printf("-onpulse_subst_noise Substitute the onpulse region with white noise based on the\n");
-    printf("                     (running) off-pulse rms\n");
+    printf("                     (running) off-pulse rms.\n");
     printf("\nData selection options:\n\n");
     printf("-zapfile file     Specify filename with pulse numbers to zap (first pulse is 0).\n");
     printf("                  Expected format: see -format.\n");
@@ -323,22 +323,25 @@ int main(int argc, char **argv)
     deviceOpened = 0;
     if(filename == 0) {
       if(change_filename_extension(filename_ptr, output_name, output_suffix, MaxFilenameLength, application.verbose_state) == 0) {
- printerror(application.verbose_state.debug, "ERROR pmod: Cannot change extension in output name.");
+ printerror(application.verbose_state.debug, "ERROR pmod: Cannot change extension in output name. The input name is expected to have an extension (even in -output is used).");
  return 0;
       }
     }else {
       strcpy(output_name, argv[filename]);
     }
     if(change_filename_extension(filename_ptr, output_name2, output_suffix2, MaxFilenameLength, application.verbose_state) == 0) {
-      printerror(application.verbose_state.debug, "ERROR pmod: Cannot change extension in output name.");
+      printerror(application.verbose_state.debug, "ERROR pmod: Cannot change extension in output name. The input name is expected to have an extension (even in -output is used).");
       return 0;
     }
     cleanPSRData(&dataout, application.verbose_state);
     cleanPSRData(&dataout2, application.verbose_state);
-    if(application.iformat <= 0)
+    if(application.iformat <= 0) {
       application.iformat = guessPSRData_format(filename_ptr, 0, application.verbose_state);
+      if(application.iformat == -2 || application.iformat == -3)
+ return 0;
+    }
     if(isValidPSRDATA_format(application.iformat) == 0) {
-      printerror(application.verbose_state.debug, "ERROR pmod: Please specify a valid input format with the -iformat option.");
+      printerror(application.verbose_state.debug, "ERROR pmod: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", filename_ptr);
       closePSRData(&dataout, 0, application.verbose_state);
       closePSRData(&dataout2, 0, application.verbose_state);
       gsl_rng_free(rand_num_gen);
@@ -495,7 +498,7 @@ int main(int argc, char **argv)
      strcpy(pgplot_options.box.xlabel, "Bin");
      strcpy(pgplot_options.box.ylabel, "I");
      strcpy(pgplot_options.box.title, "Profile");
-     pgplotGraph1(&pgplot_options, profileI, NULL, NULL, nrBins, 0, nrBins, 0, 0, nrBins, 0, 0, 0, 1, 0, 0, 1, 1, &(application.onpulse), application.verbose_state);
+     pgplotGraph1(&pgplot_options, profileI, NULL, NULL, nrBins, 0, nrBins, 0, 0, nrBins, 0, 0, 0, 1, 0, 1, 0, 1, 1, &(application.onpulse), -1, application.verbose_state);
      deviceOpened = 1;
      printf("Press return to continue\n");
      scanf("%c", txt);
@@ -599,7 +602,8 @@ int main(int argc, char **argv)
        printf("Processing polarization channel %ld (of the %d)\n", k+1, nrPol);
      }
    }
-   if(debase_flag || removeOnPulse_flag) {
+   if(debase_flag || removeOnPulse_flag
+) {
      read_rmsPSRData(datain, &rms[datain.NrSubints*k], &runningBaseline[datain.NrSubints*k], zapMask, &(application.onpulse), 0, k, l, application.verbose_state);
      if(l == 0 && application.verbose_state.verbose) {
        if(datain.NrFreqChan > 1)
@@ -735,7 +739,7 @@ int main(int argc, char **argv)
    strcpy(pgplot_options.box.xlabel, "Pulse number");
    strcpy(pgplot_options.box.ylabel, "Baseline");
    strcpy(pgplot_options.box.title, txt);
-   pgplotGraph1(&pgplot_options, baseline+baseline_length, NULL, NULL, nrPulses-2*baseline_length, baseline_length, nrPulses-baseline_length, 0, baseline_length, nrPulses-baseline_length, 0, 0, 0, 0, 0, 0, 1, 1, NULL, application.verbose_state);
+   pgplotGraph1(&pgplot_options, baseline+baseline_length, NULL, NULL, nrPulses-2*baseline_length, baseline_length, nrPulses-baseline_length, 0, baseline_length, nrPulses-baseline_length, 0, 0, 0, 0, 0, 1, 0, 1, 1, NULL, -1, application.verbose_state);
    deviceOpened = 1;
  }
       }

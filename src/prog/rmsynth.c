@@ -207,7 +207,7 @@ int main(int argc, char **argv)
   if(application.onpulse2.nrRegions == 0) {
     selectRegions(profiledata.data, profiledata.NrBins, &pgplot_options, 0, 0, 0, &(application.onpulse2), application.verbose_state);
   }else {
-    pgplotGraph1(&pgplot_options, profiledata.data, NULL, NULL, profiledata.NrBins, 0, profiledata.NrBins-1, 0, 0, profiledata.NrBins-1, 0, 0, 0, 1, 0, 0, 1, 1, &(application.onpulse2), application.verbose_state);
+    pgplotGraph1(&pgplot_options, profiledata.data, NULL, NULL, profiledata.NrBins, 0, profiledata.NrBins-1, 0, 0, profiledata.NrBins-1, 0, 0, 0, 1, 0, 1, 0, 1, 1, &(application.onpulse2), -1, application.verbose_state);
   }
     region_int_to_frac(&(application.onpulse2), 1.0/(float)datain.NrBins, 0);
   regionShowNextTimeUse(application.onpulse2, "-onpulse2", "-onpulsef2", stdout);
@@ -313,7 +313,7 @@ int main(int argc, char **argv)
       if(application.onpulse.nrRegions == 0) {
  selectRegions(profiledata.data, profiledata.NrBins, &pgplot_options, 0, 0, 0, &(application.onpulse), application.verbose_state);
       }else {
- pgplotGraph1(&pgplot_options, profiledata.data, NULL, NULL, profiledata.NrBins, 0, profiledata.NrBins-1, 0, 0, profiledata.NrBins-1, 0, 0, 0, 1, 0, 0, 1, 1, &(application.onpulse), application.verbose_state);
+ pgplotGraph1(&pgplot_options, profiledata.data, NULL, NULL, profiledata.NrBins, 0, profiledata.NrBins-1, 0, 0, profiledata.NrBins-1, 0, 0, 0, 1, 0, 1, 0, 1, 1, &(application.onpulse), -1, application.verbose_state);
       }
       ppgend();
       region_int_to_frac(&(application.onpulse), 1.0/(float)datain.NrBins, 0);
@@ -352,7 +352,7 @@ int main(int argc, char **argv)
  pgplot_options.viewport.dontclose = 1;
  strcpy(pgplot_options.box.ylabel, "RM synthesis power");
  strcpy(pgplot_options.box.xlabel, "RM (rad/m\\u2\\d)");
- pgplotGraph1(&pgplot_options, singlespectrum, NULL, NULL, nrrmsteps, rmmin, rmmax, 0, rmmin, rmmax, 0, 0, 0, 0, 0, -10, 1, 1, NULL, application.verbose_state);
+ pgplotGraph1(&pgplot_options, singlespectrum, NULL, NULL, nrrmsteps, rmmin, rmmax, 0, rmmin, rmmax, 0, 0, 0, 0, 0, 1, -10, 1, 1, NULL, -1, application.verbose_state);
  pgplot_options.viewport.dontopen = 1;
  if(parabola) {
    if(application.verbose_state.debug)
@@ -546,7 +546,7 @@ int main(int argc, char **argv)
       printf("Expected FWHM RM synthesis peak = %f\n", fwhm);
       printf("Expected errorbar on RM = %f\n", expectedRMerror);
     }
-    closePSRData(&clone, 0, application.verbose_state);
+  closePSRData(&clone, 0, application.verbose_state);
   if(collapse || write_ascii == 0) {
     for(binnr = 0; binnr < datain.NrBins; binnr++) {
       if(checkRegions(binnr, &application.onpulse, 0, application.verbose_state) != 0 || application.onpulse.nrRegions == 0 || collapse) {

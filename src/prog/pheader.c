@@ -107,6 +107,7 @@ int main(int argc, char **argv)
  printf("p0            Period\n");
  printf("parang        Show (derived) parallactic angle at midpoint observation\n");
  printf("parang1       Show (derived) parallactic angle for first subint\n");
+ printf("poltype       Polarization type (Stokes, coherency, etc.)\n");
  printf("ra            Right ascension\n");
  printf("reffreq       Reference frequency (used for dedispersion etc)\n");
  printf("rm            Rotation measure\n");
@@ -115,6 +116,10 @@ int main(int argc, char **argv)
  printf("weights       Show weights (if supported in file)\n");
  return 0;
       }else if(strcmp(argv[i], "-c") == 0) {
+ if(c_index != 0) {
+   printerror(application.verbose_state.verbose, "Cannot use -c multiple times. Use the notation -c \"param1 param2\" instead.");
+   return 0;
+ }
  c_index = ++i;
       }else if(strcmp(argv[i], "-linenr") == 0) {
  show_linenumber = 1;
@@ -141,7 +146,7 @@ int main(int argc, char **argv)
     for(i = 0; i < nrwords; i++) {
       sscanf(pickWordFromString(argv[c_index], i+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
       if(strcasecmp(cmd, "p0") == 0 || strcasecmp(cmd, "period") == 0) {
-      }else if(strcasecmp(cmd, "freq") == 0) {
+      }else if(strcasecmp(cmd, "freq") == 0 || strcasecmp(cmd, "cfreq") == 0) {
       }else if(strcasecmp(cmd, "freqlist") == 0) {
       }else if(strcasecmp(cmd, "reffreq") == 0) {
       }else if(strcasecmp(cmd, "npulses") == 0 || strcasecmp(cmd, "nsub") == 0 || strcasecmp(cmd, "nsubint") == 0 || strcasecmp(cmd, "nsubints") == 0 || strcasecmp(cmd, "nrsubint") == 0 || strcasecmp(cmd, "nrsubints") == 0 || strcasecmp(cmd, "nrpulses") == 0) {
@@ -149,6 +154,7 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "npol") == 0) {
       }else if(strcasecmp(cmd, "nchan") == 0 || strcasecmp(cmd, "nfreq") == 0) {
       }else if(strcasecmp(cmd, "nbits") == 0) {
+      }else if(strcasecmp(cmd, "poltype") == 0) {
       }else if(strcasecmp(cmd, "dt") == 0 || strcasecmp(cmd, "tsamp") == 0) {
       }else if(strcasecmp(cmd, "length") == 0 || strcasecmp(cmd, "dur") == 0 || strcasecmp(cmd, "tobs") == 0) {
       }else if(strcasecmp(cmd, "length2") == 0) {
@@ -191,10 +197,13 @@ int main(int argc, char **argv)
   i = 0;
   while((filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
     application.iformat = iformat_initial_value;
-    if(application.iformat <= 0)
+    if(application.iformat <= 0) {
       application.iformat = guessPSRData_format(filename_ptr, 0, application.verbose_state);
+      if(application.iformat == -2 || application.iformat == -3)
+ return 0;
+    }
     if(isValidPSRDATA_format(application.iformat) == 0) {
-      printerror(application.verbose_state.verbose, "ERROR pheader: Please specify a valid input format with the -iformat option.\n");
+      printerror(application.verbose_state.debug, "ERROR pheader: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", filename_ptr);
       return 0;
     }
     if(openPSRData(&datain[i], filename_ptr, application.iformat, 0, 0, 0, application.verbose_state) == 0) {
@@ -338,7 +347,7 @@ int main(int argc, char **argv)
       if(strcasecmp(cmd, "p0") == 0 || strcasecmp(cmd, "period") == 0) {
  printf("  period");
  extra_precision = 1;
-      }else if(strcasecmp(cmd, "freq") == 0) {
+      }else if(strcasecmp(cmd, "freq") == 0 || strcasecmp(cmd, "cfreq") == 0) {
  printf(" Frequency");
  extra_precision = 1;
       }else if(strcasecmp(cmd, "reffreq") == 0) {
@@ -354,6 +363,8 @@ int main(int argc, char **argv)
  printf(" nchan");
       }else if(strcasecmp(cmd, "nbits") == 0) {
  printf(" nbits");
+      }else if(strcasecmp(cmd, "poltype") == 0) {
+ printf(" poltype");
       }else if(strcasecmp(cmd, "dt") == 0 || strcasecmp(cmd, "tsamp") == 0) {
  printf(" samp time");
  extra_precision = 1;
@@ -467,7 +478,7 @@ int main(int argc, char **argv)
      printf(" SEARCH?");
      footnote_search = 1;
    }
- }else if(strcasecmp(cmd, "freq") == 0) {
+ }else if(strcasecmp(cmd, "freq") == 0 || strcasecmp(cmd, "cfreq") == 0) {
    printf(" %*.*lf", 9+precision, 4+precision, get_centre_frequency(datain[index], application.verbose_state));
  }else if(strcasecmp(cmd, "reffreq") == 0) {
    printf(" %*.*lf", 9+precision, 4+precision, datain[index].freq_ref);
@@ -481,6 +492,8 @@ int main(int argc, char **argv)
    printf(" %5ld", datain[index].NrFreqChan);
  }else if(strcasecmp(cmd, "nbits") == 0) {
    printf(" %5d", datain[index].NrBits);
+ }else if(strcasecmp(cmd, "poltype") == 0) {
+   printf(" %7d", datain[index].poltype);
  }else if(strcasecmp(cmd, "dt") == 0 || strcasecmp(cmd, "tsamp") == 0) {
    printf(" %*.*lf", 9+precision, 6+precision, get_tsamp(datain[index], 0, application.verbose_state));
  }else if(strcasecmp(cmd, "bw") == 0) {

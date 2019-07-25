@@ -151,6 +151,7 @@ void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
   datafile->scales = NULL;
   datafile->offsets = NULL;
   datafile->weights = NULL;
+  datafile->weight_stats_set = 0;
   datafile->data = NULL;
   datafile->format = 0;
   datafile->version = 0;
@@ -243,6 +244,11 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
   datafile_dest->scales = NULL;
   datafile_dest->offsets = NULL;
   datafile_dest->weights = NULL;
+  datafile_dest->weight_stats_set = datafile_source.weight_stats_set;
+  datafile_dest->weight_stats_zeroweightfound = datafile_source.weight_stats_zeroweightfound;
+  datafile_dest->weight_stats_differentweights = datafile_source.weight_stats_differentweights;
+  datafile_dest->weight_stats_negativeweights = datafile_source.weight_stats_negativeweights;
+  datafile_dest->weight_stats_weightvalue = datafile_source.weight_stats_weightvalue;
   datafile_dest->offpulse_rms = NULL;
   datafile_dest->format = datafile_source.format;
   datafile_dest->version = datafile_source.version;
@@ -1631,7 +1637,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
   if(txt == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR guessPSRData_format: Cannot allocate memory");
-    return -1;
+    return -3;
   }
   if(verbose.verbose) {
     for(indent = 0; indent < verbose.indent; indent++)
@@ -1855,18 +1861,98 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
     }
     printf("  file is not in PPOL or PPOLSHORT format.\n");
   }
-  fflush(stdout);
-  if(noerror == 0) {
-    printerror(verbose.debug, "ERROR guessPSRData_format: determining file type of '%s' failed.", filename);
-  }else {
+  int istimer = 1;
+  if(verbose.debug) {
     if(verbose.verbose) {
       for(indent = 0; indent < verbose.indent; indent++)
  printf(" ");
-      printf("  file is in an undetermined format.\n");
     }
+    printf("  check if in TIMER format.\n");
   }
+  if(fseek(fin, 32+32+8, SEEK_SET) != 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR guessPSRData_format: Seek in file '%s' failed.", filename);
+    free(txt);
+    return -1;
+  }
+  i = fread(&fdummy, sizeof(float), 1, fin);
+  if(i != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR guessPSRData_format: reading file '%s' failed.", filename);
+    free(txt);
+    return -1;
+  }
+  if(verbose.debug) {
+    if(verbose.verbose) {
+      for(indent = 0; indent < verbose.indent; indent++)
+ printf(" ");
+    }
+    printf("    got version = %f\n", fdummy);
+  }
+  if(fabs(fdummy) < 1e-10) {
+    i = fread(&fdummy, sizeof(float), 1, fin);
+    if(i != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR guessPSRData_format: reading file '%s' failed.", filename);
+      free(txt);
+      return -1;
+    }
+    if(verbose.debug) {
+      if(verbose.verbose) {
+ for(indent = 0; indent < verbose.indent; indent++)
+   printf(" ");
+      }
+      printf("    got minor version = %f\n", fdummy);
+    }
+    if(fabs(fdummy) < 1e-10) {
+      if(fseek(fin, 2*sizeof(int), SEEK_CUR) != 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR guessPSRData_format: Seek in file '%s' failed.", filename);
+ free(txt);
+ return -1;
+      }
+      i = fread(txt, 1, 16, fin);
+      if(i != 16) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR guessPSRData_format: reading file '%s' failed.", filename);
+ free(txt);
+ return -1;
+      }
+      txt[16] = 0;
+      if(verbose.debug) {
+ if(verbose.verbose) {
+   for(indent = 0; indent < verbose.indent; indent++)
+     printf(" ");
+ }
+ printf("    got date = '%s'\n", txt);
+      }
+      if(txt[2] != '-' || txt[5] != '-') {
+ istimer = 0;
+      }
+    }else {
+      istimer = 0;
+    }
+  }else {
+    istimer = 0;
+  }
+  fflush(stdout);
   fclose(fin);
   free(txt);
+  if(istimer) {
+    printerror(verbose.debug, "ERROR guessPSRData_format: file '%s' appears to be in TIMER format.", filename);
+    printerror(verbose.debug, "ERROR guessPSRData_format: If you have psrchive, you can use 'pam -a psrfits -e fits %s' to convert to PSRFITS.", filename);
+    return -2;
+  }else {
+    if(noerror == 0) {
+      printerror(verbose.debug, "ERROR guessPSRData_format: determining file type of '%s' failed.", filename);
+    }else {
+      if(verbose.verbose) {
+ for(indent = 0; indent < verbose.indent; indent++)
+   printf(" ");
+ printf("  file is in an undetermined format.\n");
+      }
+    }
+  }
   return 0;
 }
 int openPSRData(datafile_definition *datafile, char *filename, int format, int enable_write, int read_in_memory, int nowarnings, verbose_definition verbose)
@@ -1907,12 +1993,17 @@ int openPSRData(datafile_definition *datafile, char *filename, int format, int e
   }
   if(format == -1) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR openPSRData:\n  Error reading file - file format couldn't be determined.");
+    printerror(verbose.debug, "ERROR openPSRData:\n  Error reading file '%s' - file format couldn't be determined.", filename);
     return 0;
   }
-  if(format == 0) {
+  if(format == -2) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR openPSRData:\n  Error determining file type, please specify on command line.");
+    printerror(verbose.debug, "ERROR openPSRData:\n  The file type of '%s' isn't supported for reading in.", filename);
+    return 0;
+  }
+  if(format == 0 || format == -3) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR openPSRData:\n  Error determining file type of '%s'. It is either not supported, or you might need to specify the format on the command line.", filename);
     return 0;
   }
   datafile->format = format;
@@ -2087,6 +2178,9 @@ int closePSRData(datafile_definition *datafile, int perserve_info, verbose_defin
       free(datafile->scales);
       free(datafile->offsets);
       free(datafile->weights);
+      datafile->scales = NULL;
+      datafile->offsets = NULL;
+      datafile->weights = NULL;
     }else if(datafile->format != MEMORY_format){
       if(verbose.debug) {
  printf("  - Releasing file pointer\n");
@@ -2158,6 +2252,7 @@ int closePSRData(datafile_definition *datafile, int perserve_info, verbose_defin
  history_ptr->hostname = NULL;
       }
       history_ptr_next = history_ptr->nextEntry;
+      history_ptr->nextEntry = NULL;
       if(firsthistoryline == 1) {
  firsthistoryline = 0;
       }else {
@@ -2225,7 +2320,7 @@ char *returnGenType_str(int gentype)
 }
 void printGenType(int gentype, FILE *destination)
 {
-  fprintf(destination, returnGenType_str(gentype));
+  fprintf(destination, "%s", returnGenType_str(gentype));
 }
 static char * internal_format_string_PuMa = "PuMa";
 static char * internal_format_string_EPN = "EPN";
@@ -2761,7 +2856,7 @@ int setITRFlocation_by_name(datafile_definition *datafile, char *observatory, ve
     datafile->telescope_X = 2136819.1940;
     datafile->telescope_Y = 810039.5757;
     datafile->telescope_Z = 5935299.0536;
-  }else if(strcasecmp(observatory, "KAT7") == 0) {
+  }else if(strcasecmp(observatory, "KAT7") == 0 || strcasecmp(observatory, "k7") == 0 || strcasecmp(observatory, "KAT-7") == 0) {
     if(verbose.verbose) {
       for(indent = 0; indent < verbose.indent; indent++)
  printf(" ");
@@ -2778,9 +2873,9 @@ int setITRFlocation_by_name(datafile_definition *datafile, char *observatory, ve
       fflush(stdout);
       printwarning(verbose.debug, "setITRFlocation_by_name: Guessing this is MeerKAT data");
     }
-    datafile->telescope_X = 5109318.8410;
-    datafile->telescope_Y = 2006836.3673;
-    datafile->telescope_Z = -3238921.7749;
+    datafile->telescope_X = 5109360.133;
+    datafile->telescope_Y = 2006852.586;
+    datafile->telescope_Z = -3238948.127;
   }else if(strcasecmp(observatory, "LWA") == 0 || strcasecmp(observatory, "LWA1") == 0) {
     if(verbose.verbose) {
       for(indent = 0; indent < verbose.indent; indent++)
@@ -2811,6 +2906,34 @@ int setITRFlocation_by_name(datafile_definition *datafile, char *observatory, ve
     return 0;
   }
   return 1;
+}
+void determineWeightsStat(datafile_definition *datafile)
+{
+  int firstnonzeroweight = 1;
+  long n;
+  datafile->weight_stats_zeroweightfound = 0;
+  datafile->weight_stats_differentweights = 0;
+  datafile->weight_stats_negativeweights = 0;
+  if(datafile->weights == NULL) {
+    datafile->weight_stats_weightvalue = 1.0;
+    return;
+  }
+  for(n = 0; n < datafile->NrSubints*datafile->NrFreqChan; n++) {
+    if(datafile->weights[n] < 0) {
+      datafile->weight_stats_negativeweights = 1;
+    }
+    if(datafile->weights[n] == 0.0) {
+      datafile->weight_stats_zeroweightfound = 1;
+    }else {
+      if(firstnonzeroweight) {
+ datafile->weight_stats_weightvalue = datafile->weights[n];
+ firstnonzeroweight = 0;
+      }else if(datafile->weights[n] != datafile->weight_stats_weightvalue) {
+ datafile->weight_stats_differentweights = 1;
+      }
+    }
+  }
+  datafile->weight_stats_set = 1;
 }
 int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowarnings, verbose_definition verbose)
 {
@@ -3042,6 +3165,33 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
   }
   if(datafile->freq_ref < -0.9 && datafile->freq_ref >= -1.1) {
     datafile->freq_ref = 1e10;
+  }
+  if(readnoscales == 0) {
+    determineWeightsStat(datafile);
+    if(datafile->weight_stats_negativeweights) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readHeaderPSRData (%s): Found negative weights in input file, so probably the file is corrupted. You might want to use the -absweights option.", datafile->filename);
+    }
+    if(datafile->weight_stats_zeroweightfound && verbose.verbose) {
+      printf("FITS file contains zero-weighted data. By default this is applied, unless the -noweights option is used.\n");
+    }
+    if(datafile->weight_stats_differentweights == 0 && (verbose.debug || datafile->weight_stats_weightvalue != 1.0)) {
+      printf("FITS file contains uniform weights with a value %f", datafile->weight_stats_weightvalue);
+      if(datafile->weight_stats_zeroweightfound)
+ printf(" (appart from zero weights).\n");
+      else
+ printf("\n");
+    }
+    if(datafile->weight_stats_differentweights) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING readHeaderPSRData (%s): FITS file contains data with different weights. Make sure it is used as desired.", datafile->filename);
+    }
+  }else {
+    datafile->weight_stats_set = 1;
+    datafile->weight_stats_zeroweightfound = 0;
+    datafile->weight_stats_differentweights = 0;
+    datafile->weight_stats_negativeweights = 0;
+    datafile->weight_stats_weightvalue = 1.0;
   }
   if(readHistoryPSRData(datafile, verbose2) == 0) {
     printwarning(verbose.debug, "WARNING: Reading history failed.");

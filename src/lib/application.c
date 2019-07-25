@@ -386,7 +386,11 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
  if(endptr == word || endptr == NULL || endptr != word+strlen(word)) {
    if(check_only == 0) {
      fflush(stdout);
-     printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a long int", word);
+     if(format[i] == 'l') {
+       printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a long int", word);
+     }else {
+       printerror(verbose.debug, "ERROR parse_command_string: Cannot parse '%s' as a long", word);
+     }
    }
    free(word);
    return 0;
@@ -567,7 +571,7 @@ void printApplicationHelp(psrsalsaApplication *application)
       fprintf(stdout, "  -TSCR           Add all successive subints together\n");
     if(application->switch_tscr_complete) {
       fprintf(stdout, "  -tscr_complete  Use in combination with -tscr. Throw away last subints to\n");
-      fprintf(stdout, "                  ensure each subint is the sum of the same number of.\n");
+      fprintf(stdout, "                  ensure each subint is the sum of the same number of\n");
       fprintf(stdout, "                  input subints.\n");
     }
     if(application->switch_fscr) {

@@ -17,12 +17,10 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
-#include <malloc.h>
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
 #include "psrsalsa.h"
 #include "cpgplot.h"
-#define M_PI 3.14159265358979323846
 #define MaxNrJumps 100
 void PrintHelp();
 void convertAlphaBeta(double *alpha, double *beta
@@ -597,6 +595,12 @@ int main(int argc, char **argv)
   }
   if(loadresults == 0) {
     iformat = guessPSRData_format(argv[argc-1], 0, application.verbose_state);
+    if(iformat == -2 || iformat == -3)
+      return 0;
+    if(isValidPSRDATA_format(iformat) == 0) {
+      printerror(application.verbose_state.debug, "ERROR ppolFit: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", argv[argc-1]);
+      return 0;
+    }
     if(iformat != PPOL_format && iformat != PPOL_SHORT_format) {
       printerror(application.verbose_state.debug, "ppolFit: Input file does not appear to be in a ppol format.");
       return 0;

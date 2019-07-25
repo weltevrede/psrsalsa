@@ -59,6 +59,14 @@ double integrateVonMisesFunction2(double concentration, double height)
   area = 2*M_PI*height*gsl_sf_bessel_I0_scaled(concentration);
   return area;
 }
+double widthVonMisesFunction2(double concentration, double ampfrac)
+{
+  double value = log(ampfrac)/concentration + 1.0;
+  if(value < -1.0 || value >= 1.0) {
+    return sqrt(-1);
+  }
+  return 2.0*acos(value);
+}
 double calcVonMisesFunction(vonMises_collection_definition *components, double phase, double shift)
 {
   int n;

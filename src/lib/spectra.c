@@ -394,10 +394,10 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
   }
   if(calcPhaseTrack || calcsubpulseAmplitude) {
     int itteration_max = 100;
-    complex corr, phase, *phases;
+    double complex corr, phase, *phases;
     float total_phase_offset;
     if(verbose.verbose) printf("  Coherently add phase tracks\n");
-    phases = (complex *)malloc(nrphasetracks*sizeof(complex));
+    phases = (double complex *)malloc(nrphasetracks*sizeof(double complex));
     if(phases == NULL) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR calcLRFS: Cannot allocate memory");

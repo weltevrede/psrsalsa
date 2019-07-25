@@ -212,10 +212,12 @@ int main(int argc, char **argv)
     }
     if(application.iformat <= 0) {
       application.iformat = guessPSRData_format(filename_ptr, 0, application.verbose_state);
+      if(application.iformat == -2 || application.iformat == -3)
+ return 0;
       guessing_format = 1;
     }
     if(isValidPSRDATA_format(application.iformat) == 0) {
-      printerror(application.verbose_state.debug, "ERROR penergy: Please specify a valid input format with the -iformat option.\n");
+      printerror(application.verbose_state.debug, "ERROR penergy: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", filename_ptr);
       return 0;
     }
     if(openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.verbose_state) == 0) {

@@ -357,7 +357,7 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
   datasize -= curpos;
   fseeko(datafile->fptr, curpos, SEEK_SET);
   if(verbose.debug) {
-    printf("DEBUG: data size=%ld byte\n", datasize);
+    printf("DEBUG: data size=%ld byte\n", (long)datasize);
   }
   if(datafile->isFolded && datafile->NrBins <= 0) {
     printwarning(verbose.debug, "WARNING readSigprocHeader: For folded data the number of bins should be defined in header. Assume the data is not folded");

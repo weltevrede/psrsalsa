@@ -20,24 +20,34 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <pwd.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <termio.h>
+#include <termios.h>
+#include <sys/ioctl.h>
 #include "psrsalsa.h"
+#include <fcntl.h>
 #include <signal.h>
 #include <stdarg.h>
-#include <fcntl.h>
 #include <errno.h>
 #include <math.h>
 int pgetch(void)
 {
-  char ch;
-  int fd = fileno(stdin);
-  struct termio old_tty, new_tty;
-  ioctl(fd, TCGETA, &old_tty);
-  new_tty = old_tty;
-  new_tty.c_lflag &= ~(ICANON | ECHO | ISIG);
-  ioctl(fd, TCSETA, &new_tty);
-  fread(&ch, 1, sizeof(ch), stdin);
-  ioctl(fd, TCSETA, &old_tty);
+  struct termios oldattr, newattr;
+  int ch;
+  tcgetattr(STDIN_FILENO, &oldattr);
+  newattr = oldattr;
+  newattr.c_lflag &= ~( ICANON | ECHO | ISIG);
+  tcsetattr(STDIN_FILENO, TCSANOW, &newattr);
+  int gotkey = 0;
+  int n;
+  while(gotkey == 0) {
+    if(ioctl(fileno(stdin), FIONREAD, &n) == 0 && n > 0) {
+      ch = getchar();
+      gotkey = 1;
+    }
+    if(gotkey == 0) {
+      usleep(10000);
+    }
+  }
+  tcsetattr(STDIN_FILENO, TCSANOW, &oldattr);
   if(ch == 3) {
     fflush(stdout);
     fprintf(stderr, "pgetch: caught control-c\n");

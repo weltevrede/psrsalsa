@@ -26,6 +26,7 @@ int main(int argc, char **argv)
   int manualOnpulseSelection, deviceID, normalize, correctLbias, nxsub, boxlinewidth;
   int titleset, titlelw, dashed, datalinewidth, noylabel, overlayPA, overlayFine, nrJumps;
   int outline, outline_color, extended, onlysignificantPA, twoprofiles, sigmaI;
+  int doprojection;
   long i, j, f;
   float *profileI, loffset, correctQV, correctV, sigma_limit;
   float xsize, ysize, ysizepa, xtick, plotI1, plotI2, titlech;
@@ -66,6 +67,7 @@ int main(int argc, char **argv)
   application.switch_history_cmd_only = 1;
   application.switch_nskip = 1;
   application.switch_nread = 1;
+  application.switch_forceUniformFreqLabelling = 1;
   application.oformat = PPOL_format;
   nokeypresses = 0;
   extendedPol = 0;
@@ -111,6 +113,7 @@ int main(int argc, char **argv)
   overlaypa0 = 0;
   overlayl0 = 0;
   sigmaI = 0;
+  doprojection = 0;
   if(argc < 2) {
     printf("Program to convert Stokes parameters in other polarization products such as\n");
     printf("postition angle and linear intensity. The results can be written out and plotted\n");
@@ -266,8 +269,10 @@ int main(int argc, char **argv)
     if(PSRDataHeader_parse_commandline(&datain, argc, argv, application.verbose_state) == 0)
       return 0;
     if(datain.poltype == POLTYPE_ILVPAdPA || datain.poltype == POLTYPE_PAdPA || datain.poltype == POLTYPE_ILVPAdPATEldEl) {
-      printerror(application.verbose_state.debug, "ERROR ppol: File already contains PA data. You can use ppolFig to plot this data.");
-      return 0;
+      if(doprojection == 0) {
+ printerror(application.verbose_state.debug, "ERROR ppol: File already contains PA data. You can use ppolFig to plot this data.");
+ return 0;
+      }
     }
     compute_PA = 1;
     if(datain.isFolded && datain.foldMode == FOLDMODE_FIXEDPERIOD) {
@@ -306,22 +311,29 @@ int main(int argc, char **argv)
       printwarning(application.verbose_state.debug, "WARNING ppol: Applying preprocess options failed.");
       return 0;
     }
-    if(datain.poltype == POLTYPE_COHERENCY) {
-      if(application.verbose_state.verbose) {
- printf("Data is written as coherency parameters. Going to convert them into Stokes parameters first.\n");
-      }
-      if(preprocess_stokes(&datain, application.verbose_state) == 0) {
+    if(!(doprojection && datain.poltype == POLTYPE_ILVPAdPATEldEl)) {
+      if(datain.poltype == POLTYPE_COHERENCY) {
+ if(application.verbose_state.verbose) {
+   printf("Data is written as coherency parameters. Going to convert them into Stokes parameters first.\n");
+ }
+ if(preprocess_stokes(&datain, application.verbose_state) == 0) {
+   fflush(stdout);
+   printerror(application.verbose_state.debug, "ERROR ppol: Conversion into Stokes parameters failed.");
+   return 0;
+ }
+      }else if(datain.poltype == POLTYPE_UNKNOWN) {
  fflush(stdout);
- printerror(application.verbose_state.debug, "ERROR ppol: Conversion into Stokes parameters failed.");
+ printwarning(application.verbose_state.debug, "WARNING ppol: It is assumed that the data are Stokes parameters.");
+      }else if(datain.poltype != POLTYPE_STOKES) {
+ fflush(stdout);
+ printerror(application.verbose_state.debug, "ERROR ppol: The polarization type of the data cannot be handled by ppol.");
  return 0;
       }
-    }else if(datain.poltype == POLTYPE_UNKNOWN) {
-      fflush(stdout);
-      printwarning(application.verbose_state.debug, "WARNING ppol: It is assumed that the data are Stokes parameters.");
-    }else if(datain.poltype != POLTYPE_STOKES) {
-      fflush(stdout);
-      printerror(application.verbose_state.debug, "ERROR ppol: The polarization type of the data cannot be handled by ppol.");
-      return 0;
+      if(datain.NrPols != 4) {
+ fflush(stdout);
+ printerror(application.verbose_state.debug, "ERROR ppol: Need Stokes IQUV data, but the number of polarization channels != 4!");
+ return 0;
+      }
     }
     if(datain.NrSubints > 1) {
       if(application.oformat == PPOL_format) {
@@ -334,11 +346,6 @@ int main(int argc, char **argv)
  printf("Data contains multiple frequency channels. Data will be written out in FITS format.\n");
  application.oformat = FITS_format;
       }
-    }
-    if(datain.NrPols != 4) {
-      fflush(stdout);
-      printerror(application.verbose_state.debug, "ERROR ppol: Need Stokes IQUV data, but the number of polarization channels != 4!");
-      return 0;
     }
       region_frac_to_int(&(application.onpulse), datain.NrBins, 0);
     long total_nr_offpulse_file_bins;
@@ -374,7 +381,7 @@ int main(int argc, char **argv)
  strcpy(pgplot_options.box.ylabel, "Intensity");
  strcpy(pgplot_options.box.title, txt);
  strcpy(pgplot_options.viewport.plotDevice, PlotDevice);
- pgplotGraph1(&pgplot_options, profileI, NULL, NULL, total_nr_offpulse_file_bins, 0, total_nr_offpulse_file_bins, 0, 0, total_nr_offpulse_file_bins, 0, 0, 0, 1, 0, 0, 1, 1, &(application.onpulse), application.verbose_state);
+ pgplotGraph1(&pgplot_options, profileI, NULL, NULL, total_nr_offpulse_file_bins, 0, total_nr_offpulse_file_bins, 0, 0, total_nr_offpulse_file_bins, 0, 0, 0, 1, 0, 1, 0, 1, 1, &(application.onpulse), -1, application.verbose_state);
  if(firstfiletoopen == 0) {
    ppgslct(deviceID);
  }
@@ -393,8 +400,9 @@ int main(int argc, char **argv)
       }else {
  nolongitudes = 0;
       }
- if(make_paswing_fromIQUV(&datain, extendedPol, application.onpulse, normalize, correctLbias, correctQV, correctV, nolongitudes, loffset, PAoffset_data, NULL, 1.0, verbose2) == 0)
+ if(make_paswing_fromIQUV(&datain, extendedPol, application.onpulse, normalize, correctLbias, correctQV, correctV, nolongitudes, loffset, PAoffset_data, NULL, 1.0, verbose2) == 0) {
    return 0;
+ }
       if(sigma_limit > 0
   ) {
  int pachannel;
@@ -429,7 +437,7 @@ int main(int argc, char **argv)
      }
    }
  }
- }
+      }
       if(datain.NrSubints > 1 || datain.NrFreqChan > 1) {
  fflush(stdout);
  printwarning(application.verbose_state.debug, "WARNING ppol: Only showing polarization of the first subint/frequency channel");
@@ -455,7 +463,7 @@ int main(int argc, char **argv)
       pgplot_options.box.title_ch = titlech;
       pgplot_options.box.title_lw = titlelw;
       pgplotPAplot(datain, extendedPol, 0, 0
-     , &pgplot_options, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", "\\gx [deg]", plotl1, plotl2, 0, plotI1, plotI2, plotp1, plotp2, 0.0, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-herrorbar", "-herrorbar2", "-verrorbar", "-verrorbar2", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, NULL, NULL, application.verbose_state);
+     , &pgplot_options, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", "\\gx [deg]", plotl1, plotl2, 0, plotI1, plotI2, plotp1, plotp2, 0.0, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-herrorbar", "-herrorbar2", "-verrorbar", "-verrorbar2", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, NULL, -90, 90, 1.0, NULL, 1.0, 0, application.verbose_state);
       if(firstfiletoopen) {
  ppgqid(&deviceID);
       }

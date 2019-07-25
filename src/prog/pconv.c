@@ -99,14 +99,20 @@ int main(int argc, char **argv)
   }
   cleanPSRData(&fout, application.verbose_state);
   while((dummy_ptr = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
-  if(application.iformat <= 0)
-    application.iformat = guessPSRData_format(dummy_ptr, 0, application.verbose_state);
-  if(isValidPSRDATA_format(application.iformat) == 0) {
-    printerror(application.verbose_state.debug, "ERROR pconv: Please specify a valid input format with the -iformat option.");
-    terminateApplication(&application);
-    closePSRData(&fout, 0, application.verbose_state);
-    return 0;
-  }
+    if(application.iformat <= 0) {
+      application.iformat = guessPSRData_format(dummy_ptr, 0, application.verbose_state);
+      if(application.iformat == -2 || application.iformat == -3) {
+ closePSRData(&fout, 0, application.verbose_state);
+ terminateApplication(&application);
+ return 0;
+      }
+    }
+    if(isValidPSRDATA_format(application.iformat) == 0) {
+      printerror(application.verbose_state.debug, "ERROR pconv: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", dummy_ptr);
+      closePSRData(&fout, 0, application.verbose_state);
+      terminateApplication(&application);
+      return 0;
+    }
   if(!openPSRData(&fin, dummy_ptr, application.iformat, 0, read_wholefile, 0, application.verbose_state))
     return 0;
   if(read_wholefile == 0) {
@@ -175,6 +181,7 @@ int main(int argc, char **argv)
       void *data_ptr;
       if(fin.NrSubints > 1) {
  printerror(application.verbose_state.debug, "ERROR pconv: Non-folded sigproc data can be converted in PuMa format with the -memsave option. This data has %ld subints.", fin.NrSubints);
+ return 0;
       }
       if(fin.NrBits == 32) {
  data_ptr = malloc(4*fin.NrFreqChan);
@@ -184,6 +191,7 @@ int main(int argc, char **argv)
  sample_b = data_ptr;
       }else {
  printerror(application.verbose_state.debug, "ERROR pconv: Only 32-bit or 8-bit sigproc data can be converted in PuMa format. This is %ld bit data.", fin.NrBits);
+ return 0;
       }
       if(data_ptr == NULL) {
  printerror(application.verbose_state.debug, "ERROR pconv: Cannot allocate memory.");

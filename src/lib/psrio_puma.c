@@ -653,8 +653,8 @@ void beheader_convert(Header_type *src, Header_type *dst)
 int prheader(Header_type *inphdr,FILE *srcfile)
 {
   int r;
-  Header_type behdr;
 #if defined ( __linux__) || defined (__alpha)
+  Header_type behdr;
   r = fread(&behdr,sizeof(Header_type),1,srcfile);
   beheader_convert(&behdr,inphdr);
 #else
@@ -673,8 +673,8 @@ int prheader(Header_type *inphdr,FILE *srcfile)
 int pwheader(Header_type *outphdr,FILE *dstfile)
 {
   int r;
-  Header_type behdr;
 #if defined ( __linux__) || defined (__alpha)
+  Header_type behdr;
   beheader_convert(outphdr,&behdr);
   r = fwrite(&behdr,sizeof(Header_type),1,dstfile);
 # else
@@ -992,11 +992,11 @@ void FillPuMaHeader(Header_type *hdr, int obsID, int timefilenr, int freqband, i
 {
   int i;
   memset(hdr, 0, sizeof(Header_type));
-  sprintf(hdr->gen.HdrVer, "DPC_1.3");
-  sprintf(hdr->gen.Platform, "PuMaISim");
+  strcpy(hdr->gen.HdrVer, "DPC_1.3");
+  strcpy(hdr->gen.Platform, "PuMaISim");
   sprintf(hdr->gen.ThisFileName, "%d.%05d.%d.puma", obsID, timefilenr, freqband);
   sprintf(hdr->gen.ScanNum, "%d", obsID);
-  sprintf(hdr->gen.Comment, "PuMaISim");
+  strcpy(hdr->gen.Comment, "PuMaISim");
   hdr->gen.NFiles=NFiles;
   hdr->gen.FileNum=FileNum;
   hdr->gen.TapeID[0] = 0;
@@ -1015,20 +1015,20 @@ void FillPuMaHeader(Header_type *hdr, int obsID, int timefilenr, int freqband, i
   hdr->gen.Cluster[freqband] = TRUE;
   hdr->gen.DataMJD = DataMJD;
   hdr->gen.DataTime = DataTime;
-  sprintf(hdr->obsy.Name, observatoryname);
+  strcpy(hdr->obsy.Name, observatoryname);
   hdr->obsy.Long = longitude;
   hdr->obsy.Lat = latitude;
   hdr->obsy.Height = height;
-  sprintf(hdr->obs.ObsName, ObsName);
-  sprintf(hdr->obs.ObsType, "observation");
-  sprintf(hdr->obs.LastCalID, "CalId");
+  strcpy(hdr->obs.ObsName, ObsName);
+  strcpy(hdr->obs.ObsType, "observation");
+  strcpy(hdr->obs.LastCalID, "CalId");
   hdr->obs.StMJD = StartMJD;
   hdr->obs.StTime = StTime;
   hdr->obs.StLST = 0;
   hdr->obs.MaserOffset = MaserOffset;
   hdr->obs.Dur = Dur;
   hdr->obs.IonRM = 0;
-  sprintf(hdr->src.Pulsar, "%s", pulsar);
+  strcpy(hdr->src.Pulsar, pulsar);
   i = -1;
   do{
     i++;
@@ -1039,7 +1039,7 @@ void FillPuMaHeader(Header_type *hdr, int obsID, int timefilenr, int freqband, i
   }while(hdr->src.Pulsar[i] != 0);
   hdr->src.RA = RA;
   hdr->src.Dec = Dec;
-  sprintf(hdr->src.Epoch, "%s", Epoch);
+  strcpy(hdr->src.Epoch, Epoch);
   for(i = 0; i < MAXTELESCOPES; i++) {
     hdr->WSRT.Tel[i].Active = FALSE;
     hdr->WSRT.Tel[i].NoiseSrcOff = FALSE;
@@ -1093,10 +1093,10 @@ void FillPuMaHeader(Header_type *hdr, int obsID, int timefilenr, int freqband, i
   hdr->mode.FloatsOut=FALSE;
   hdr->mode.BitsPerSamp = BitsPerSamp;
   hdr->mode.SigmaRange = SigmaRange;
-  sprintf(hdr->software.Master, "Created by PuMaISim");
+  strcpy(hdr->software.Master, "Created by PuMaISim");
   for(i = 0; i < MAXDSPSPERBOARD; i++)
     hdr->software.DSP[i][0] = 0;
-  sprintf(hdr->software.Filter, "Created by PuMaISim");
+  strcpy(hdr->software.Filter, "Created by PuMaISim");
   hdr->check.ExitCodeObsy = 0;
   hdr->check.ExitCodePuMa = 0;
   for(i = 0; i < MAXFREQBANDS; i++)
@@ -1105,14 +1105,15 @@ void FillPuMaHeader(Header_type *hdr, int obsID, int timefilenr, int freqband, i
 }
 void beadj_convert_write(Adjustments outpadj, FILE *fout)
 {
-  Adjustments beadj;
 #ifdef __linux__
+  Adjustments beadj;
   PutBEint(&beadj.framenumber, outpadj.framenumber);
   PutBEfloat(&beadj.scale, outpadj.scale);
   PutBEfloat(&beadj.offset, outpadj.offset);
   fwrite(&beadj,sizeof(Adjustments),1,fout);
 #endif
 #ifdef __alpha
+  Adjustments beadj;
   PutBEint(&beadj.framenumber, outpadj.framenumber);
   PutBEfloat(&beadj.scale, outpadj.scale);
   PutBEfloat(&beadj.offset, outpadj.offset);
@@ -1134,7 +1135,7 @@ void FillPuMaHeaderSimple(Header_type *hdr, int obsID, int timefilenr, int freqb
   StartMJDint = StartMJD;
   StartMJD -= StartMJDint;
   StartMJD *= 24*3600;
-  sprintf(Epoch, "J2006");
+  strcpy(Epoch, "J2006");
   if(flipped == 0)
     NonFlip = TRUE;
   else

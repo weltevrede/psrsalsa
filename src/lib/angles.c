@@ -94,6 +94,14 @@ double derotate_180_small_double(double a)
     y = y-180.0;
   return y;
 }
+double derotate_90_small_double(double a)
+{
+  double y;
+  y = derotate_90_double(a);
+  if(y >= 45.0)
+    y = y-90.0;
+  return y;
+}
 float polar_angle_rad(float x, float y)
 {
   float alpha;

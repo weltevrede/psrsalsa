@@ -37,6 +37,7 @@ typedef struct {
   long subint_start, subint_end;
   long x1, x2;
   int grayscalemode;
+  int nrcontours;
   int nrZappedVectors, nrZappedSubints;
 }plot_state_def;
 void copystackstate(plot_state_def state1, plot_state_def *state2)
@@ -46,6 +47,7 @@ void copystackstate(plot_state_def state1, plot_state_def *state2)
   state2->x1 = state1.x1;
   state2->x2 = state1.x2;
   state2->grayscalemode = state1.grayscalemode;
+  state2->nrcontours = state1.nrcontours;
   state2->nrZappedVectors = state1.nrZappedVectors;
   state2->nrZappedSubints = state1.nrZappedSubints;
 }
@@ -85,6 +87,7 @@ int main(int argc, char **argv)
   plot_state_def *stack_state;
   int current_stack_pos;
   int grayscalemode_start;
+  int nrcontours_start;
   int showTwice_flag;
   int nonumside_flag;
   int disable_x_numbers, disable_y_numbers;
@@ -159,7 +162,11 @@ int main(int argc, char **argv)
   application.switch_template = 1;
   application.switch_libversions = 1;
   application.cmap = PPGPLOT_INVERTED_HEAT;
+#ifdef HAVEPGPLOT2
+  strcpy(application.pgplotdevice, "/pw");
+#else
   strcpy(application.pgplotdevice, "/xs");
+#endif
   application.switch_forceUniformFreqLabelling = 1;
   interactive_flag = 0;
   dxshift_start = 0;
@@ -200,6 +207,7 @@ int main(int argc, char **argv)
   fixverticalscale_flag = 0;
   nokeypresses_flag = 0;
   grayscalemode_start = -1;
+  nrcontours_start = 0;
   scale_start = 1;
   scale2_start = 0;
   nrpanelsx = 1;
@@ -249,7 +257,7 @@ int main(int argc, char **argv)
     printf("              bin nr. If plotting versus pulse longitude/time/phase, you can\n");
     printf("              use the -dl option.\n");
     printf("-lw           set line width of line plot (not used in map mode).\n");
-    printf("-lp           Show graphics as a \"joy division\" line plot rather than a colour\n");
+    printf("-lp           Show graphics as a \"Joy Division\" line plot rather than a colour\n");
     printf("              map (-map). For a single row of data -lp is the default.\n");
     printf("-map          Show graphics as a colour map (default if multiple rows in data).\n");
     printf("              The bin centre is plotted at an integer bin nr. If plotting versus\n");
@@ -313,6 +321,10 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-prange") == 0) {
  if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld %ld", &subint_start, &subint_end, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
+ if(subint_end < subint_start) {
+   printerror(application.verbose_state.debug, "ERROR pplot: The selected subint range seems to be such that the first subint exceeds the final.");
    return 0;
  }
  subint_range_defined = 1;
@@ -476,7 +488,22 @@ int main(int argc, char **argv)
       }else if(strcmp(argv[i], "-lp") == 0) {
  grayscalemode_start = 0;
       }else if(strcmp(argv[i], "-map") == 0) {
- grayscalemode_start = 1;
+ if(grayscalemode_start == 2) {
+   grayscalemode_start = 3;
+ }else {
+   grayscalemode_start = 1;
+ }
+      }else if(strcmp(argv[i], "-cont") == 0) {
+ if(grayscalemode_start == 1) {
+   grayscalemode_start = 3;
+ }else {
+   grayscalemode_start = 2;
+ }
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &nrcontours_start, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
+ i++;
       }else if(strcmp(argv[i], "-showtop") == 0) {
  showtop = 1;
       }else if(strcmp(argv[i], "-showright") == 0) {
@@ -500,7 +527,7 @@ int main(int argc, char **argv)
     }
   }
   if(histswitch && grayscalemode_start) {
-    printerror(application.verbose_state.debug, "ERROR pplot: Cannot use the -hist and -map options simultaneously.");
+    printerror(application.verbose_state.debug, "ERROR pplot: Cannot use the -hist and -map/-cont options simultaneously.");
     return 0;
   }
   if(applicationFilenameList_checkConsecutive(argv, application.verbose_state) == 0) {
@@ -599,6 +626,8 @@ int main(int argc, char **argv)
     scale2 = scale2_start;
     stack_state[0].grayscalemode = grayscalemode_start;
     stack_state[1].grayscalemode = grayscalemode_start;
+    stack_state[0].nrcontours = nrcontours_start;
+    stack_state[1].nrcontours = nrcontours_start;
     if(notitleset) {
       strcpy(title, inputfilename);
     }
@@ -673,10 +702,13 @@ int main(int argc, char **argv)
    terminateApplication(&application);
    return 0;
  }
- if(iformat <= 0)
+ if(iformat <= 0) {
    iformat = guessPSRData_format(inputfilename, 0, application.verbose_state);
+   if(iformat == -2 || iformat == -3)
+     return 0;
+ }
  if(isValidPSRDATA_format(iformat) == 0) {
-   printerror(application.verbose_state.debug, "ERROR pplot: Please specify a valid input format with the -iformat option.\n");
+   printerror(application.verbose_state.debug, "ERROR pplot: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", inputfilename);
    free(zappedVectors);
    free(zappedSubints);
    free(stack_state);
@@ -733,6 +765,18 @@ int main(int argc, char **argv)
        return 0;
      }
      fin.fixedtsamp = period/(double)fin.NrBins;
+   }
+ }
+ if(fin.NrSubints > 1) {
+   if(fin.freqMode != FREQMODE_UNIFORM) {
+     if(fin.freqMode == FREQMODE_FREQTABLE) {
+       printwarning(application.verbose_state.debug, "WARNING pplot: Different subints appear to have different effective frequencies. The subints will not be aligned properly if they are dedispersed with different reference frequencies.");
+     }else {
+       printwarning(application.verbose_state.debug, "WARNING pplot: The subints might not be aligned properly if they are dedispersed with different reference frequencies.");
+     }
+     if(showtop) {
+       printwarning(application.verbose_state.debug, "WARNING pplot: As a result, the -shoptop option might not result in a proper pulse profile.");
+     }
    }
  }
  region_frac_to_int(&(application.onpulse), fin.NrBins, 0);
@@ -864,8 +908,13 @@ int main(int argc, char **argv)
    }
    if(application.verbose_state.verbose) printf("Specified binrange: %d - %d\n", bin1, bin2);
  }
- if(dataSubset_allocated)
+ if(dataSubset_allocated) {
    free(dataSubset);
+ }
+ if(subint_end < subint_start) {
+   printerror(application.verbose_state.debug, "ERROR pplot: The selected subint range seems to be such that the first subint exceeds the final.");
+   return 0;
+ }
  dataSubset = (float *)malloc((subint_end-subint_start+1)*fin.NrBins*sizeof(float));
  dataSubset_allocated = 1;
  if(stack_poly_allocated) {
@@ -904,15 +953,16 @@ int main(int argc, char **argv)
    }
  }
  if(stack_state[current_stack_pos].grayscalemode == -1) {
-   if(fin.NrSubints > 1)
+   if(fin.NrSubints > 1) {
      stack_state[current_stack_pos].grayscalemode = 1;
-   else
+   }else {
      stack_state[current_stack_pos].grayscalemode = 0;
+   }
  }
  if(data_read == 0) {
    if(change_pulse_numbering_flag) {
      if(interactive_flag != 0 || stack_state[current_stack_pos].grayscalemode != 0) {
-       printwarning(application.verbose_state.debug, "WARNING: -map mode and interactive mode are incompatable with the -0 and -1 options. Commands are ignored.");
+       printwarning(application.verbose_state.debug, "WARNING: -map/-cont mode and interactive mode are incompatable with the -0 and -1 options. Commands are ignored.");
      }else {
        subint_end -= subint_start - change_pulse_numbering_value;
        subint_start = change_pulse_numbering_value;
@@ -1080,9 +1130,21 @@ int main(int argc, char **argv)
    min = scalerange_min;
    max = scalerange_max;
  }
- if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 0, 0, NULL, 1, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
-   printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot data.");
-   return 0;
+ if(stack_state[current_stack_pos-1].grayscalemode == 1) {
+   if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 0, 0, NULL, 1, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot data.");
+     return 0;
+   }
+ }else if(stack_state[current_stack_pos-1].grayscalemode == 2) {
+   if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 1, stack_state[current_stack_pos-1].nrcontours, NULL, plotlw, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot data.");
+     return 0;
+   }
+ }else {
+   if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 0, stack_state[current_stack_pos-1].nrcontours, NULL, plotlw, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot data.");
+     return 0;
+   }
  }
       }else {
  printf("Plotting vectors (vertical axis): %ld - %ld\n", stack_state[current_stack_pos-1].subint_start, stack_state[current_stack_pos-1].subint_end);
@@ -1402,7 +1464,7 @@ int main(int argc, char **argv)
  }
  if(ytitleset == 0) {
    if(ytitle_set_to_intensity) {
-     if(stack_state[current_stack_pos-1].grayscalemode != 1) {
+     if(stack_state[current_stack_pos-1].grayscalemode == 0) {
        strcpy(ytitle, "Intensity");
      }else {
        strcpy(ytitle, "Pulse number");
@@ -1411,12 +1473,12 @@ int main(int argc, char **argv)
      strcpy(ytitle, "Frequency channel");
    }else if(ytitle_set_to_pulsenumber && yUnitsSwitch == 0) {
      strcpy(ytitle, "Pulse number");
-     if(stack_state[current_stack_pos-1].subint_start == stack_state[current_stack_pos-1].subint_end && stack_state[current_stack_pos-1].grayscalemode != 1) {
+     if(stack_state[current_stack_pos-1].subint_start == stack_state[current_stack_pos-1].subint_end && stack_state[current_stack_pos-1].grayscalemode == 0) {
        strcpy(ytitle, "Intensity");
      }
    }else if(ytitle_set_to_subint && yUnitsSwitch == 0) {
      strcpy(ytitle, "Subint number");
-     if(stack_state[current_stack_pos-1].subint_start == stack_state[current_stack_pos-1].subint_end && stack_state[current_stack_pos-1].grayscalemode != 1) {
+     if(stack_state[current_stack_pos-1].subint_start == stack_state[current_stack_pos-1].subint_end && stack_state[current_stack_pos-1].grayscalemode == 0) {
        strcpy(ytitle, "Intensity");
      }
    }else if(ytitle_set_to_p3fold && yUnitsSwitch) {
@@ -1556,7 +1618,9 @@ int main(int argc, char **argv)
      }
      break;
    case 'M':
+     printf("  c = contour map\n");
      printf("  m = colour map\n");
+     printf("  C = contour + colour map\n");
      printf("  l = line drawing\n");
      fflush(stdout);
      if(current_stack_pos >= max_nr_stack) {
@@ -1571,6 +1635,20 @@ int main(int argc, char **argv)
      if(key2 == 'm') {
        printf("set colour map mode\n");
        stack_state[current_stack_pos].grayscalemode = 1;
+       scale = 1;
+     }else if(key2 == 'c') {
+       printf("set contour map mode\n");
+       stack_state[current_stack_pos].grayscalemode = 2;
+       printf("\nType the desired nr of contours in the terminal: ");
+       fflush(stdout);
+       scanf("%d", &(stack_state[current_stack_pos].nrcontours));
+       scale = 1;
+     }else if(key2 == 'C') {
+       printf("set contour + colour map mode\n");
+       stack_state[current_stack_pos].grayscalemode = 3;
+       printf("\nType the desired nr of contours in the terminal: ");
+       fflush(stdout);
+       scanf("%d", &(stack_state[current_stack_pos].nrcontours));
        scale = 1;
      }else {
        printf("set line plot mode\n");
