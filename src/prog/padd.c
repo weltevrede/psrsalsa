@@ -21,6 +21,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
+#include <gsl/gsl_sort.h>
 #include "psrsalsa.h"
 #define MaxNrOnpulseRegions 10
 int NrOnpulseRegions, OnPulseRegion[MaxNrOnpulseRegions][2];
@@ -243,10 +244,20 @@ int main(int argc, char **argv)
     currentfilenumber++;
   }
   printf("Reading of input files done\n");
+  unsigned long *sort_indx;
+  sort_indx = (unsigned long *)malloc(nrinputfiles*sizeof(unsigned long));
+  if(sort_indx == NULL) {
+    printerror(application.verbose_state.debug, "ERROR padd: Memory allocation error\n");
+    return 0;
+  }
+    for(currentfilenumber = 0; currentfilenumber < nrinputfiles; currentfilenumber++) {
+      sort_indx[currentfilenumber] = currentfilenumber;
+    }
   cleanPSRData(&fout, application.verbose_state);
   copy_params_PSRData(*(fin[0]), &fout, application.verbose_state);
-  if(onlyI)
+  if(onlyI) {
     fout.NrPols = 1;
+  }
   fout.format = application.oformat;
   fout.NrSubints = 0;
   subintslost = 0;
@@ -284,9 +295,10 @@ int main(int argc, char **argv)
     }
   }else {
     for(i = 0; i < nrinputfiles; i++) {
-      for(nsub = 0; nsub < fin[i]->NrSubints; nsub++) {
+      currentfilenumber = sort_indx[i];
+      for(nsub = 0; nsub < fin[currentfilenumber]->NrSubints; nsub++) {
  if(currentOutputSubint < fout.NrSubints)
-   fout.tsub_list[currentOutputSubint] += get_tsub(*(fin[i]), nsub, application.verbose_state);
+   fout.tsub_list[currentOutputSubint] += get_tsub(*(fin[currentfilenumber]), nsub, application.verbose_state);
  if(sumNsub == 1) {
    subintWritten = 1;
  }else if(curNrInsubint == sumNsub - 1) {
@@ -347,10 +359,12 @@ int main(int argc, char **argv)
   curNrInsubint = 0;
   subintWritten = 0;
   rewindFilenameList(&application);
+  long currentfilenumber_index;
   while((inputname = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
+    currentfilenumber_index = sort_indx[currentfilenumber];
     if(memsave) {
-      closePSRData(fin[currentfilenumber], 0, application.verbose_state);
-      if(openPSRData(fin[currentfilenumber], inputname, application.iformat, 0, 1, 0, application.verbose_state) == 0) {
+      closePSRData(fin[currentfilenumber_index], 0, application.verbose_state);
+      if(openPSRData(fin[currentfilenumber_index], inputname, application.iformat, 0, 1, 0, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "ERROR padd: Cannot open %s\n", inputname);
  return 0;
       }
@@ -362,7 +376,7 @@ int main(int argc, char **argv)
    }
  }
       }
-      if(preprocessApplication(&application, fin[currentfilenumber]) == 0) {
+      if(preprocessApplication(&application, fin[currentfilenumber_index]) == 0) {
  printerror(application.verbose_state.debug, "ERROR padd: preprocess option failed on file %s\n", inputname);
  return 0;
       }
@@ -372,7 +386,7 @@ int main(int argc, char **argv)
     if(shift < 0)
       shift += fout.NrBins;
     if(noinput == 0 && currentfilenumber != 0) {
-      if(read_profilePSRData(*fin[currentfilenumber], Iprofile, NULL, 0, application.verbose_state) != 1) {
+      if(read_profilePSRData(*fin[currentfilenumber_index], Iprofile, NULL, 0, application.verbose_state) != 1) {
  printerror(application.verbose_state.debug, "ERROR padd: Reading pulse profile failed.");
  return 0;
       }
@@ -406,13 +420,13 @@ int main(int argc, char **argv)
       }while(j < 10);
     }
     if(shift != 0) {
-      if(continuous_shift(*fin[currentfilenumber], &clone, shift, circularShift, "padd", MEMORY_format, 0, NULL, application.verbose_state, application.verbose_state.debug) != 1) {
+      if(continuous_shift(*fin[currentfilenumber_index], &clone, shift, circularShift, "padd", MEMORY_format, 0, NULL, application.verbose_state, application.verbose_state.debug) != 1) {
  printerror(application.verbose_state.debug, "ERROR padd: circular shift failed.");
       }
-      swap_orig_clone(fin[currentfilenumber], &clone, application.verbose_state);
+      swap_orig_clone(fin[currentfilenumber_index], &clone, application.verbose_state);
     }
     long nrPulsesInCurFile;
-    nrPulsesInCurFile = fin[currentfilenumber]->NrSubints;
+    nrPulsesInCurFile = fin[currentfilenumber_index]->NrSubints;
     if(shift == 0 && circularShift == 0)
       nrPulsesInCurFile -= 1;
     for(nsub = 0; nsub < nrPulsesInCurFile; nsub++) {
@@ -422,16 +436,16 @@ int main(int argc, char **argv)
  nrpolsinloop = 1;
       for(pol = 0; pol < nrpolsinloop; pol++) {
  for(fchan = 0; fchan < fout.NrFreqChan; fchan++) {
-   if(readPulsePSRData(fin[currentfilenumber], nsub, pol, fchan, 0, fin[currentfilenumber]->NrBins, Iprofile, application.verbose_state) != 1) {
+   if(readPulsePSRData(fin[currentfilenumber_index], nsub, pol, fchan, 0, fin[currentfilenumber_index]->NrBins, Iprofile, application.verbose_state) != 1) {
      printerror(application.verbose_state.debug, "ERROR padd: Read error");
      return 0;
    }
    if(sumNsub == 1) {
      if(poladd == 0) {
-       if(writePulsePSRData(&fout, currentOutputSubint, pol, fchan, 0, fout.NrBins, Iprofile, application.verbose_state) != 1) {
-  printerror(application.verbose_state.debug, "ERROR padd: Write error");
-  return 0;
-       }
+  if(writePulsePSRData(&fout, currentOutputSubint, pol, fchan, 0, fout.NrBins, Iprofile, application.verbose_state) != 1) {
+    printerror(application.verbose_state.debug, "ERROR padd: Write error");
+    return 0;
+  }
      }else {
        if(writePulsePSRData(&fout, nsub, currentfilenumber, fchan, 0, fout.NrBins, Iprofile, application.verbose_state) != 1) {
   printerror(application.verbose_state.debug, "ERROR padd: Write error");
@@ -472,14 +486,14 @@ int main(int argc, char **argv)
  currentOutputSubint++;
       }
       if(application.verbose_state.nocounters == 0) {
- printf("Processing input file %d: %.1f%%     \r", currentfilenumber+1, (100.0*(nsub+1))/(float)(fin[currentfilenumber]->NrSubints));
+ printf("Processing input file %d: %.1f%%     \r", currentfilenumber+1, (100.0*(nsub+1))/(float)(fin[currentfilenumber_index]->NrSubints));
  fflush(stdout);
       }
     }
     if(application.verbose_state.nocounters == 0) {
       printf("Processing file %d is done.                                \n", currentfilenumber+1);
     }
-    closePSRData(fin[currentfilenumber], 0, application.verbose_state);
+    closePSRData(fin[currentfilenumber_index], 0, application.verbose_state);
     currentfilenumber++;
   }
   closePSRData(&fout, 0, application.verbose_state);
@@ -496,6 +510,7 @@ int main(int argc, char **argv)
     free(fin[i]);
   }
   free(fin);
+  free(sort_indx);
   terminateApplication(&application);
   return 0;
 }

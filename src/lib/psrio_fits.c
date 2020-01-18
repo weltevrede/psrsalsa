@@ -721,6 +721,16 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
     return 0;
   }
+  if(fits_write_key(datafile->fits_fptr, TSTRING, "OBSERVER", datafile->observer, "Observer name(s)", &status) != 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
+    return 0;
+  }
+  if(fits_write_key(datafile->fits_fptr, TSTRING, "PROJID", datafile->projectID, "Project name", &status) != 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
+    return 0;
+  }
   mjd2dateString(datafile->mjd_start, dummy_txt, 0, 1, "T");
   if(fits_write_key(datafile->fits_fptr, TSTRING, "DATE-OBS", dummy_txt, "Date of observation (YYYY-MM-DDThh:mm:ss UTC)", &status) != 0) {
     fflush(stdout);
@@ -1510,7 +1520,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
   fits_strip_quotes(value, value_tmp);
   if(set_observatory_PSRData(datafile, value_tmp, verbose) == 0) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readEPNHeader: Setting observatory name failed.");
+    printerror(verbose.debug, "ERROR readPSRFITSHeader: Setting observatory name failed.");
     return 0;
   }
   if(fits_read_card(datafile->fits_fptr,"ANT_X", card, &status)) {
@@ -1555,7 +1565,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
   fits_strip_quotes(value, value_tmp);
   if(set_psrname_PSRData(datafile, value_tmp, verbose) == 0) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readEPNHeader: Setting pulsar name failed.");
+    printerror(verbose.debug, "ERROR readPSRFITSHeader: Setting pulsar name failed.");
     return 0;
   }
   if (fits_read_card(datafile->fits_fptr,"BACKEND", card, &status)) {
@@ -1567,8 +1577,34 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
   fits_strip_quotes(value, value_tmp);
   if(set_instrument_PSRData(datafile, value_tmp, verbose) == 0) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readEPNHeader: Setting instrument name failed.");
+    printerror(verbose.debug, "ERROR readFITSHeader: Setting instrument name failed.");
     return 0;
+  }
+  if(fits_read_card(datafile->fits_fptr,"OBSERVER", card, &status)) {
+    fflush(stdout);
+    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): OBSERVER keyword does not exist", datafile->filename);
+    status = 0;
+  }else {
+    fits_parse_value(card, value, comment, &status);
+    fits_strip_quotes(value, value_tmp);
+    if(set_observer_PSRData(datafile, value_tmp, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRFITSHeader: Setting name observer failed.");
+      return 0;
+    }
+  }
+  if(fits_read_card(datafile->fits_fptr,"PROJID", card, &status)) {
+    fflush(stdout);
+    printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): PROJID keyword does not exist", datafile->filename);
+    status = 0;
+  }else {
+    fits_parse_value(card, value, comment, &status);
+    fits_strip_quotes(value, value_tmp);
+    if(set_projectID_PSRData(datafile, value_tmp, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRFITSHeader: Setting project ID failed.");
+      return 0;
+    }
   }
   if(fits_read_card(datafile->fits_fptr, "RA", card, &status)) {
     fflush(stdout);

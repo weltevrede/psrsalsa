@@ -133,7 +133,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "-selectonpulse     Enables manual graphical selection of more on-pulse regions\n");
     fprintf(stdout, "                   in addition to any provided on the command line.\n");
     fprintf(stdout, "-sigma             Set sigma limit on L required for PA calculation [def=%.1f].\n", sigma_limit);
-    fprintf(stdout, "                   Here sigma is defined as the RMS of the unbiased off-pulse L.\n");
+    fprintf(stdout, "                   Here sigma is defined as the RMS of the not de-biased off-pulse L.\n");
     fprintf(stdout, "-2                 Write out two pulse periods (so there is duplicated data).\n");
     fprintf(stdout, "-extendedpol       Also generate the total amount of polarization\n");
     fprintf(stdout, "\nOptions affecting the plotting:\n");

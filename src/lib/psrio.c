@@ -199,7 +199,9 @@ void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
   datafile->institute = malloc(1);
   datafile->instrument = malloc(1);
   datafile->scanID = malloc(1);
-  if(datafile->psrname == NULL || datafile->observatory == NULL || datafile->institute == NULL || datafile->instrument == NULL || datafile->scanID == NULL) {
+  datafile->observer = malloc(1);
+  datafile->projectID = malloc(1);
+  if(datafile->psrname == NULL || datafile->observatory == NULL || datafile->institute == NULL || datafile->instrument == NULL || datafile->scanID == NULL || datafile->observer == NULL || datafile->projectID == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR cleanPSRData: Memory allocation error.");
     exit(0);
@@ -209,6 +211,8 @@ void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
   datafile->institute[0] = 0;
   datafile->instrument[0] = 0;
   datafile->scanID[0] = 0;
+  datafile->observer[0] = 0;
+  datafile->projectID[0] = 0;
   datafile->offpulse_rms = NULL;
   datafile->feedtype = FEEDTYPE_UNKNOWN;
   datafile->poltype = POLTYPE_UNKNOWN;
@@ -348,6 +352,16 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
     printerror(verbose.debug, "ERROR copy_paramsPSRData: Setting scan ID name failed.");
     return 0;
   }
+  if(set_observer_PSRData(datafile_dest, datafile_source.observer, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR copy_paramsPSRData: Setting name of observer failed.");
+    return 0;
+  }
+  if(set_projectID_PSRData(datafile_dest, datafile_source.projectID, verbose) == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR copy_paramsPSRData: Setting project ID failed.");
+    return 0;
+  }
   datafile_dest->telescope_X = datafile_source.telescope_X;
   datafile_dest->telescope_Y = datafile_source.telescope_Y;
   datafile_dest->telescope_Z = datafile_source.telescope_Z;
@@ -432,7 +446,7 @@ int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbos
 {
   int ret, dummyi;
   char identifier[] = "PSRSALSAdump";
-  int version = 1;
+  int version = 2;
   ret = fwrite(identifier, 12, 1, datafile->fptr_hdr);
   if(ret != 1) {
     fflush(stdout);
@@ -469,6 +483,36 @@ int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbos
   }
   if(dummyi > 0) {
     ret = fwrite(datafile->scanID, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  dummyi = strlen(datafile->observer);
+  ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fwrite(datafile->observer, sizeof(char), dummyi, datafile->fptr_hdr);
+    if(ret != dummyi) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+      return 0;
+    }
+  }
+  dummyi = strlen(datafile->projectID);
+  ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(dummyi > 0) {
+    ret = fwrite(datafile->projectID, sizeof(char), dummyi, datafile->fptr_hdr);
     if(ret != dummyi) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
@@ -902,7 +946,7 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
 {
   int ret, dummyi;
   char identifier[13], *txt;
-  int version;
+  int version, maxversion_supported = 2;
   txt = malloc(10000);
   if(txt == NULL) {
     fflush(stdout);
@@ -927,9 +971,9 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
     printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
     return 0;
   }
-  if(version < 1 || version > 1) {
+  if(version < 1 || version > maxversion_supported) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readPSRSALSAHeader: File %s is in an unsupported version number (%d)", datafile->filename, version);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: File %s is in an unsupported version number (%d). The maximum supported version in your installation is %d. An update might be required to read this file.", datafile->filename, version, maxversion_supported);
     return 0;
   }
   if(verbose.debug) {
@@ -983,6 +1027,58 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
       fflush(stdout);
       printerror(verbose.debug, "ERROR readPSRSALSAHeader: Setting scan ID failed for %s", datafile->filename);
       return 0;
+    }
+  }
+  if(version > 1) {
+    ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+    if(ret != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    if(dummyi > 9999) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Maximum string length exceeded for %s", datafile->filename);
+      return 0;
+    }
+    if(dummyi > 0) {
+      ret = fread(txt, sizeof(char), dummyi, datafile->fptr_hdr);
+      if(ret != dummyi) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+ return 0;
+      }
+      txt[dummyi] = 0;
+      if(set_observer_PSRData(datafile, txt, verbose) == 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Setting scan ID failed for %s", datafile->filename);
+ return 0;
+      }
+    }
+    ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+    if(ret != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    if(dummyi > 9999) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Maximum string length exceeded for %s", datafile->filename);
+      return 0;
+    }
+    if(dummyi > 0) {
+      ret = fread(txt, sizeof(char), dummyi, datafile->fptr_hdr);
+      if(ret != dummyi) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+ return 0;
+      }
+      txt[dummyi] = 0;
+      if(set_projectID_PSRData(datafile, txt, verbose) == 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Setting scan ID failed for %s", datafile->filename);
+ return 0;
+      }
     }
   }
   ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
@@ -1627,6 +1723,14 @@ int set_scanID_PSRData(datafile_definition *datafile_dest, char *scanID, verbose
 {
   return set_string_PSRData(&(datafile_dest->scanID), scanID, verbose);
 }
+int set_observer_PSRData(datafile_definition *datafile_dest, char *observer, verbose_definition verbose)
+{
+  return set_string_PSRData(&(datafile_dest->observer), observer, verbose);
+}
+int set_projectID_PSRData(datafile_definition *datafile_dest, char *projectID, verbose_definition verbose)
+{
+  return set_string_PSRData(&(datafile_dest->projectID), projectID, verbose);
+}
 int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
 {
   FILE *fin;
@@ -2214,6 +2318,10 @@ int closePSRData(datafile_definition *datafile, int perserve_info, verbose_defin
     datafile->instrument = NULL;
     free(datafile->scanID);
     datafile->scanID = NULL;
+    free(datafile->observer);
+    datafile->observer = NULL;
+    free(datafile->projectID);
+    datafile->projectID = NULL;
     if(datafile->tsamp_list != NULL) {
       free(datafile->tsamp_list);
       datafile->tsamp_list = NULL;
@@ -2485,7 +2593,7 @@ void printHeaderPSRData(datafile_definition datafile, int update, verbose_defini
     printf("observatory=%s  long=%lf deg lat=%lf deg (geodetic derived)\n", datafile.observatory, observatory_long_geodetic(datafile)*180.0/M_PI, observatory_lat_geodetic(datafile)*180.0/M_PI);
   }
   for(i = 0; i < verbose.indent; i++) printf(" ");
-  printf("institute=%s  instrument=%s\n", datafile.institute, datafile.instrument);
+  printf("projectID=%s  observer=%s  institute=%s  instrument=%s\n", datafile.projectID, datafile.observer, datafile.institute, datafile.instrument);
   for(i = 0; i < verbose.indent; i++) printf(" ");
   printf("feedtype=%d ", datafile.feedtype);
   if(datafile.feedtype == FEEDTYPE_LINEAR) {
@@ -3471,6 +3579,10 @@ int read_rmsPSRData(datafile_definition datafile, float *rms, float *avrg, int *
  nrOffpulseBins--;
     }
   }
+  if(nrOffpulseBins == 0) {
+    printerror(verbose.debug, "ERROR read_rmsPSRData: An off-pulse rms was requested, but everything is defined as onpulse.");
+    return 0;
+  }
   if(freqchan < 0) {
     freq0 = 0;
     freq1 = datafile.NrFreqChan;
@@ -3715,6 +3827,20 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
      return 0;
    }
    if(verbose.verbose) printf("  hdr.ScanID = %s\n", psrdata->scanID);
+ }else if(strcasecmp(identifier,"project") == 0 || strcasecmp(identifier,"projectid") == 0 || strcasecmp(identifier,"projid") == 0) {
+   if(set_projectID_PSRData(psrdata, value, verbose) == 0) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Setting project ID failed.");
+     return 0;
+   }
+   if(verbose.verbose) printf("  hdr.projectID = %s\n", psrdata->projectID);
+ }else if(strcasecmp(identifier, "observer") == 0 || strcasecmp(identifier, "observers") == 0) {
+   if(set_observer_PSRData(psrdata, value, verbose) == 0) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Setting name of observer(s) failed.");
+     return 0;
+   }
+   if(verbose.verbose) printf("  hdr.observer = %s\n", psrdata->observer);
  }else if(strcasecmp(identifier,"observatory") == 0 || strcasecmp(identifier,"telescope") == 0) {
    if(set_observatory_PSRData(psrdata, value, verbose) == 0) {
      fflush(stdout);

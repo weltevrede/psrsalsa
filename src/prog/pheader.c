@@ -27,7 +27,7 @@ psrsalsaApplication application;
 int main(int argc, char **argv)
 {
   int index, c_index, nrwords, iformat_initial_value, didhistory, didweights, didfreqlist, nohead, noweights, show_linenumber;
-  int maxfilenamelength, maxobservatorylength, maxgentypelength, maxscanidlength, maxinstrumentlength, maxfileformatlength, j;
+  int maxfilenamelength, maxobservatorylength, maxgentypelength, maxscanidlength, maxobserverlength, maxprojectidlength, maxinstrumentlength, maxfileformatlength, j;
   int showfootnotes, footnote_length, footnote_length2, footnote_search, footnote_parang, precision;
   long i;
   char *filename_ptr, cmd[5000];
@@ -104,10 +104,12 @@ int main(int argc, char **argv)
  printf("npol          Number of polarization channels\n");
  printf("nsub          Number of subints (or pulses in single-pulse data)\n");
  printf("observatory   Name of the observatory\n");
+ printf("observer      Observer identifier string\n");
  printf("p0            Period\n");
  printf("parang        Show (derived) parallactic angle at midpoint observation\n");
  printf("parang1       Show (derived) parallactic angle for first subint\n");
  printf("poltype       Polarization type (Stokes, coherency, etc.)\n");
+ printf("projectid     Project identifier string\n");
  printf("ra            Right ascension\n");
  printf("reffreq       Reference frequency (used for dedispersion etc)\n");
  printf("rm            Rotation measure\n");
@@ -177,6 +179,8 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "lat") == 0) {
       }else if(strcasecmp(cmd, "backend") == 0) {
       }else if(strcasecmp(cmd, "scanid") == 0) {
+      }else if(strcasecmp(cmd, "observer") == 0 || strcasecmp(cmd, "observers") == 0) {
+      }else if(strcasecmp(cmd, "project") == 0 || strcasecmp(cmd,"projectid") == 0 || strcasecmp(cmd,"projid") == 0) {
       }else if(strcasecmp(cmd, "parang") == 0) {
       }else if(strcasecmp(cmd, "parang1") == 0) {
       }else if(strcasecmp(cmd, "dedisp") == 0) {
@@ -334,6 +338,16 @@ int main(int argc, char **argv)
     if(strlen(datain[index].scanID) > maxscanidlength)
       maxscanidlength = strlen(datain[index].scanID);
   }
+  maxobserverlength = strlen("observer");
+  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
+    if(strlen(datain[index].observer) > maxobserverlength)
+      maxobserverlength = strlen(datain[index].observer);
+  }
+  maxprojectidlength = strlen("projectID");
+  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
+    if(strlen(datain[index].projectID) > maxprojectidlength)
+      maxprojectidlength = strlen(datain[index].projectID);
+  }
   if(nohead == 0) {
     if(show_linenumber)
       printf("line ");
@@ -434,6 +448,14 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "scanid") == 0) {
  printf(" scanid");
  for(j = 0; j < maxscanidlength - strlen("scanid"); j++)
+   printf(" ");
+      }else if(strcasecmp(cmd, "observer") == 0 || strcasecmp(cmd, "observers") == 0) {
+ printf(" observer");
+ for(j = 0; j < maxobserverlength - strlen("observer"); j++)
+   printf(" ");
+      }else if(strcasecmp(cmd, "project") == 0 || strcasecmp(cmd,"projectid") == 0 || strcasecmp(cmd,"projid") == 0) {
+ printf(" projectID");
+ for(j = 0; j < maxprojectidlength - strlen("projectID"); j++)
    printf(" ");
       }else if(strcasecmp(cmd, "parang") == 0) {
  printf(" parallactic angle (mid)");
@@ -549,6 +571,14 @@ int main(int argc, char **argv)
  }else if(strcasecmp(cmd, "scanid") == 0) {
    printf(" %s", datain[index].scanID);
    for(j = 0; j < maxscanidlength - strlen(datain[index].scanID); j++)
+     printf(" ");
+ }else if(strcasecmp(cmd, "observer") == 0 || strcasecmp(cmd, "observers") == 0) {
+   printf(" %s", datain[index].observer);
+   for(j = 0; j < maxobserverlength - strlen(datain[index].observer); j++)
+     printf(" ");
+ }else if(strcasecmp(cmd, "project") == 0 || strcasecmp(cmd,"projectid") == 0 || strcasecmp(cmd,"projid") == 0) {
+   printf(" %s", datain[index].projectID);
+   for(j = 0; j < maxprojectidlength - strlen(datain[index].projectID); j++)
      printf(" ");
  }else if(strcasecmp(cmd, "parang") == 0) {
    double parang;

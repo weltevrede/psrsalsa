@@ -158,7 +158,7 @@ int preprocess_checkinf(datafile_definition original, int generate_warning, verb
   }
   return 0;
 }
-int preprocess_fftshift(datafile_definition original, float shiftPhase, int addslope, float slope, verbose_definition verbose)
+int preprocess_fftshift(datafile_definition original, long singlesubint, float shiftPhase, int addslope, float slope, verbose_definition verbose)
 {
   long p, f, n;
   int i;
@@ -184,6 +184,8 @@ int preprocess_fftshift(datafile_definition original, float shiftPhase, int adds
   for(p = 0; p < original.NrPols; p++) {
     for(f = 0; f < original.NrFreqChan; f++) {
       for(n = 0; n < original.NrSubints; n++) {
+ if(singlesubint >= 0)
+   n = singlesubint;
  if(addslope) {
    offset = (shiftPhase+n*slope)*original.NrBins;
  }else {
@@ -203,6 +205,8 @@ int preprocess_fftshift(datafile_definition original, float shiftPhase, int adds
      fflush(stdout);
    }
  }
+ if(singlesubint >= 0)
+   break;
       }
     }
   }

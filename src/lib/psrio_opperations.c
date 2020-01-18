@@ -354,6 +354,10 @@ double get_pulse_longitude(datafile_definition datafile, long subint, long binnr
     }
     return datafile.tsamp_list[binnr];
   }else if(datafile.tsampMode == TSAMPMODE_FIXEDTSAMP) {
+    if(datafile.fixedtsamp == 0) {
+      printerror(verbose.debug, "ERROR get_pulse_longitude (%s): Sampling time appears to be set to zero.", datafile.filename);
+      exit(0);
+    }
     double longitude;
     double period;
     int ret;

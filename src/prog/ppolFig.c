@@ -45,6 +45,7 @@ int main(int argc, char **argv)
   application.switch_headerlist = 1;
   application.switch_nocounters = 1;
   application.switch_filelist = 1;
+  application.switch_iformat = 1;
   curpanelnrx = 0;
   curpanelnry = 0;
   nokeypresses = 0;

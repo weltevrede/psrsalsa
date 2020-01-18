@@ -27,6 +27,8 @@ int set_observatory_PSRData(datafile_definition *datafile_dest, char *observator
 int set_institute_PSRData(datafile_definition *datafile_dest, char *institute, verbose_definition verbose);
 int set_instrument_PSRData(datafile_definition *datafile_dest, char *instrument, verbose_definition verbose);
 int set_scanID_PSRData(datafile_definition *datafile_dest, char *scanID, verbose_definition verbose);
+int set_observer_PSRData(datafile_definition *datafile_dest, char *observer, verbose_definition verbose);
+int set_projectID_PSRData(datafile_definition *datafile_dest, char *projectID, verbose_definition verbose);
 int guessPSRData_format(char *filename, int noerror, verbose_definition verbose);
 int openPSRData(datafile_definition *datafile, char *filename, int format, int enable_write, int read_in_memory, int nowarnings, verbose_definition verbose);
 int closePSRData(datafile_definition *datafile, int perserve_header_info, verbose_definition verbose);
@@ -106,7 +108,7 @@ int preprocess_debase(datafile_definition *original, pulselongitude_regions_defi
 int preprocess_channelselect(datafile_definition original, datafile_definition *clone, long chanelnr, verbose_definition verbose);
 int preprocess_pulsesselect(datafile_definition original, datafile_definition *clone, long nskip, long nread, verbose_definition verbose);
 int preprocess_blocksize(datafile_definition original, datafile_definition *clone, int blocksize, verbose_definition verbose);
-int preprocess_fftshift(datafile_definition original, float shiftPhase, int addslope, float slope, verbose_definition verbose);
+int preprocess_fftshift(datafile_definition original, long singlesubint, float shiftPhase, int addslope, float slope, verbose_definition verbose);
 int preprocess_polselect(datafile_definition original, datafile_definition *clone, long polnr, verbose_definition verbose);
 int preprocess_transposeRawFBdata(datafile_definition original, datafile_definition *clone, verbose_definition verbose);
 int preprocess_norm(datafile_definition original, float normvalue, pulselongitude_regions_definition *onpulse, int global, verbose_definition verbose);
@@ -121,8 +123,8 @@ int rotateSinglepulse(float *data, int npts, float epsilon, verbose_definition v
 int crosscorrelation_fft(float *data1, float *data2, int ndata, float *cc, verbose_definition verbose);
 int crosscorrelation_fft_padding_cclength(int ndata, int extrazeropad);
 int crosscorrelation_fft_padding(float *data1, float *data2, int ndata, int extrazeropad, float **cc, int *cclength, verbose_definition verbose);
-int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrfs, int subtractDC, float *phase_track, float *phase_track_phases, int calcPhaseTrack, float freq_min, float freq_max, int track_only_first_region, float *subpulseAmplitude, int calcsubpulseAmplitude, int mask_freqs, int inverseFFT, pulselongitude_regions_definition *regions, float *var_rms, int argc, char **argv, verbose_definition verbose);
-void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size, unsigned long nrpulses, float *sigma, float *rms_sigma, float *modind, float *rms_modind, pulselongitude_regions_definition *regions, float var_rms, verbose_definition verbose);
+int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrfs, int subtractDC, float *avrg_offpulse_lrfs_power, float *phase_track, float *phase_track_phases, int calcPhaseTrack, float freq_min, float freq_max, int track_only_first_region, float *subpulseAmplitude, int calcsubpulseAmplitude, int mask_freqs, int inverseFFT, pulselongitude_regions_definition *regions, float *var_rms, int argc, char **argv, verbose_definition verbose);
+void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size, unsigned long nrpulses, float *sigma, float *rms_sigma, float *modind, float *rms_modind, pulselongitude_regions_definition *regions, float var_rms, float *avrg_offpulse_lrfs_power, verbose_definition verbose);
 int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *twodfs, pulselongitude_regions_definition *onpulse, int region, verbose_definition verbose);
 int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float foldp3, int refine, int cyclesperblock, int noSmooth, float smoothWidth, float slope, float subpulse_offset, pulselongitude_regions_definition *onpulse
     , verbose_definition verbose);

@@ -94,6 +94,8 @@ typedef struct
   char *observatory;
   char *instrument;
   char *scanID;
+  char *observer;
+  char *projectID;
   char *institute;
   double telescope_X, telescope_Y, telescope_Z;
   int NrBits;
@@ -198,7 +200,7 @@ typedef struct {
   int switch_fixseed, fixseed;
   int switch_templatedata, template_data_index; datafile_definition template_file;
   int switch_template, template_specified;
-  int switch_align, doalign;
+  int switch_align, switch_alignsub, doalign;
   int switch_blocksize, blocksize;
   pulselongitude_regions_definition onpulse;
   vonMises_collection_definition vonMises_components;

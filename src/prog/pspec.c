@@ -121,7 +121,8 @@ int main(int argc, char **argv)
     printf("  -prof               Compute pulse profile.\n");
     printf("  -lrfs               Compute LRFS.\n");
     printf("  -DC                 Leave the DC channel in the LRFS.\n");
-    printf("  -stddev             Compute standard deviation profile.\n");
+    printf("  -stddev             Compute standard deviation profile, normalised by the average\n");
+    printf("                      intensity in the pulse longitude bin where the profile peaks.\n");
     printf("  -stddev_sigma       Specify sigma threshold for the stddev output to file.\n");
     printf("                      The plot (shown with -prof) only shows 3 sigma detections.\n");
     printf("  -mod                Compute modulation index profile.\n");
@@ -363,8 +364,9 @@ int main(int argc, char **argv)
   fft_blocks = fin[0].NrSubints/fft_size;
   junk_int = fft_blocks*fft_size;
   if(application.verbose_state.verbose && (lrfs_flag || stddev_flag || mod_flag || track_flag || amplitude_flag || modSimple_flag || profile_flag || twodfs_flag || s2dfs_p3_flag || s2dfs_p2_flag
-))
+        )) {
     printf("Only using %ld of the %ld pulses for the spectra being generated (%ld blocks with fft size %d).\n", junk_int, fin[0].NrSubints, fft_blocks, fft_size);
+  }
   if(junk_int == 0) {
     printerror(application.verbose_state.debug, "ERROR pspec: Not enough pulses, try a shorter fft length.");
     return 0;
@@ -509,12 +511,17 @@ int main(int argc, char **argv)
    verbose2.verbose = 1;
  else
    verbose2.verbose = 0;
- if(calcLRFS(clone.data, fin[0].NrSubints, fin[0].NrBins, fft_size, lrfs, subtractDC, &phase_track[(i+2)*fin[0].NrBins], NULL, track_flag, freq_min, freq_max, track_only_first_region, NULL, 0, 0, 0, &application.onpulse, &var_rms, argc, argv, verbose2) == 0) {
+ if(calcLRFS(clone.data, fin[0].NrSubints, fin[0].NrBins, fft_size, lrfs, subtractDC, NULL, &phase_track[(i+2)*fin[0].NrBins], NULL, track_flag, freq_min, freq_max, track_only_first_region, NULL, 0, 0, 0, &application.onpulse, &var_rms, argc, argv, verbose2) == 0) {
    printerror(application.verbose_state.debug, "ERROR pspec: Cannot calculate LRFS");
    return 0;
  }
  read_partprofilePSRData(clone, clone_profileI, NULL, 0, 0, fft_blocks*fft_size, noverbose);
- calcModindex(lrfs, clone_profileI, fin[0].NrBins, fft_size, fft_blocks*fft_size, stddev, rms_sigma, modindex, rms_modindex, &application.onpulse, var_rms, application.verbose_state);
+ int oldverbose = application.verbose_state.verbose;
+ if(application.verbose_state.debug == 0) {
+   application.verbose_state.verbose = 0;
+ }
+ calcModindex(lrfs, clone_profileI, fin[0].NrBins, fft_size, fft_blocks*fft_size, stddev, rms_sigma, modindex, rms_modindex, &application.onpulse, var_rms, NULL, application.verbose_state);
+ application.verbose_state.verbose = oldverbose;
  for(j = 0; j < fin[0].NrBins; j++) {
    modindex_av[j] += modindex[j];
    modindex_square[j] += modindex[j]*modindex[j];
@@ -526,6 +533,7 @@ int main(int argc, char **argv)
       }
       printf("Bootstrap finished\n");
     }
+    float avrg_offpulse_lrfs_power;
     for(i = 0; i < originalNrPols; i++) {
       int track_flag_pol, amplitude_flag_pol;
       track_flag_pol = track_flag;
@@ -534,13 +542,19 @@ int main(int argc, char **argv)
  track_flag_pol = 0;
  amplitude_flag_pol = 0;
       }
-      if(calcLRFS(fin[i].data, fin[i].NrSubints, fin[i].NrBins, fft_size, &lrfs[i*(fft_size/2+1)*fin[0].NrBins], subtractDC, phase_track, phase_track_phases, track_flag_pol, freq_min, freq_max, track_only_first_region, amplitude_profile, amplitude_flag_pol, ftrack_mask, inverseFFT, &application.onpulse, &var_rms, argc, argv, application.verbose_state) == 0) {
+      float *float_ptr;
+      if(i == 0) {
+ float_ptr = &avrg_offpulse_lrfs_power;
+      }else {
+ float_ptr = NULL;
+      }
+      if(calcLRFS(fin[i].data, fin[i].NrSubints, fin[i].NrBins, fft_size, &lrfs[i*(fft_size/2+1)*fin[0].NrBins], subtractDC, float_ptr, phase_track, phase_track_phases, track_flag_pol, freq_min, freq_max, track_only_first_region, amplitude_profile, amplitude_flag_pol, ftrack_mask, inverseFFT, &application.onpulse, &var_rms, argc, argv, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "ERROR pspec: Cannot calculate LRFS");
  return 0;
       }
     }
     if(profile_flag || stddev_flag || mod_flag || modSimple_flag) {
-      calcModindex(lrfs, profileI, fin[0].NrBins, fft_size, fft_blocks*fft_size, stddev, rms_sigma, modindex, rms_modindex, &application.onpulse, var_rms, application.verbose_state);
+      calcModindex(lrfs, profileI, fin[0].NrBins, fft_size, fft_blocks*fft_size, stddev, rms_sigma, modindex, rms_modindex, &application.onpulse, var_rms, &avrg_offpulse_lrfs_power, application.verbose_state);
       if(bootstrap > 0) {
  for(j = 0; j < fin[0].NrBins; j++) {
    stddev_av[j] /= (double)bootstrap;

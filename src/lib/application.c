@@ -1181,47 +1181,62 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     if(verbose1.verbose) {
       for(i = 0; i < verbose1.indent; i++)
  printf(" ");
-      printf("Aligning data using template\n");
+      if(application->doalign == 1) {
+ printf("Aligning data using template\n");
+      }else {
+ printf("Aligning data using template by allowing subints to rotate separately\n");
+      }
     }
     if(application->template_specified == 0 && application->template_data_index == 0) {
       fflush(stdout);
-      printerror(application->verbose_state.debug, "preprocessApplication: Can only use -align option together with a specified template on the command line.");
+      printerror(application->verbose_state.debug, "preprocessApplication: Can only use -align option when a template is specified on the command line.");
       return 0;
     }
-    if(!preprocess_addsuccessivepulses(*psrdata, &clone, psrdata->NrSubints, application->tscr_complete, verbose2))
+    if(application->doalign == 1) {
+      if(!preprocess_addsuccessivepulses(*psrdata, &clone, psrdata->NrSubints, application->tscr_complete, verbose2)) {
+ return 0;
+      }
+    }else {
+      if(!make_clone(*psrdata, &clone, verbose2)) {
+ return 0;
+      }
+    }
+    if(!preprocess_dedisperse(&clone, 0, 0, 0, verbose2)) {
       return 0;
-    if(!preprocess_dedisperse(&clone, 0, 0, 0, verbose2))
-      return 0;
+    }
     if(psrdata->NrPols == 4) {
       if(!preprocess_deFaraday(&clone, 0, 0, 0, NULL, verbose2))
  return 0;
     }
     datafile_definition clone2;
-    if(!preprocess_addsuccessiveFreqChans(clone, &clone2, clone.NrFreqChan, NULL, verbose2))
+    if(!preprocess_addsuccessiveFreqChans(clone, &clone2, clone.NrFreqChan, NULL, verbose2)) {
       return 0;
-    if(application->template_specified) {
-      x = correlateVonMisesFunction(&(application->vonMises_components), clone2.NrBins, clone2.data, verbose2);
-    }else {
-      if(clone2.NrBins != application->template_file.NrBins) {
- fflush(stdout);
- printerror(application->verbose_state.debug, "preprocessApplication: The template and the data file have a different amount of bins (%ld != %ld).", clone2.NrBins, application->template_file.NrBins);
- return 0;
+    }
+    if(application->doalign == 1) {
+      if(application->template_specified) {
+ x = correlateVonMisesFunction(&(application->vonMises_components), clone2.NrBins, clone2.data, verbose2);
+      }else {
+ if(clone2.NrBins != application->template_file.NrBins) {
+   fflush(stdout);
+   printerror(application->verbose_state.debug, "preprocessApplication: The template and the data file have a different amount of bins (%ld != %ld).", clone2.NrBins, application->template_file.NrBins);
+   return 0;
+ }
+ int lag;
+ float correl_max;
+ if(find_peak_correlation(clone2.data, application->template_file.data, clone2.NrBins, 0, 0, 1, &lag, &correl_max, verbose2) == 0) {
+   return 0;
+ }
+ x = lag/(double)clone2.NrBins;
       }
-      int lag;
-      float correl_max;
-      if(find_peak_correlation(clone2.data, application->template_file.data, clone2.NrBins, 0, 0, 1, &lag, &correl_max, verbose2) == 0) {
- return 0;
+      if(application->doshiftphase) {
+ application->shiftPhase -= x;
+      }else {
+ application->doshiftphase = 1;
+ application->shiftPhase = -x;
       }
-      x = lag/(double)clone2.NrBins;
     }
     closePSRData(&clone2, 0, verbose2);
     closePSRData(&clone, 0, verbose2);
-    if(application->doshiftphase) {
-      application->shiftPhase -= x;
-    }else {
-      application->doshiftphase = 1;
-      application->shiftPhase = -x;
-    }
     if(verbose1.verbose) {
       for(i = 0; i < verbose1.indent; i++)
  printf(" ");
@@ -1245,7 +1260,7 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
  return 0;
       swap_orig_clone(psrdata, &clone, application->verbose_state);
     }else {
-      if(preprocess_fftshift(*psrdata, application->shiftPhase, 0, 0, verbose2) == 0)
+      if(preprocess_fftshift(*psrdata, -1, application->shiftPhase, 0, 0, verbose2) == 0)
  return 0;
     }
   }

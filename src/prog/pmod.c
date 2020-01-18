@@ -475,14 +475,14 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pmod: Memory allocation error.");
       return 0;
     }
-    if(debase_flag || removeOnPulse_flag
+    if(debase_flag || removeOnPulse_flag || selectMoreOnpulseRegions
        ) {
       if(read_profilePSRData(datain, profileI, zapMask, 0, application.verbose_state) != 1) {
  printerror(application.verbose_state.debug, "Error pmod: Cannot form pulse profile");
  return 0;
       }
     }
-      if((debase_flag && debase_offset_flag == 0) || removeOnPulse_flag
+      if((debase_flag && debase_offset_flag == 0) || removeOnPulse_flag || selectMoreOnpulseRegions
   ) {
  if(selectMoreOnpulseRegions || application.onpulse.nrRegions == 0) {
    pgplot_options.viewport.dontopen = deviceOpened;
@@ -604,7 +604,10 @@ int main(int argc, char **argv)
    }
    if(debase_flag || removeOnPulse_flag
 ) {
-     read_rmsPSRData(datain, &rms[datain.NrSubints*k], &runningBaseline[datain.NrSubints*k], zapMask, &(application.onpulse), 0, k, l, application.verbose_state);
+     if(read_rmsPSRData(datain, &rms[datain.NrSubints*k], &runningBaseline[datain.NrSubints*k], zapMask, &(application.onpulse), 0, k, l, application.verbose_state) == 0) {
+       printerror(application.verbose_state.debug, "Error pmod: Cannot determine offpulse rms.");
+       return 0;
+     }
      if(l == 0 && application.verbose_state.verbose) {
        if(datain.NrFreqChan > 1)
   printf("  Preparing baseline for first frequency channel\n");
