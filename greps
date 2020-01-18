@@ -1,0 +1,31 @@
+#!/bin/tcsh -f
+
+#Script added by Maciej Serylak to help searching source code, based on similar script in PSRCHIVE.
+
+if ( "$1" == "-h" || "$1" == "--help" || "$1" == "" ) then
+  echo
+  echo "greps: searches PSRSALSA source code for regular expression"
+  echo
+  echo "usage:"
+  echo "  greps <regex>"
+  echo
+  exit
+endif
+
+ack-grep --help >& /dev/null
+if ( "$?" == "0" ) then
+  set GREP_COMMAND=ack-grep
+else
+  ack --help >& /dev/null
+  if ( "$?" == "0" ) then
+    set GREP_COMMAND=ack
+  else
+    set GREP_COMMAND=grep
+  endif
+endif
+
+$GREP_COMMAND "$*" `find . -name "*.[hfc]"`
+
+$GREP_COMMAND --color -H "$*" Makefile
+
+$GREP_COMMAND "$*" `find . -name "*.txt"`
