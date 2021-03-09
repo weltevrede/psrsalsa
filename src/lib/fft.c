@@ -49,7 +49,7 @@ int rotateSinglepulse(float *data, int npts, float epsilon, verbose_definition v
   fftwf_free(dataFFT);
   return 1;
 }
-int crosscorrelation_fft(float *data1, float *data2, int ndata, float *cc, verbose_definition verbose)
+int crosscorrelation_fft(float *data1, float *data2, int ndata, float *cc, int remove_baseline, verbose_definition verbose)
 {
   int i, npts2;
   float fac;
@@ -68,8 +68,12 @@ int crosscorrelation_fft(float *data1, float *data2, int ndata, float *cc, verbo
   plan3 = fftwf_plan_dft_c2r_1d(ndata, dataFFT1, cc, FFTW_ESTIMATE);
   fftwf_execute(plan1);
   fftwf_execute(plan2);
+  if(remove_baseline != 0) {
+    dataFFT1[0] = 0.0;
+    dataFFT2[0] = 0.0;
+  }
   fac = 1.0/(float)ndata;
-  for (i=0; i < npts2; i++) {
+  for(i = 0; i < npts2; i++) {
     dataFFT1[i] *= fac*conj(dataFFT2[i]);
   }
   fftwf_execute(plan3);
@@ -89,7 +93,7 @@ int crosscorrelation_fft_padding_cclength(int ndata, int extrazeropad)
     ndata_padded = ndata;
   return ndata_padded;
 }
-int crosscorrelation_fft_padding(float *data1, float *data2, int ndata, int extrazeropad, float **cc, int *cclength, verbose_definition verbose)
+int crosscorrelation_fft_padding(float *data1, float *data2, int ndata, int extrazeropad, float **cc, int *cclength, int remove_baseline, verbose_definition verbose)
 {
   float *padded1, *padded2;
   int i, ndata_padded;
@@ -135,7 +139,7 @@ int crosscorrelation_fft_padding(float *data1, float *data2, int ndata, int extr
     printerror(verbose.debug, "ERROR crosscorrelation_fft_padding: Memory allocation error");
     return 0;
   }
-  if(crosscorrelation_fft(padded1, padded2, ndata_padded, *cc, verbose) == 0)
+  if(crosscorrelation_fft(padded1, padded2, ndata_padded, *cc, remove_baseline, verbose) == 0)
     return 0;
   if(ndata_padded != ndata) {
     free(padded1);

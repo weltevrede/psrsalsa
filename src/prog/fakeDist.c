@@ -194,7 +194,7 @@ int main(int argc, char **argv)
   if(noisefile_id != 0) {
     if(application.verbose_state.verbose)
       fprintf(stdout, "Loading noise values from ascii file\n");
-    if(read_ascii_column_double(argv[noisefile_id], 0, '#', -1, 1, &n_noisedata, 1, 1.0, 0, &data_noise, NULL, NULL, NULL, application.verbose_state, 1) == 0) {
+    if(read_ascii_column_double(argv[noisefile_id], 0, '#', -1, 1, &n_noisedata, 0, 1, 1.0, 0.0, 0, &data_noise, NULL, NULL, NULL, application.verbose_state, 1) == 0) {
       printerror(application.verbose_state.debug, "ERROR fakeDist: Cannot load file with noise values.\n");
       return 0;
     }

@@ -366,18 +366,19 @@ int main(int argc, char **argv)
  }
       }
     }
-    if(strcmp(p3fold_device, "?") == 0)
+    if(strcmp(p3fold_device, "?") == 0) {
       printf("Specify plotting device to show the P3 fold map: \n  ");
-      strcpy(pgplot_options.viewport.plotDevice, p3fold_device);
-      strcpy(pgplot_options.box.xlabel, "Pulse phase [degrees]");
-      strcpy(pgplot_options.box.ylabel, "P3 [pulse periods]");
-      strcpy(pgplot_options.box.title, "P3 fold");
-      ret = get_period(fin[0], 0, &period, application.verbose_state);
-      if(ret == 2) {
- printerror(application.verbose_state.debug, "ERROR pfold (%s): Cannot obtain period", fin[0].filename);
- return 0;
-      }
-      pgplotMap(&pgplot_options, p3foldmap, fin[0].NrBins, p3_fold_nbin, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, xmin_zoom, xmax_zoom, 0.5*p3_fold/(float)p3_fold_nbin, 0.5*p3_fold/(float)p3_fold_nbin + p3_fold*(p3_fold_nbin-1)/(float)p3_fold_nbin, 0, p3_fold, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, application.verbose_state);
+    }
+    strcpy(pgplot_options.viewport.plotDevice, p3fold_device);
+    strcpy(pgplot_options.box.xlabel, "Pulse phase [degrees]");
+    strcpy(pgplot_options.box.ylabel, "P3 [pulse periods]");
+    strcpy(pgplot_options.box.title, "P3 fold");
+    ret = get_period(fin[0], 0, &period, application.verbose_state);
+    if(ret == 2) {
+      printerror(application.verbose_state.debug, "ERROR pfold (%s): Cannot obtain period", fin[0].filename);
+      return 0;
+    }
+    pgplotMap(&pgplot_options, p3foldmap, fin[0].NrBins, p3_fold_nbin, 0, 360*(fin[0].NrBins-1)*get_tsamp(fin[0], 0, application.verbose_state)/period, xmin_zoom, xmax_zoom, 0.5*p3_fold/(float)p3_fold_nbin, 0.5*p3_fold/(float)p3_fold_nbin + p3_fold*(p3_fold_nbin-1)/(float)p3_fold_nbin, 0, p3_fold, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, application.verbose_state);
     if(write_flag) {
       fout.NrSubints = p3_fold_nbin;
       fout.NrBins = fin[0].NrBins;

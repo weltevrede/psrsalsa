@@ -31,7 +31,7 @@ int main(int argc, char **argv)
 {
   char output_fname[1000], PlotDevice[100], singlechar, *inputname;
   int circularShift, noinput, onlyI, memsave, currentfilenumber, dummy_int;
-  int shift, bin1, bin2, subintWritten, poladd;
+  int shift, bin1, bin2, subintWritten, poladd, freqadd;
   long i, j, pol, fchan, nsub, binnr, nrinputfiles, subintslost, currentOutputSubint, sumNsub, curNrInsubint;
   float *Iprofile, *Iprofile_firstfile, *shiftedProfile, *subint, x, y, *float_ptr, *float_ptr2;
   datafile_definition **fin;
@@ -60,6 +60,7 @@ int main(int argc, char **argv)
   memsave = 0;
   sumNsub = 1;
   poladd = 0;
+  freqadd = 0;
   x = y = singlechar = 0;
   if(argc < 2) {
     printf("Program to add data files together. Usage:\n\n");
@@ -77,6 +78,8 @@ int main(int argc, char **argv)
     printf("                        written out\n");
     printf("-poladd                 The input files are to be interpretted as separate\n");
     printf("                        polarization channels (option implies -n 0).\n");
+    printf("-freqadd                The input files are to be interpretted as separate\n");
+    printf("                        frequency bands (option implies -n 0).\n");
     printf("-memsave                Only one full input data-set exists in memory at a time,\n");
     printf("                        but every input file will be opened twice.\n");
     printf("\n");
@@ -99,6 +102,11 @@ int main(int argc, char **argv)
  onlyI = 1;
       }else if(strcmp(argv[i], "-poladd") == 0) {
  poladd = 1;
+ circularShift = 1;
+ noinput = 1;
+ shift = 0;
+      }else if(strcmp(argv[i], "-freqadd") == 0) {
+ freqadd = 1;
  circularShift = 1;
  noinput = 1;
  shift = 0;
@@ -141,15 +149,31 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR padd: Need at least two input files");
     return 0;
   }
+  if(freqadd && poladd) {
+    printerror(application.verbose_state.debug, "ERROR padd: Cannot use the -freqadd and -poladd flag simultaneously.");
+    return 0;
+  }
   if(sumNsub != 1 && poladd) {
     printerror(application.verbose_state.debug, "ERROR padd: Cannot use the -nsub and -poladd flag simultaneously.");
+    return 0;
+  }
+  if(sumNsub != 1 && freqadd) {
+    printerror(application.verbose_state.debug, "ERROR padd: Cannot use the -nsub and -freqadd flag simultaneously.");
     return 0;
   }
   if(circularShift != 1 && poladd) {
     printerror(application.verbose_state.debug, "ERROR padd: You must use the -c option together with -poladd.");
     return 0;
   }
+  if(circularShift != 1 && freqadd) {
+    printerror(application.verbose_state.debug, "ERROR padd: You must use the -c option together with -freqadd.");
+    return 0;
+  }
   if((noinput != 1 || shift != 0) && poladd) {
+    printerror(application.verbose_state.debug, "ERROR padd: You must use the -n 0 option together with -poladd.");
+    return 0;
+  }
+  if((noinput != 1 || shift != 0) && freqadd) {
     printerror(application.verbose_state.debug, "ERROR padd: You must use the -n 0 option together with -poladd.");
     return 0;
   }
@@ -171,8 +195,9 @@ int main(int argc, char **argv)
     copyVerboseState(application.verbose_state, &verbose2);
     verbose2.indent = application.verbose_state.indent + 2;
     if(memsave == 0 || (currentfilenumber == 0 && noinput == 0)) {
-      if(currentfilenumber == 0)
+      if(currentfilenumber == 0) {
  printf("Read in input files:\n");
+      }
       if(openPSRData(fin[currentfilenumber], inputname, application.iformat, 0, 1, 0, verbose2) == 0) {
  printerror(application.verbose_state.debug, "ERROR padd: Cannot open %s\n", inputname);
  return 0;
@@ -219,27 +244,43 @@ int main(int argc, char **argv)
  return 0;
       }
     }
-    if(fin[currentfilenumber]->NrFreqChan != fin[0]->NrFreqChan) {
-      printerror(application.verbose_state.debug, "ERROR padd: Nr of frequency channel are not equal in input files.");
-      return 0;
-    }
     if(fin[currentfilenumber]->NrBins != fin[0]->NrBins) {
-      printerror(application.verbose_state.debug, "ERROR padd: Nr of bins in not equal in input files.");
+      printerror(application.verbose_state.debug, "ERROR padd: Number of pulse longitude bins not equal in input files.");
       return 0;
     }
     if(fin[0]->NrPols != fin[currentfilenumber]->NrPols && onlyI == 0) {
       printerror(application.verbose_state.debug, "ERROR padd: Number of polarization channels are different. Maybe you want to use the -I option?");
       return 0;
     }
-    if(poladd) {
+    if(freqadd == 0) {
+      if(fin[currentfilenumber]->NrFreqChan != fin[0]->NrFreqChan) {
+ printerror(application.verbose_state.debug, "ERROR padd: Number of frequency channels not equal in input files.");
+ return 0;
+      }
+    }
+    if(poladd || freqadd) {
       if(fin[0]->NrSubints != fin[currentfilenumber]->NrSubints) {
- printerror(application.verbose_state.debug, "ERROR padd: Number of subints are different. This is not allowed with the -poladd option.");
+ printerror(application.verbose_state.debug, "ERROR padd: Number of subints are different. This is not allowed with the -poladd or -freqadd options.");
  return 0;
       }
+    }
+    if(poladd) {
       if(fin[currentfilenumber]->NrPols != 1) {
- printerror(application.verbose_state.debug, "ERROR padd: Number of polarization in input files should be 1 if using the -poladd option.");
+ printerror(application.verbose_state.debug, "ERROR padd: Number of polarization channels in input files should be 1 if using the -poladd option.");
  return 0;
       }
+    }
+    if(fin[currentfilenumber]->isDeDisp != fin[0]->isDeDisp) {
+      printerror(application.verbose_state.debug, "ERROR padd: Dedispersion state is not equal in input files.");
+      return 0;
+    }
+    if(fin[currentfilenumber]->isDeFarad != fin[0]->isDeFarad) {
+      printerror(application.verbose_state.debug, "ERROR padd: De-Faraday rotation state is not equal in input files.");
+      return 0;
+    }
+    if(fin[currentfilenumber]->isDePar != fin[0]->isDePar) {
+      printerror(application.verbose_state.debug, "ERROR padd: Parallactic angle state is not equal in input files.");
+      return 0;
     }
     currentfilenumber++;
   }
@@ -264,6 +305,36 @@ int main(int argc, char **argv)
   if(poladd) {
     fout.NrPols = nrinputfiles;
     fout.NrSubints = fin[0]->NrSubints;
+  }else if(freqadd) {
+    fout.NrSubints = fin[0]->NrSubints;
+    fout.NrFreqChan = 0;
+    for(currentfilenumber = 0; currentfilenumber < nrinputfiles; currentfilenumber++) {
+      fout.NrFreqChan += fin[currentfilenumber]->NrFreqChan;
+    }
+    fout.freqMode = FREQMODE_FREQTABLE;
+    if(fout.freqlabel_list != NULL) {
+      free(fout.freqlabel_list);
+    }
+    fout.freqlabel_list = (double *)malloc(fout.NrFreqChan*fout.NrSubints*sizeof(double));
+    if(fout.freqlabel_list == NULL) {
+      printerror(application.verbose_state.debug, "ERROR padd: Memory allocation error");
+      return 0;
+    }
+    long currentOutputChan = 0;
+    for(i = 0; i < nrinputfiles; i++) {
+      currentfilenumber = sort_indx[i];
+      for(fchan = 0; fchan < fin[currentfilenumber]->NrFreqChan; fchan++) {
+ for(nsub = 0; nsub < fin[currentfilenumber]->NrSubints; nsub++) {
+   double freq;
+   freq = get_weighted_channel_freq(*(fin[currentfilenumber]), nsub, fchan, application.verbose_state);
+   if(set_weighted_channel_freq(&fout, nsub, currentOutputChan, freq, application.verbose_state) == 0) {
+     printerror(application.verbose_state.debug, "ERROR padd: Constructing frequency table failed");
+     return 0;
+   }
+ }
+ currentOutputChan++;
+      }
+    }
   }else {
     for(i = 0; i < nrinputfiles; i++) {
       fout.NrSubints += fin[i]->NrSubints;
@@ -273,13 +344,18 @@ int main(int argc, char **argv)
       }
     }
   }
-  printf("\nInput data contains %ld subints, %ld phase bins %ld frequency channels and %ld polarizations.\n", fout.NrSubints+subintslost, fout.NrBins, fout.NrFreqChan, fout.NrPols);
-  printf("%ld subints are lost because of the alignment of input data", subintslost);
-  if(subintslost > 0)
-    printf(" (consider using -c option)");
+  if(freqadd || poladd) {
+    printf("\nOutput data will be %ld subints, %ld phase bins %ld frequency channels and %ld polarizations.\n", fout.NrSubints, fout.NrBins, fout.NrFreqChan, fout.NrPols);
+  }else {
+    printf("\nInput data contains %ld subints, %ld phase bins %ld frequency channels and %ld polarizations.\n", fout.NrSubints+subintslost, fout.NrBins, fout.NrFreqChan, fout.NrPols);
+    printf("%ld subints are lost because of the alignment of input data", subintslost);
+    if(subintslost > 0)
+      printf(" (consider using -c option)");
+  }
   fout.tsubMode = TSUBMODE_TSUBLIST;
-  if(fout.tsub_list != NULL)
+  if(fout.tsub_list != NULL) {
     free(fout.tsub_list);
+  }
   fout.tsub_list = (double *)malloc(fout.NrSubints*sizeof(double));
   if(fout.tsub_list == NULL) {
     printerror(application.verbose_state.debug, "ERROR padd: Memory allocation error");
@@ -289,7 +365,7 @@ int main(int argc, char **argv)
   fout.tsub_list[0] = 0;
   subintWritten = 0;
   curNrInsubint = 0;
-  if(poladd) {
+  if(poladd || freqadd) {
     for(nsub = 0; nsub < fin[0]->NrSubints; nsub++) {
       fout.tsub_list[nsub] = get_tsub(*(fin[0]), nsub, application.verbose_state);
     }
@@ -315,19 +391,22 @@ int main(int argc, char **argv)
       }
     }
   }
-  dummy_int = fout.NrSubints % sumNsub;
-  fout.NrSubints = fout.NrSubints/sumNsub;
-  printf("\nOutput data will contain %ld subints", fout.NrSubints);
-  if(sumNsub > 1)
-    printf(" after summing every %ld input subints", sumNsub);
-  if(dummy_int)
-    printf(" (%d input subints lost because of incomplete last subint)", dummy_int);
-  printf("\n\n");
+  if(freqadd == 0 && poladd == 0) {
+    dummy_int = fout.NrSubints % sumNsub;
+    fout.NrSubints = fout.NrSubints/sumNsub;
+    printf("\nOutput data will contain %ld subints", fout.NrSubints);
+    if(sumNsub > 1)
+      printf(" after summing every %ld input subints", sumNsub);
+    if(dummy_int)
+      printf(" (%d input subints lost because of incomplete last subint)", dummy_int);
+    printf("\n\n");
+  }
   if(fout.gentype == GENTYPE_PULSESTACK && sumNsub != 1) {
-    if(fout.NrSubints != 1)
+    if(fout.NrSubints != 1) {
       fout.gentype = GENTYPE_SUBINTEGRATIONS;
-    else
+    }else {
       fout.gentype = GENTYPE_PROFILE;
+    }
   }
   if(openPSRData(&fout, output_fname, fout.format, 1, 0, 0, application.verbose_state) == 0) {
     printerror(application.verbose_state.debug, "ERROR padd: Cannot open %s", output_fname);
@@ -360,6 +439,7 @@ int main(int argc, char **argv)
   subintWritten = 0;
   rewindFilenameList(&application);
   long currentfilenumber_index;
+  long fchan_offset = 0;
   while((inputname = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
     currentfilenumber_index = sort_indx[currentfilenumber];
     if(memsave) {
@@ -432,24 +512,32 @@ int main(int argc, char **argv)
     for(nsub = 0; nsub < nrPulsesInCurFile; nsub++) {
       int nrpolsinloop;
       nrpolsinloop = fout.NrPols;
-      if(poladd)
+      if(poladd) {
  nrpolsinloop = 1;
+      }
       for(pol = 0; pol < nrpolsinloop; pol++) {
- for(fchan = 0; fchan < fout.NrFreqChan; fchan++) {
+ for(fchan = 0; fchan < fin[currentfilenumber_index]->NrFreqChan; fchan++) {
    if(readPulsePSRData(fin[currentfilenumber_index], nsub, pol, fchan, 0, fin[currentfilenumber_index]->NrBins, Iprofile, application.verbose_state) != 1) {
      printerror(application.verbose_state.debug, "ERROR padd: Read error");
      return 0;
    }
    if(sumNsub == 1) {
-     if(poladd == 0) {
+     if(poladd == 0 && freqadd == 0) {
   if(writePulsePSRData(&fout, currentOutputSubint, pol, fchan, 0, fout.NrBins, Iprofile, application.verbose_state) != 1) {
     printerror(application.verbose_state.debug, "ERROR padd: Write error");
     return 0;
   }
      }else {
-       if(writePulsePSRData(&fout, nsub, currentfilenumber, fchan, 0, fout.NrBins, Iprofile, application.verbose_state) != 1) {
-  printerror(application.verbose_state.debug, "ERROR padd: Write error");
-  return 0;
+       if(poladd) {
+  if(writePulsePSRData(&fout, nsub, currentfilenumber, fchan, 0, fout.NrBins, Iprofile, application.verbose_state) != 1) {
+    printerror(application.verbose_state.debug, "ERROR padd: Write error");
+    return 0;
+  }
+       }else if(freqadd) {
+  if(writePulsePSRData(&fout, nsub, pol, fchan+fchan_offset, 0, fout.NrBins, Iprofile, application.verbose_state) != 1) {
+    printerror(application.verbose_state.debug, "ERROR padd: Write error");
+    return 0;
+  }
        }
      }
      subintWritten = 1;
@@ -490,8 +578,11 @@ int main(int argc, char **argv)
  fflush(stdout);
       }
     }
+    if(freqadd) {
+      fchan_offset += fin[currentfilenumber_index]->NrFreqChan;
+    }
     if(application.verbose_state.nocounters == 0) {
-      printf("Processing file %d is done.                                \n", currentfilenumber+1);
+      printf("Processing file %d is done (%s).                                \n", currentfilenumber+1, fin[currentfilenumber_index]->filename);
     }
     closePSRData(fin[currentfilenumber_index], 0, application.verbose_state);
     currentfilenumber++;

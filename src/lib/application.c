@@ -1223,7 +1223,7 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
  }
  int lag;
  float correl_max;
- if(find_peak_correlation(clone2.data, application->template_file.data, clone2.NrBins, 0, 0, 1, &lag, &correl_max, verbose2) == 0) {
+ if(find_peak_correlation(clone2.data, application->template_file.data, clone2.NrBins, 0, 0, 1, 1, &lag, &correl_max, verbose2) == 0) {
    return 0;
  }
  x = lag/(double)clone2.NrBins;

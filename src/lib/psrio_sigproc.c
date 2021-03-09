@@ -154,6 +154,17 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
  printf("DEBUG: %s=%d\n", id, dummy_int);
       }
       datafile->NrFreqChan = dummy_int;
+    }else if(strcmp(id, "ibeam") == 0) {
+      if(fread(&dummy_int, sizeof(int), 1, datafile->fptr) != 1) {
+ printerror(verbose.debug,"ERROR readSigprocHeader: Read error");
+ return 0;
+      }
+      if(verbose.debug) {
+ printf("DEBUG: %s=%d\n", id, dummy_int);
+      }
+      if(dummy_int != 0) {
+ printwarning(verbose.debug, "WARNING readSigprocHeader: Expected the ibeam parameter to be set to 0. Multibeam data will not be handled correctly.");
+      }
     }else if(strcmp(id, "source_name") == 0) {
       char *txt;
       txt = NULL;
@@ -332,7 +343,7 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
       printerror(verbose.debug, "ERROR readSigprocHeader: Bandwidth changing failed.");
       return 0;
     }
-    set_centre_frequency(datafile, freq_chan1+0.5*(datafile->NrFreqChan*freq_chanbw), verbose);
+    set_centre_frequency(datafile, freq_chan1+0.5*((datafile->NrFreqChan-1)*freq_chanbw), verbose);
   }else {
     printwarning(verbose.debug, "WARNING readSigprocHeader: The frequency of the observation does not appear to be defined.");
     if(datafile->freq_ref > 0) {

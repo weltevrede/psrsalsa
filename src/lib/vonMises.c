@@ -118,7 +118,7 @@ float correlateVonMisesFunction(vonMises_collection_definition *components, int 
     return 0;
   }
   calcVonMisesProfile(components, nrbins, profile2, 0, 0);
-  find_peak_correlation(profile, profile2, nrbins, 0, 1, 1, &ishift, &correl_max, verbose);
+  find_peak_correlation(profile, profile2, nrbins, 0, 1, 1, 1, &ishift, &correl_max, verbose);
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");

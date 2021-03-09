@@ -208,6 +208,7 @@ int main(int argc, char **argv)
     }
     if(isValidPSRDATA_format(application.iformat) == 0) {
       printerror(application.verbose_state.debug, "ERROR pheader: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", filename_ptr);
+      free(datain);
       return 0;
     }
     if(openPSRData(&datain[i], filename_ptr, application.iformat, 0, 0, 0, application.verbose_state) == 0) {

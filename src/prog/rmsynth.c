@@ -295,7 +295,7 @@ int main(int argc, char **argv)
       pgplot_options.viewport.dontclose = 1;
       strcpy(pgplot_options.box.xlabel, "Pulse longitude (bin)");
       strcpy(pgplot_options.box.ylabel, "RM (rad/m\\u2\\d)");
-      pgplotMap(&pgplot_options, cmap, datain.NrBins, nrrmsteps, 0, datain.NrBins-1, 0-0.5, datain.NrBins-1 + 0.5, rmmin, rmmax, rmmin, rmmax, PPGPLOT_HEAT, 0, 0, 0, NULL, 0, 0, 1.0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, application.verbose_state);
+      pgplotMap(&pgplot_options, cmap, datain.NrBins, nrrmsteps, 0, datain.NrBins-1, 0-0.5, datain.NrBins-1 + 0.5, rmmin, rmmax, rmmin, rmmax, PPGPLOT_HEAT, 0, 0, 0, NULL, 0, 0, 1.0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, application.verbose_state);
       pgplot_clear_options(&pgplot_options);
       if(pgplot_mapdevice)
  strcpy(pgplot_options.viewport.plotDevice, argv[pgplot_mapdevice]);
@@ -515,7 +515,7 @@ int main(int argc, char **argv)
     return 0;
   if(application.verbose_state.verbose)
     printf("Calculating L from Q and U\n");
-    if(make_paswing_fromIQUV(&clone, 0, application.onpulse2, 0, 1, 1, 1, 0, 0.0, 0.0, NULL, 1.0, application.verbose_state) == 0) {
+    if(make_paswing_fromIQUV(&clone, 0, 0, -1, 0, application.onpulse2, 0, 1, 0, 1, 1, 0, 0.0, 0.0, NULL, 1.0, 0, application.verbose_state) == 0) {
       printerror(application.verbose_state.debug, "Creation of L profile failed, cannot determine analytic errorbar");
       return 0;
     }

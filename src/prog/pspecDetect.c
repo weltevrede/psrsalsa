@@ -16,6 +16,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 #include "psrsalsa.h"
 double f2_min, f2_max, f3_min, f3_max, fl_min, fl_max, f2n_min, f2n_max, f3n_min, f3n_max;
 double twodsf_Imin;
@@ -37,12 +38,12 @@ void PlotWindow(verbose_definition verbose);
 int MakeSelection(double sigma_noise);
 void SelectRegion();
 double calculate_noise_sigma(void);
-void calculate_2dfs_Centroid(double sigma_noise, verbose_definition verbose);
+void calculate_2dfs_Centroid(double sigma_noise, FILE *writesel_fptr, int SelectedComponent, verbose_definition verbose);
 int main(int argc, char **argv)
 {
-  int i, xi, yi, index;
+  int i, xi, yi, index, extprefix;
   double I;
-  char filename[1000], txt[1000], *input_filename_ptr;
+  char filename[MaxFilenameLength+1], txt[MaxFilenameLength+1], *input_filename_ptr;
   double sigma_noise;
   psrsalsaApplication application;
   initApplication(&application, "pspecDetect", "[options] pulse_stack,\nwhere pulse_stack is the file name of the pulse stack that has been processed by\npspec to produce the 2DFS and LRFS.");
@@ -64,6 +65,7 @@ int main(int argc, char **argv)
   SelectedComponent = 1;
   Centered = 1;
   PlotAvrgProfile = 1;
+  extprefix = 0;
   if(argc < 2) {
     printf("Interactive program designed to analyse features in the 2DFS to obtain\ncentroid P2 and P3 values and corresponding error-bars.\n\n");
     printApplicationHelp(&application);
@@ -99,8 +101,12 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR pspecDetect: No files specified");
     return 0;
   }
+  FILE *writesel_fptr;
+  writesel_fptr = NULL;
   input_filename_ptr = getNextFilenameFromList(&application, argv, application.verbose_state);
-  sprintf(txt, "%d.2dfs", 1);
+  if(extprefix == 0) {
+    sprintf(txt, "%d.2dfs", 1);
+  }
   if(change_filename_extension(input_filename_ptr, filename, txt, 1000, application.verbose_state) == 0) {
     return 0;
   }
@@ -128,7 +134,9 @@ int main(int argc, char **argv)
     printf("%ldx%ld points read from 2dfs\n", twodfs.NrBins, twodfs.NrSubints);
   if(preprocess_polselect(twodfs, &noise, 0, application.verbose_state) != 1)
     exit(0);
-  sprintf(txt, "lrfs");
+  if(extprefix == 0) {
+    sprintf(txt, "lrfs");
+  }
   if(change_filename_extension(input_filename_ptr, filename, txt, 1000, application.verbose_state) == 0) {
     return 0;
   }
@@ -177,8 +185,13 @@ int main(int argc, char **argv)
   }
   if(application.verbose_state.verbose)
     printf("%ld points read from avgprof\n\n", AverageProfile.NrBins);
-  f2_min = f2n_min = -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
-  f2_max = f2n_max = +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
+  if(twodfs.xrangeset) {
+    f2_min = f2n_min = twodfs.xrange[0];
+    f2_max = f2n_max = twodfs.xrange[1];
+  }else {
+    f2_min = f2n_min = -AverageProfile.NrBins/2.0;
+    f2_max = f2n_max = -AverageProfile.NrBins/2.0 + AverageProfile.NrBins*(twodfs.NrBins-1.0)/(float)twodfs.NrBins;
+  }
   f3_min = 0;
   f3n_min = 0;
   f3_max = f3n_max = 0.5;
@@ -199,7 +212,7 @@ int main(int argc, char **argv)
     case 27: KeyCode = 27; break;
     case 13:
  sigma_noise = calculate_noise_sigma();
-      calculate_2dfs_Centroid(sigma_noise, application.verbose_state);
+      calculate_2dfs_Centroid(sigma_noise, writesel_fptr, SelectedComponent, application.verbose_state);
       PlotWindow(application.verbose_state);
       break;
     case 67:
@@ -217,8 +230,13 @@ int main(int argc, char **argv)
     case 114:
       sigma_noise = 0;
       centroid_calculated = 0;
-      f2_min = f2n_min = -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
-      f2_max = f2n_max = +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
+      if(twodfs.xrangeset) {
+ f2_min = f2n_min = twodfs.xrange[0];
+ f2_max = f2n_max = twodfs.xrange[1];
+      }else {
+ f2_min = f2n_min = -AverageProfile.NrBins/2.0;
+ f2_max = f2n_max = -AverageProfile.NrBins/2.0 + AverageProfile.NrBins*(twodfs.NrBins-1.0)/(float)twodfs.NrBins;
+      }
       f3_min = 0;
       f3n_min = 0;
       f3_max = f3n_max = 0.5;
@@ -235,8 +253,13 @@ int main(int argc, char **argv)
       break;
     case 70:
     case 102:
-      f2_min = -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
-      f2_max = +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
+      if(twodfs.xrangeset) {
+ f2_min = twodfs.xrange[0];
+ f2_max = twodfs.xrange[1];
+      }else {
+ f2_min = -AverageProfile.NrBins/2.0;
+ f2_max = -AverageProfile.NrBins/2.0 + AverageProfile.NrBins*(twodfs.NrBins-1.0)/(float)twodfs.NrBins;
+      }
       f3_min = 0;
       f3_max = 0.5;
       fl_min = 0;
@@ -255,7 +278,9 @@ int main(int argc, char **argv)
     case 57:
       SelectedComponent = KeyCode - 48;
       strcpy(filename, argv[argc - 1]);
-      sprintf(txt, "%d.2dfs", SelectedComponent);
+      if(extprefix == 0) {
+ sprintf(txt, "%d.2dfs", SelectedComponent);
+      }
       if(change_filename_extension(input_filename_ptr, filename, txt, 1000, application.verbose_state) == 0) {
  return 0;
       }
@@ -288,8 +313,13 @@ int main(int argc, char **argv)
       sigma_noise = 0;
       centroid_calculated = 0;
       nr_noise_patches = 0;
-      f2_min = f2n_min = -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
-      f2_max = f2n_max = +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins;
+      if(twodfs.xrangeset) {
+ f2_min = f2n_min = twodfs.xrange[0];
+ f2_max = f2n_max = twodfs.xrange[1];
+      }else {
+ f2_min = f2n_min = -AverageProfile.NrBins/2.0;
+ f2_max = f2n_max = -AverageProfile.NrBins/2.0 + AverageProfile.NrBins*(twodfs.NrBins-1.0)/(float)twodfs.NrBins;
+      }
       f3_min = 0;
       f3n_min = 0;
       f3_max = f3n_max = 0.5;
@@ -381,7 +411,15 @@ void PlotWindow(verbose_definition verbose)
       strcpy(pgplot_options.box.xlabel, "Fluctuation frequency (cycles/period)");
       strcpy(pgplot_options.box.ylabel, "Fluctuation frequency (cycles/period)");
       strcpy(pgplot_options.box.title, txt);
-      pgplotMap(&pgplot_options, twodfs.data, twodfs.NrBins, twodfs.NrSubints, -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)twodfs.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, verbose);
+      float xrange0, xrange1;
+      if(twodfs.xrangeset) {
+ xrange0 = twodfs.xrange[0];
+ xrange1 = twodfs.xrange[1];
+      }else {
+ xrange0 = -AverageProfile.NrBins/2.0;
+ xrange1 = -AverageProfile.NrBins/2.0 + AverageProfile.NrBins*(twodfs.NrBins-1.0)/(float)twodfs.NrBins;
+      }
+      pgplotMap(&pgplot_options, twodfs.data, twodfs.NrBins, twodfs.NrSubints, xrange0, xrange1, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, verbose);
       if(centroid_calculated) {
  ppgsci(2);
  ppgslw(1);
@@ -406,7 +444,7 @@ void PlotWindow(verbose_definition verbose)
       strcpy(pgplot_options.box.xlabel, "bins");
       strcpy(pgplot_options.box.ylabel, "Fluctuation frequency (cycles/period)");
       strcpy(pgplot_options.box.title, "lrfs feature");
-      pgplotMap(&pgplot_options, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0, lrfs.NrBins-1, fl_min, fl_max, 0, 0.5, f3_min, f3_max, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, verbose);
+      pgplotMap(&pgplot_options, lrfs.data, lrfs.NrBins, lrfs.NrSubints, 0, lrfs.NrBins-1, fl_min, fl_max, 0, 0.5, f3_min, f3_max, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, verbose);
       if(PlotAvrgProfile != 0) {
         i = 0;
  Imax = AverageProfile.data[0];
@@ -453,7 +491,7 @@ void PlotWindow(verbose_definition verbose)
       strcpy(pgplot_options.box.ylabel, "Fluctuation frequency (cycles/period)");
       strcpy(pgplot_options.box.title, "For noise calulation: All signal should be flagged in this 2dfs plot");
       pgplotMap(&pgplot_options, noise.data, noise.NrBins, noise.NrSubints,
-  -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)noise.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)noise.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, verbose);
+  -AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)noise.NrBins, +AverageProfile.NrBins/2.0-0.5*AverageProfile.NrBins/(float)noise.NrBins, f2_min, f2_max, 0, 0.5, f3_min, f3_max, PPGPLOT_INVERTED_HEAT, 0, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, verbose);
       SelectRegion();
     }
 }
@@ -559,7 +597,7 @@ double calculate_noise_sigma(void)
   }
   return sigma_noise;
 }
-void calculate_2dfs_Centroid(double sigma_noise, verbose_definition verbose)
+void calculate_2dfs_Centroid(double sigma_noise, FILE *writesel_fptr, int SelectedComponent, verbose_definition verbose)
 {
   double I, Itot;
   int xi, yi, xstart, xend, ystart, yend, nrbins;

@@ -13,7 +13,10 @@ Redistribution and use in source and binary forms, with or without modification,
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#define DM_CONST 4.148808e3
+#ifndef PSRSALSA_TEMPDIRECTORY
+   #define PSRSALSA_TEMPDIRECTORY "/tmp/"
+#endif
+#define DM_CONST 4149.37759336099585062241
 #define MAX_pulselongitude_regions 200
 #define maxNrVonMisesComponents 100
 #define MaxPickWordFromString_WordLength 1000
@@ -74,6 +77,8 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #define GENTYPE_LRCC 33
 #define GENTYPE_LRAC 34
 #define GENTYPE_RMMAP 50
+#define GENTYPE_GEN_LR_DIST 70
+#define GENTYPE_GEN_LR_CUMDIST 71
 #define GENTYPE_PADIST 101
 #define GENTYPE_ELLDIST 102
 #define GENTYPE_RECEIVERMODEL 200
@@ -112,10 +117,14 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
   #define M_PI 3.14159265358979323846264338327950288
 #endif
 #define printerror(debug_flag,...) \
-  { fflush(stdout); fprintf_color(stderr, 2, __VA_ARGS__); \
-  if(debug_flag) fprintf_color(stderr, 2, " (message generated in %s line %d)", __FILE__, __LINE__); \
-  fprintf_color(stderr, 0, "\n"); }
+  do { \
+    fflush(stdout); fprintf_color(stderr, 2, __VA_ARGS__); \
+    if(debug_flag) fprintf_color(stderr, 2, " (message generated in %s line %d)", __FILE__, __LINE__); \
+    fprintf_color(stderr, 0, "\n"); \
+  }while(0)
 #define printwarning(debug_flag,...) \
-  fflush(stdout); fprintf_color(stderr, 7, __VA_ARGS__); \
-  if(debug_flag) fprintf_color(stderr, 7, " (message generated in %s line %d)", __FILE__, __LINE__); \
-  fprintf_color(stderr, 0, "\n")
+  do { \
+    fflush(stdout); fprintf_color(stderr, 7, __VA_ARGS__); \
+    if(debug_flag) fprintf_color(stderr, 7, " (message generated in %s line %d)", __FILE__, __LINE__); \
+    fprintf_color(stderr, 0, "\n"); \
+  }while(0)

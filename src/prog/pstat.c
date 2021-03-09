@@ -32,7 +32,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 int main(int argc, char **argv)
 {
   psrsalsaApplication application;
-  long i, j;
+  long i, j, nread_max;
   int file1_column1, file1_column2, file1_column3, file2_column1, file2_column2, file2_column3, typetest, read_log, output_idx, skiplines;
   double threshold1, threshold2, threshold3, ksflat_min, ksflat_max;
   initApplication(&application, "pstat", "[options] inputfile(s)");
@@ -52,6 +52,7 @@ int main(int argc, char **argv)
   threshold3 = 0;
   output_idx = 0;
   skiplines = 0;
+  nread_max = 0;
   if(argc < 2) {
     printf("Program to perform various statistical tests on input data. One or two input\n");
     printf("files are required depending on the statistical test to be performed. The input\n");
@@ -65,6 +66,7 @@ int main(int argc, char **argv)
     printf("-col1            Equivalent to -col\n");
     printf("-col2            Like -col1, but for second input file.\n");
     printf("-log             The base 10 log of the input values is used.\n");
+    printf("-nread N         Cap the nr of input values to N.\n");
     printf("-output          Specify output filename to use rather than the stdout.\n");
     printf("-skiplines nr    Specify number of lines that should be skipped from start file(s).\n");
     printf("\nStatistical tests:\n");
@@ -248,6 +250,14 @@ int main(int argc, char **argv)
  typetest = CHI2TEST_CDF;
       }else if(strcmp(argv[i], "-log") == 0) {
  read_log = 1;
+      }else if(strcmp(argv[i], "-nread") == 0) {
+ int ret;
+ ret = parse_command_string(application.verbose_state, argc, argv, i+1, 0, 1, "%ld", &nread_max, NULL);
+ if(ret != 1) {
+   printerror(application.verbose_state.debug, "ERROR pstat: Cannot parse '%s' option, 1 value was expected.", argv[i]);
+   return 0;
+ }
+ i++;
       }else {
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "pstat: Unknown option: %s\n\nRun pstat without command line arguments to show help", argv[i]);
@@ -386,7 +396,7 @@ int main(int argc, char **argv)
   }
   if(file1_column1) {
     double min_x, max_x, avrg;
-    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], file1_column1, 1.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
+    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], nread_max, file1_column1, 1.0, 0.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
       printerror(application.verbose_state.debug, "ERROR pstat: cannot load file.\n");
       return 0;
     }
@@ -394,7 +404,7 @@ int main(int argc, char **argv)
   }
   if(file1_column2) {
     double min_x, max_x, avrg;
-    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], file1_column2, 1.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
+    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], nread_max, file1_column2, 1.0, 0.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
       printerror(application.verbose_state.debug, "ERROR pstat: cannot load file.\n");
       return 0;
     }
@@ -402,7 +412,7 @@ int main(int argc, char **argv)
   }
   if(file1_column3) {
     double min_x, max_x, avrg;
-    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], file1_column3, 1.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
+    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], nread_max, file1_column3, 1.0, 0.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
       printerror(application.verbose_state.debug, "ERROR pstat: cannot load file.\n");
       return 0;
     }
@@ -417,7 +427,7 @@ int main(int argc, char **argv)
   }
   if(file2_column1) {
     double min_x, max_x, avrg;
-    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], file2_column1, 1.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
+    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], nread_max, file2_column1, 1.0, 0.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
       printerror(application.verbose_state.debug, "ERROR pstat: cannot load file.\n");
       return 0;
     }
@@ -425,7 +435,7 @@ int main(int argc, char **argv)
   }
   if(file2_column2) {
     double min_x, max_x, avrg;
-    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], file2_column2, 1.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
+    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], nread_max, file2_column2, 1.0, 0.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
       printerror(application.verbose_state.debug, "ERROR pstat: cannot load file.\n");
       return 0;
     }
@@ -433,7 +443,7 @@ int main(int argc, char **argv)
   }
   if(file2_column3) {
     double min_x, max_x, avrg;
-    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], file2_column3, 1.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
+    if(read_ascii_column_double(filename_ptr, skiplines, '#', -1, 1, &number_values[number_input_arrays], nread_max, file2_column3, 1.0, 0.0, read_log, &input_array[number_input_arrays], &min_x, &max_x, &avrg, application.verbose_state, 0) == 0) {
       printerror(application.verbose_state.debug, "ERROR pstat: cannot load file.\n");
       return 0;
     }
@@ -560,7 +570,7 @@ int main(int argc, char **argv)
     int extrazeropad, cc_length;
     float *ans;
     extrazeropad = 0;
-    if(crosscorrelation_fft_padding(x1, y1, number_values[0], extrazeropad, &ans, &cc_length, application.verbose_state) == 0) {
+    if(crosscorrelation_fft_padding(x1, y1, number_values[0], extrazeropad, &ans, &cc_length, 0, application.verbose_state) == 0) {
       printerror(application.verbose_state.debug, "ERROR pstat: Cross correlation failed.");
       return 0;
     }

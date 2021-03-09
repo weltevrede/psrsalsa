@@ -1189,7 +1189,15 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
  printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
  return 0;
       }
-      dummy_double = get_tsub(*datafile, i, verbose);
+      if(datafile->tsubMode != TSUBMODE_UNKNOWN) {
+ dummy_double = get_tsub(*datafile, i, verbose);
+      }else {
+ dummy_double = 1.0/datafile->NrSubints;
+ if(i == 0) {
+   fflush(stdout);
+   printwarning(verbose.debug, "WARNING writePSRFITSHeader: Observation length seems to be undefined, set the length of the observation to 1 second.");
+ }
+      }
       if(fits_write_col(datafile->fits_fptr, TDOUBLE, 2, i+1, 1, 1, &dummy_double, &status) != 0) {
  fflush(stdout);
  printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
@@ -1447,7 +1455,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
   int version_major, version_minor;
   long numrows, dummy_long;
   double f, dummy_double, f1, f2, bandwidth;
-  char command[2000], tmpfilename[2000];
+  char command[4000], tmpfilename[2000];
   char dummy_txt[2000];
   FILE *fin;
   char *char_ptrptr[1];
@@ -1812,6 +1820,8 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
     printerror(verbose.debug, "ERROR readPSRFITSHeader: Memory allocation error");
     return 0;
   }
+  if(verbose.debug)
+    printf("  readPSRFITSHeader (%s): Initialise tsub_list\n", datafile->filename);
   datafile->tsub_list[0] = 0;
   if(fits_read_card(datafile->fits_fptr,"PS_XMIN", card, &status)) {
     datafile->xrangeset = 0;
@@ -2294,7 +2304,7 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
  }
  sprintf(username, "Unknown");
       }
-      sprintf(tmpfilename, "/tmp/junk_mjd_%s", username);
+      sprintf(tmpfilename, "%sjunk_mjd_%s", PSRSALSA_TEMPDIRECTORY, username);
       free(username);
       remove(tmpfilename);
       sprintf(command, "vap -n -c period %s > %s", datafile->filename, tmpfilename);
@@ -2687,6 +2697,8 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
    if(datafile->tsub_list != NULL) {
      free(datafile->tsub_list);
    }
+   if(verbose.debug)
+     printf("  readPSRFITSHeader (%s): Re-initialise tsub_list as a list of length %ld\n", datafile->filename, datafile->NrSubints);
    datafile->tsub_list = (double *)malloc(datafile->NrSubints*sizeof(double));
    if(datafile->tsub_list == NULL) {
      fflush(stdout);

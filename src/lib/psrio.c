@@ -57,6 +57,7 @@ int readSigprocASCIIHeader(datafile_definition *datafile, verbose_definition ver
 int writeSigprocASCIIHeader(datafile_definition datafile, verbose_definition verbose);
 int writeSigprocASCIIfile(datafile_definition datafile, float *data, verbose_definition verbose);
 int readSigprocASCIIfile(datafile_definition datafile, float *data, verbose_definition verbose);
+void closeHistoryPSRData(datafile_definition *datafile);
 int isValidPSRDATA_format(int format)
 {
   if(format == PUMA_format)
@@ -381,6 +382,7 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
   datafile_dest->isDebase = datafile_source.isDebase;
   datafile_dest->cableSwap = datafile_source.cableSwap;
   datafile_dest->cableSwapcor = datafile_source.cableSwapcor;
+  closeHistoryPSRData(datafile_dest);
   datafile_history_entry_definition *dest_hist, *source_hist;
   dest_hist = &(datafile_dest->history);
   source_hist = &(datafile_source.history);
@@ -2239,6 +2241,39 @@ int openPSRData(datafile_definition *datafile, char *filename, int format, int e
   }
   return datafile->opened_flag;
 }
+void closeHistoryPSRData(datafile_definition *datafile)
+{
+  datafile_history_entry_definition *history_ptr, *history_ptr_next;
+  int firsthistoryline;
+  history_ptr = &(datafile->history);
+  firsthistoryline = 1;
+  do {
+    if(history_ptr->timestamp != NULL) {
+      free(history_ptr->timestamp);
+      history_ptr->timestamp = NULL;
+    }
+    if(history_ptr->cmd != NULL) {
+      free(history_ptr->cmd);
+      history_ptr->cmd = NULL;
+    }
+    if(history_ptr->user != NULL) {
+      free(history_ptr->user);
+      history_ptr->user = NULL;
+    }
+    if(history_ptr->hostname != NULL) {
+      free(history_ptr->hostname);
+      history_ptr->hostname = NULL;
+    }
+    history_ptr_next = history_ptr->nextEntry;
+    history_ptr->nextEntry = NULL;
+    if(firsthistoryline == 1) {
+      firsthistoryline = 0;
+    }else {
+      free(history_ptr);
+    }
+    history_ptr = history_ptr_next;
+  }while(history_ptr_next != NULL);
+}
 int closePSRData(datafile_definition *datafile, int perserve_info, verbose_definition verbose)
 {
   int indent;
@@ -2327,6 +2362,9 @@ int closePSRData(datafile_definition *datafile, int perserve_info, verbose_defin
       datafile->tsamp_list = NULL;
     }
     if(datafile->tsub_list != NULL) {
+      if(verbose.debug) {
+ printf("  - Releasing tsub_list\n");
+      }
       free(datafile->tsub_list);
       datafile->tsub_list = NULL;
     }
@@ -2338,36 +2376,7 @@ int closePSRData(datafile_definition *datafile, int perserve_info, verbose_defin
       free(datafile->offpulse_rms);
       datafile->offpulse_rms = NULL;
     }
-    datafile_history_entry_definition *history_ptr, *history_ptr_next;
-    int firsthistoryline;
-    history_ptr = &(datafile->history);
-    firsthistoryline = 1;
-    do {
-      if(history_ptr->timestamp != NULL) {
- free(history_ptr->timestamp);
- history_ptr->timestamp = NULL;
-      }
-      if(history_ptr->cmd != NULL) {
- free(history_ptr->cmd);
- history_ptr->cmd = NULL;
-      }
-      if(history_ptr->user != NULL) {
- free(history_ptr->user);
- history_ptr->user = NULL;
-      }
-      if(history_ptr->hostname != NULL) {
- free(history_ptr->hostname);
- history_ptr->hostname = NULL;
-      }
-      history_ptr_next = history_ptr->nextEntry;
-      history_ptr->nextEntry = NULL;
-      if(firsthistoryline == 1) {
- firsthistoryline = 0;
-      }else {
- free(history_ptr);
-      }
-      history_ptr = history_ptr_next;
-    }while(history_ptr_next != NULL);
+    closeHistoryPSRData(datafile);
   }
   return status;
 }
@@ -2387,6 +2396,8 @@ static char * internal_gentype_string_p3fold = "P3 fold";
 static char * internal_gentype_string_polarmap = "Polar map";
 static char * internal_gentype_string_lrcc = "LRCC";
 static char * internal_gentype_string_lrac = "LRAC";
+static char * internal_gentype_string_gen_lr_dist = "Generic long. resolved distr.";
+static char * internal_gentype_string_gen_lr_cumdist = "Generic long. resolved cum. distr.";
 static char * internal_gentype_string_padist = "PA distr.";
 static char * internal_gentype_string_elldist = "Ell distr.";
 static char * internal_gentype_string_recmodel = "Receiver model";
@@ -2415,6 +2426,8 @@ char *returnGenType_str(int gentype)
   case GENTYPE_POLARMAP: return internal_gentype_string_polarmap; break;
   case GENTYPE_LRCC: return internal_gentype_string_lrcc; break;
   case GENTYPE_LRAC: return internal_gentype_string_lrac; break;
+  case GENTYPE_GEN_LR_DIST: return internal_gentype_string_gen_lr_dist; break;
+  case GENTYPE_GEN_LR_CUMDIST: return internal_gentype_string_gen_lr_cumdist; break;
   case GENTYPE_PADIST: return internal_gentype_string_padist; break;
   case GENTYPE_ELLDIST: return internal_gentype_string_elldist; break;
   case GENTYPE_RECEIVERMODEL: return internal_gentype_string_recmodel; break;

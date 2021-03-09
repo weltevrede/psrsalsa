@@ -122,6 +122,51 @@ int preprocess_checknan(datafile_definition original, int generate_warning, verb
   }
   return 0;
 }
+int preprocess_removenan(datafile_definition original, verbose_definition verbose)
+{
+  long p, f, n, b;
+  int i, ret;
+  float I;
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("Removing any NaN's from data if they occur\n");
+  }
+  if(original.format != MEMORY_format) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_removenan: only works if data is loaded into memory.");
+    return 0;
+  }
+  ret = 0;
+  for(p = 0; p < original.NrPols; p++) {
+    for(f = 0; f < original.NrFreqChan; f++) {
+      for(n = 0; n < original.NrSubints; n++) {
+ for(b = 0; b < original.NrBins; b++) {
+   if(readPulsePSRData(&original, n, p, f, b, 1, &I, verbose) != 1) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR preprocess_removenan: Cannot read data.");
+     exit(-1);
+   }
+   if(isnan(I)) {
+     I = 0;
+     if(writePulsePSRData(&original, n, p, f, b, 1, &I, verbose) != 1) {
+       fflush(stdout);
+       printerror(verbose.debug, "ERROR preprocess_removenan: Cannot write data.");
+       exit(-1);
+     }
+     ret = 1;
+   }
+ }
+      }
+    }
+  }
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("  done             \n");
+  }
+  return ret;
+}
 int preprocess_checkinf(datafile_definition original, int generate_warning, verbose_definition verbose)
 {
   long p, f, n, b;
@@ -375,9 +420,14 @@ int preprocess_pulsesselect(datafile_definition original, datafile_definition *c
     printerror(verbose.debug, "ERROR preprocess_pulsesselect: Invalid nskip.");
     return 0;
   }
-  if(nread < 0 || nskip+nread > original.NrSubints) {
+  if(nread < 0) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_pulsesselect: Invalid nread.");
+    printerror(verbose.debug, "ERROR preprocess_pulsesselect: Invalid nread (%ld < 0).", nread);
+    return 0;
+  }
+  if(nskip+nread > original.NrSubints) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_pulsesselect: Invalid nread (%ld > %ld).", nskip+nread, original.NrSubints);
     return 0;
   }
   if(original.freqMode != FREQMODE_UNIFORM) {
@@ -2000,8 +2050,9 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
     if(rm_table == NULL) {
-      if(update == 0)
+      if(update == 0) {
  dphi = calcRMAngle(get_weighted_channel_freq(*original, 0, original->NrFreqChan/2, verbose), original->freq_ref, inffreq, original->rm);
+      }
       printf("  Rotating Q&U of central frequency channel of first subint (%f MHz) by %f rad = %f deg\n", get_weighted_channel_freq(*original, 0, original->NrFreqChan/2, verbose), 2.0*dphi, 2.0*dphi*180.0/M_PI);
     }else {
       printf("  Rotating Q&U\n");
@@ -2043,6 +2094,11 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
  L = sqrt(pulseQ[b]*pulseQ[b]+pulseU[b]*pulseU[b]);
  phi = atan2(pulseU[b], pulseQ[b]);
  phi -= 2.0*dphi;
+ if(verbose.debug) {
+   if(b == 0 && n == 0) {
+     printf("  Rotating Q&U of frequency channel %ld (%f MHz) of first bin of first subint by %f rad = %f deg in Q/U space\n", f, get_weighted_channel_freq(*original, n, f, verbose), -2.0*dphi, -2.0*dphi*180.0/M_PI);
+   }
+ }
  pulseQ[b] = L*cos(phi);
  pulseU[b] = L*sin(phi);
       }

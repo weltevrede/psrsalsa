@@ -361,7 +361,7 @@ int ascii_file_stats(FILE *fin, char skipChar, long *nrlines, int maxlinelength,
   free(txt);
   return 1;
 }
-int read_ascii_column(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, double scale, int read_log, float **data, float *mindata, float *maxdata, float *avdata, verbose_definition verbose, int verbose_stderr)
+int read_ascii_column(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, long nrdatapoints_max, int colnum, double scale, double norm, int read_log, float **data, float *mindata, float *maxdata, float *avdata, verbose_definition verbose, int verbose_stderr)
 {
   FILE *fin, *verbose_stream;
   long i, j, n, fpos, maxlinelength, linenr;
@@ -405,6 +405,17 @@ int read_ascii_column(char *fname, int skiplines, char skipChar, int nrColumns, 
     printerror(verbose.debug, "read_ascii_column: Error in determining the nr of lines");
     free(txt);
     return 0;
+  }
+  if(nrdatapoints_max > 0) {
+    if(verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      fflush(stdout);
+      fprintf(verbose_stream, "  Capping the %ld datapoints to %ld\n", *nrdatapoints, nrdatapoints_max);
+    }
+    if(*nrdatapoints > nrdatapoints_max) {
+      *nrdatapoints = nrdatapoints_max;
+    }
   }
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
@@ -473,6 +484,11 @@ int read_ascii_column(char *fname, int skiplines, char skipChar, int nrColumns, 
       sumx += (*data)[n];
       n++;
     }
+    if(nrdatapoints_max > 0) {
+      if(n == nrdatapoints_max) {
+ break;
+      }
+    }
   }while(ret != 0);
   free(txt);
   fclose(fin);
@@ -486,6 +502,15 @@ int read_ascii_column(char *fname, int skiplines, char skipChar, int nrColumns, 
       printf(" ");
     fprintf(verbose_stream, "  Average value = %lf\n", sumx/(double)(*nrdatapoints));
   }
+  if(norm != 0.0) {
+    scale = 1.0/(sumx/(double)(*nrdatapoints));
+    for(n = 0; n < *nrdatapoints; n++) {
+      (*data)[n] *= scale;
+    }
+    minx *= scale;
+    maxx *= scale;
+    sumx *= scale;
+  }
   if(mindata != NULL)
     *mindata = minx;
   if(maxdata != NULL)
@@ -494,7 +519,7 @@ int read_ascii_column(char *fname, int skiplines, char skipChar, int nrColumns, 
     *avdata = sumx/(double)(*nrdatapoints);
   return 1;
 }
-int read_ascii_column_double(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, double scale, int read_log, double **data, double *mindata, double *maxdata, double *avdata, verbose_definition verbose, int verbose_stderr)
+int read_ascii_column_double(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, long nrdatapoints_max, int colnum, double scale, double norm, int read_log, double **data, double *mindata, double *maxdata, double *avdata, verbose_definition verbose, int verbose_stderr)
 {
   FILE *fin, *verbose_stream;
   long i, j, n, fpos, maxlinelength, linenr;
@@ -538,6 +563,17 @@ int read_ascii_column_double(char *fname, int skiplines, char skipChar, int nrCo
     printerror(verbose.debug, "read_ascii_column_double: Error in determining the nr of lines");
     free(txt);
     return 0;
+  }
+  if(nrdatapoints_max > 0) {
+    if(verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      fflush(stdout);
+      fprintf(verbose_stream, "  Capping the %ld datapoints to %ld\n", *nrdatapoints, nrdatapoints_max);
+    }
+    if(*nrdatapoints > nrdatapoints_max) {
+      *nrdatapoints = nrdatapoints_max;
+    }
   }
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
@@ -606,6 +642,11 @@ int read_ascii_column_double(char *fname, int skiplines, char skipChar, int nrCo
       sumx += (*data)[n];
       n++;
     }
+    if(nrdatapoints_max > 0) {
+      if(n == nrdatapoints_max) {
+ break;
+      }
+    }
   }while(ret != 0);
   free(txt);
   fclose(fin);
@@ -619,6 +660,15 @@ int read_ascii_column_double(char *fname, int skiplines, char skipChar, int nrCo
       printf(" ");
     fprintf(verbose_stream, "  Average value = %lf\n", sumx/(double)(*nrdatapoints));
   }
+  if(norm != 0.0) {
+    scale = 1.0/(sumx/(double)(*nrdatapoints));
+    for(n = 0; n < *nrdatapoints; n++) {
+      (*data)[n] *= scale;
+    }
+    minx *= scale;
+    maxx *= scale;
+    sumx *= scale;
+  }
   if(mindata != NULL)
     *mindata = minx;
   if(maxdata != NULL)
@@ -627,7 +677,7 @@ int read_ascii_column_double(char *fname, int skiplines, char skipChar, int nrCo
     *avdata = sumx/(double)(*nrdatapoints);
   return 1;
 }
-int read_ascii_column_int(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, int **data, int *mindata, int *maxdata, double *avdata, verbose_definition verbose, int verbose_stderr)
+int read_ascii_column_int(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, long nrdatapoints_max, int colnum, int **data, int *mindata, int *maxdata, double *avdata, verbose_definition verbose, int verbose_stderr)
 {
   FILE *fin, *verbose_stream;
   long i, j, n, fpos, maxlinelength, linenr;
@@ -671,6 +721,17 @@ int read_ascii_column_int(char *fname, int skiplines, char skipChar, int nrColum
     printerror(verbose.debug, "read_ascii_column_int: Error in determining the nr of lines");
     free(txt);
     return 0;
+  }
+  if(nrdatapoints_max > 0) {
+    if(verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      fflush(stdout);
+      fprintf(verbose_stream, "  Capping the %ld datapoints to %ld\n", *nrdatapoints, nrdatapoints_max);
+    }
+    if(*nrdatapoints > nrdatapoints_max) {
+      *nrdatapoints = nrdatapoints_max;
+    }
   }
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
@@ -731,6 +792,11 @@ int read_ascii_column_int(char *fname, int skiplines, char skipChar, int nrColum
       sumx += (*data)[n];
       n++;
     }
+    if(nrdatapoints_max > 0) {
+      if(n == nrdatapoints_max) {
+ break;
+      }
+    }
   }while(ret != 0);
   free(txt);
   fclose(fin);
@@ -752,7 +818,7 @@ int read_ascii_column_int(char *fname, int skiplines, char skipChar, int nrColum
     *avdata = sumx/(double)(*nrdatapoints);
   return 1;
 }
-int read_ascii_column_str(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, int colnum, char ***data, verbose_definition verbose, int verbose_stderr)
+int read_ascii_column_str(char *fname, int skiplines, char skipChar, int nrColumns, int autoNrColumns, long *nrdatapoints, long nrdatapoints_max, int colnum, char ***data, verbose_definition verbose, int verbose_stderr)
 {
   FILE *fin, *verbose_stream;
   long i, n, fpos, maxlinelength, linenr;
@@ -797,6 +863,17 @@ int read_ascii_column_str(char *fname, int skiplines, char skipChar, int nrColum
     free(txt);
     free(word);
     return 0;
+  }
+  if(nrdatapoints_max > 0) {
+    if(verbose.verbose) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      fflush(stdout);
+      fprintf(verbose_stream, "  Capping the %ld datapoints to %ld\n", *nrdatapoints, nrdatapoints_max);
+    }
+    if(*nrdatapoints > nrdatapoints_max) {
+      *nrdatapoints = nrdatapoints_max;
+    }
   }
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
@@ -852,6 +929,11 @@ int read_ascii_column_str(char *fname, int skiplines, char skipChar, int nrColum
       }
       strcpy((*data)[n], word);
       n++;
+    }
+    if(nrdatapoints_max > 0) {
+      if(n == nrdatapoints_max) {
+ break;
+      }
     }
   }while(ret != 0);
   free(word);

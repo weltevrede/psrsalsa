@@ -28,12 +28,12 @@ void convertAlphaBeta(double *alpha, double *beta
 void calcBeamWidths(int nalpha, int nbeta, double alphastart, double alphaend, double betastart, double betaend,
       int calculate_beam_widths, int calculate_interpulse_widths, double pulse_width2, float *rhogrid, float *rhogrid2, int nocounters);
 int internal_fit_pa_or_l0;
-void PlotGrid(float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, double level, double suppress_fac, int GridDeviceID, double alpha, double beta, double lwbox, double labelcharheight, double boxlabelcharheight, int drawCross, int draw_title, int drawcontours, int nogray,
+void PlotGrid(float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, double level, double suppress_fac, int GridDeviceID, double alpha, double beta, double lwbox, double labelcharheight, double boxlabelcharheight, int drawCross, int draw_title, int nr_contours, int nruserContours, float *userContours, int nogray,
        double chimax, double chimin, int maptype, int showwedge, char *showwedge_label);
 void DoFitting(double alpha0, double beta0, double pa0, double dpa0, double l0, double dl0, double dh0, double ddh0, double ftol, double *fit_pa0, double *fit_l0, double *fit_a, double *fit_b, double *fit_dh, double *chi, int *nfunk, int searchAll, int report, FILE *reportStream, int finderrors, double nrofsigmas, int *nfitparameters, int amoeba_algorithm, verbose_definition verbose);
 void PlotPAswing(double alpha, double beta, double pa0, double l0, int PlotFit, double leftPulseLongitude, double rightPulseLongitude, double dh);
-void PlotContours(float *rhogrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nrlevels, float *TR, int GridDeviceID, int contour_txt, int contourcolor, int fixedContours, int nruserContours, float *userContours, int lwbox, int dotted);
-void calcIntersectionRhoAndBanana(float *rhogrid, float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nruserContours, float *userContours, double chimax, double chimin, verbose_definition verbose);
+void PlotContours(float *rhogrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nrlevels, float *TR, int GridDeviceID, int contour_txt, int contourcolor, int fixedContours, int nrBeamWidthuserContours, float *userBeamWidthContours, int lwbox, int dotted);
+void calcIntersectionRhoAndBanana(float *rhogrid, float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nrBeamWidthuserContours, float *userBeamWidthContours, double chimax, double chimin, verbose_definition verbose);
 void print_steepness(double alpha, double beta, double l0, double pa0, int verbose, double dh, double *sina_b);
 double funk(double x[]);
 double internal_funk_gsl(double *x, void *params);
@@ -45,7 +45,8 @@ struct {
   int NrDataPoints;
   double jump_longitude[MaxNrJumps], jump_offset[MaxNrJumps];
   int nrJumps, autojump;
-  double add_height_longitude;
+  double add_height_longitude, max_height_diff;
+  int height_diff_bcw_only;
   double l0_start, max_l0_diff;
   int force_set;
   double force_l, force_pa, force_dpa;
@@ -57,16 +58,16 @@ int main(int argc, char **argv)
   char prefix[1000];
   int i, j, nfunk, loadresults, GridDeviceID, PADeviceID, PSDeviceID, macrofilename, ret;
   int calculate_beam_widths, nrcontourlevels, nrcontourlevels2, redraw;
-  int fixedContours, printsmooth, nogray, drawcontours, boxlw, nrfitparams;
+  int fixedContours, printsmooth, nogray, nr_contours, boxlw, nrfitparams;
   int contour_plot, contour_txt, calculate_interpulse_widths, iformat;
   int alphaset, betaset, lset, paset, printnofit, printfit, GridSearch, nalpha, nbeta;
   int onlyshowbest, showgraphics, drawCross, title_txt;
-  int enableerrors, nruserContours, doBruteForce;
+  int enableerrors, nrBeamWidthuserContours, nruserContours, doBruteForce;
   int showwedge, version;
   int gridDevice_resx, gridDevice_resy, paDevice_resx, paDevice_resy;
   int invertGrayscale, amoeba_algorithm, doMC, devicenores, fixseed;
   int suppress_greyscale, beamwidth_params_only_w;
-  float *chigrid, *l0grid, *pa0grid, *dhgrid, *rhogrid, *rhogrid2, TR[6], userContours[500];
+  float *chigrid, *l0grid, *pa0grid, *dhgrid, *rhogrid, *rhogrid2, TR[6], userBeamWidthContours[500], userContours[500];
   double ftol;
   double l0, dl0, pa0, dpa0, dh0, ddh0, alpha0, beta0, chi, chi_old, chimax, chimin;
   double fit_pa0, fit_l0, fit_dh0, fit_alpha, fit_beta, bestalpha, bestbeta;
@@ -99,6 +100,7 @@ int main(int argc, char **argv)
   betastart = -90;
   betaend = 90;
   fitterinfo.max_l0_diff = 45;
+  fitterinfo.max_height_diff = 1.0;
   calculate_beam_widths = 0;
   calculate_interpulse_widths = 0;
   strcpy(dumpfile, "dump.dat");
@@ -118,7 +120,7 @@ int main(int argc, char **argv)
   fitterinfo.force_set = 0;
   title_txt = 1;
   boxlw = 4;
-  drawcontours = 3;
+  nr_contours = 3;
   labelcharheight = 1.7;
   boxlabelcharheight = 1;
   suppress_fac = 1;
@@ -129,6 +131,7 @@ int main(int argc, char **argv)
   doBruteForce = 0;
   sprintf(device1, "?");
   sprintf(device2, "?");
+  nrBeamWidthuserContours = 0;
   nruserContours = 0;
   showwedge_label = "Reduced-\\gx\\u2";
   macrofilename = 0;
@@ -155,6 +158,7 @@ int main(int argc, char **argv)
   paErrorFac = 1;
   sprintf(prefix, "chi2");
   doContourRange = 0;
+  fitterinfo.height_diff_bcw_only = 0;
   if(argc < 2) {
     printf("Program to fit the rotating vector model to a position angle swing as generated by ppol. Usage:\n\n");
     printApplicationHelp(&application);
@@ -191,6 +195,8 @@ int main(int argc, char **argv)
     fprintf(stdout, "                      and initial step size dh.\n");
     fprintf(stdout, "  -maxdl              Set maximum allowed deviation of the position of the\n");
     fprintf(stdout, "                      magnetic axis from start value [def=%.1f deg].\n", fitterinfo.max_l0_diff);
+    fprintf(stdout, "  -maxh               Set maximum deviation of 0 of the height difference  [def=%.1f deg].\n", fitterinfo.max_l0_diff);
+    fprintf(stdout, "                      Use in combination with -fitdh.\n");
     fprintf(stdout, "  -forcepa \"l PA dPA\" Forces fit to go through PA with error bar dPA\n");
     fprintf(stdout, "                      at longitude l.\n");
     fprintf(stdout, "  -opm \"l o\"          Put an OPM at longitude l with offset o in degrees in\n");
@@ -351,6 +357,12 @@ int main(int argc, char **argv)
  i++;
       }else if(strcmp(argv[i], "-maxdl") == 0) {
  if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &fitterinfo.max_l0_diff, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR ppolFit: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
+ i++;
+      }else if(strcmp(argv[i], "-maxh") == 0) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf", &fitterinfo.max_height_diff, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR ppolFit: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -587,16 +599,19 @@ int main(int argc, char **argv)
   gsl_rng_set(rand_num_gen, idnum);
   fit_dh0 = dh0;
   if(printnofit == 1) {
-    for(i = 0; i < 360; i++)
-      printf("%d %lf\n", i, paswing_double(alpha0, beta0, i, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh0));
+    for(i = 0; i < 360; i++) {
+      printf("%d %lf\n", i, paswing_double(alpha0, beta0, i, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh0, fitterinfo.height_diff_bcw_only));
+    }
     terminateApplication(&application);
     gsl_rng_free(rand_num_gen);
     return 0;
   }
   if(loadresults == 0) {
-    iformat = guessPSRData_format(argv[argc-1], 0, application.verbose_state);
-    if(iformat == -2 || iformat == -3)
-      return 0;
+    if(iformat == -1) {
+      iformat = guessPSRData_format(argv[argc-1], 0, application.verbose_state);
+      if(iformat == -2 || iformat == -3)
+ return 0;
+    }
     if(isValidPSRDATA_format(iformat) == 0) {
       printerror(application.verbose_state.debug, "ERROR ppolFit: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", argv[argc-1]);
       return 0;
@@ -608,7 +623,7 @@ int main(int argc, char **argv)
     if(!openPSRData(&datain, argv[argc-1], iformat, 0, 1, 0, application.verbose_state))
       return 0;
     fitterinfo.NrDataPoints = filterPApoints(&datain, application.verbose_state);
-    if(fitterinfo.NrDataPoints == 0) {
+    if(fitterinfo.NrDataPoints <= 0) {
       printerror(application.verbose_state.debug, "ppolFit: No significant pa points in data.");
       return 0;
     }
@@ -991,13 +1006,13 @@ int main(int argc, char **argv)
    if(redraw == 2) {
      if(onlyshowbest != 1) {
        cpgslct(GridDeviceID);
-       PlotGrid(chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, level, suppress_fac, GridDeviceID, bestalpha, bestbeta, boxlw, labelcharheight, boxlabelcharheight, drawCross, title_txt, drawcontours, nogray,
+       PlotGrid(chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, level, suppress_fac, GridDeviceID, bestalpha, bestbeta, boxlw, labelcharheight, boxlabelcharheight, drawCross, title_txt, nr_contours, nruserContours, userContours, nogray,
          chimax, chimin, PPGPLOT_GRAYSCALE, showwedge, showwedge_label);
      }
    }else {
      if(onlyshowbest != 1) {
        cpgslct(GridDeviceID);
-       PlotGrid(chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, level, suppress_fac, GridDeviceID, -1, -1, boxlw, labelcharheight, boxlabelcharheight, drawCross, title_txt, drawcontours, nogray,
+       PlotGrid(chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, level, suppress_fac, GridDeviceID, -1, -1, boxlw, labelcharheight, boxlabelcharheight, drawCross, title_txt, nr_contours, nruserContours, userContours, nogray,
          chimax, chimin, PPGPLOT_GRAYSCALE, showwedge, showwedge_label);
      }
    }
@@ -1011,26 +1026,26 @@ int main(int argc, char **argv)
   int ret;
   do {
     if(calculate_interpulse_widths == 0)
-      ret = fscanf(beamwidth_params_fin, "%lf %f", &fitterinfo.pulse_width, &userContours[0]);
+      ret = fscanf(beamwidth_params_fin, "%lf %f", &fitterinfo.pulse_width, &userBeamWidthContours[0]);
     else
-      ret = fscanf(beamwidth_params_fin, "%lf %f", &pulse_width2, &userContours[0]);
+      ret = fscanf(beamwidth_params_fin, "%lf %f", &pulse_width2, &userBeamWidthContours[0]);
     if(ret == 2) {
-      nruserContours = 1;
+      nrBeamWidthuserContours = 1;
       calculate_beam_widths = 1;
       if(calculate_interpulse_widths == 0)
-        printf("Calculating contours with W=%f deg and rho=%f deg\n", fitterinfo.pulse_width, userContours[0]);
+        printf("Calculating contours with W=%f deg and rho=%f deg\n", fitterinfo.pulse_width, userBeamWidthContours[0]);
       else
-        printf("Calculating contours for interpulse with W=%f deg and rho=%f deg\n", pulse_width2, userContours[0]);
+        printf("Calculating contours for interpulse with W=%f deg and rho=%f deg\n", pulse_width2, userBeamWidthContours[0]);
       calcBeamWidths(nalpha, nbeta, alphastart, alphaend, betastart, betaend,
        calculate_beam_widths, calculate_interpulse_widths, pulse_width2, rhogrid, rhogrid2, application.verbose_state.nocounters);
-      PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, GridDeviceID, contour_txt, contourcolor, fixedContours, nruserContours, userContours, boxlw, dotted);
-      calcIntersectionRhoAndBanana(rhogrid, chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nruserContours, userContours, chimax, chimin, beamwidth_params_vebose);
+      PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, GridDeviceID, contour_txt, contourcolor, fixedContours, nrBeamWidthuserContours, userBeamWidthContours, boxlw, dotted);
+      calcIntersectionRhoAndBanana(rhogrid, chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrBeamWidthuserContours, userBeamWidthContours, chimax, chimin, beamwidth_params_vebose);
     }
   }while(ret == 2);
        }else {
   if(onlyshowbest != 1) {
     dotted = 1;
-    PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, GridDeviceID, contour_txt, contourcolor, fixedContours, nruserContours, userContours, boxlw, dotted);
+    PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, GridDeviceID, contour_txt, contourcolor, fixedContours, nrBeamWidthuserContours, userBeamWidthContours, boxlw, dotted);
   }
        }
      }
@@ -1046,25 +1061,25 @@ int main(int argc, char **argv)
   int ret;
   do {
     if(calculate_interpulse_widths == 0)
-      ret = fscanf(beamwidth_params_fin, "%lf %f", &fitterinfo.pulse_width, &userContours[0]);
+      ret = fscanf(beamwidth_params_fin, "%lf %f", &fitterinfo.pulse_width, &userBeamWidthContours[0]);
     else
-      ret = fscanf(beamwidth_params_fin, "%lf %f", &pulse_width2, &userContours[0]);
+      ret = fscanf(beamwidth_params_fin, "%lf %f", &pulse_width2, &userBeamWidthContours[0]);
     if(ret == 2) {
-      nruserContours = 1;
+      nrBeamWidthuserContours = 1;
       calculate_interpulse_widths = 1;
       if(calculate_interpulse_widths == 0)
-        printf("Calculating contours with W=%f deg and rho=%f deg\n", fitterinfo.pulse_width, userContours[0]);
+        printf("Calculating contours with W=%f deg and rho=%f deg\n", fitterinfo.pulse_width, userBeamWidthContours[0]);
       else
-        printf("Calculating contours for interpulse with W=%f deg and rho=%f deg\n", pulse_width2, userContours[0]);
+        printf("Calculating contours for interpulse with W=%f deg and rho=%f deg\n", pulse_width2, userBeamWidthContours[0]);
       calcBeamWidths(nalpha, nbeta, alphastart, alphaend, betastart, betaend,
        calculate_beam_widths, calculate_interpulse_widths, pulse_width2, rhogrid, rhogrid2, application.verbose_state.nocounters);
-      PlotContours(rhogrid2, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels2, TR, GridDeviceID, contour_txt, contourcolorIP, fixedContours, nruserContours, userContours, boxlw, dotted);
-      calcIntersectionRhoAndBanana(rhogrid2, chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nruserContours, userContours, chimax, chimin, beamwidth_params_vebose);
+      PlotContours(rhogrid2, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels2, TR, GridDeviceID, contour_txt, contourcolorIP, fixedContours, nrBeamWidthuserContours, userBeamWidthContours, boxlw, dotted);
+      calcIntersectionRhoAndBanana(rhogrid2, chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrBeamWidthuserContours, userBeamWidthContours, chimax, chimin, beamwidth_params_vebose);
     }
   }while(ret == 2);
        }else {
   dotted = 1;
-  PlotContours(rhogrid2, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels2, TR, GridDeviceID, contour_txt, contourcolorIP, fixedContours, nruserContours, userContours, boxlw, dotted);
+  PlotContours(rhogrid2, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels2, TR, GridDeviceID, contour_txt, contourcolorIP, fixedContours, nrBeamWidthuserContours, userBeamWidthContours, boxlw, dotted);
        }
      }
    }
@@ -1559,13 +1574,56 @@ int main(int argc, char **argv)
  }
  break;
       case 99:
- printf("Nr contour levels: ");
+ printf("Nr contour levels (equally spaced separated by minimum chi2, set to -1 to define levels manually): ");
  fflush(stdout);
  if(macrofilename == 0) {
-   scanf("%d", &drawcontours);
+   scanf("%d", &nr_contours);
  }else {
-   fscanf(macrofile, "%d", &drawcontours);
-   printf("%d\n", drawcontours);
+   fscanf(macrofile, "%d", &nr_contours);
+   printf("%d\n", nr_contours);
+ }
+ if(nr_contours >= 0) {
+   nruserContours = 0;
+ }else {
+   nr_contours = 0;
+   printf("Specify contours. These are the reduced chi2 values of the contours minus the minimum reduced chi2. So for example 1.0,2.0,3.0.\n");
+   if(macrofilename == 0) {
+     fgets(txt, 990, stdin);
+     if(strlen(txt) <= 1) {
+       fgets(txt, 990, stdin);
+     }
+   }else {
+     int index, ret;
+     char character;
+     index = 0;
+     while((ret = fscanf(macrofile, "%c", &character))==1) {
+       txt[index++] = character;
+       if(index == 990) {
+  txt[index] = 0;
+  break;
+       }
+       if(character == '\n' || character == '\r') {
+  txt[index] = 0;
+  if(index != 1) {
+    break;
+  }
+       }
+     }
+   }
+   if(strlen(txt) == 0) {
+     printwarning(application.verbose_state.debug, "WARNING: empty string. If not correct, try c again.");
+   }
+   txtptr = strtok(txt, ",");
+   nruserContours = 0;
+   do {
+     if(txtptr != NULL) {
+       sscanf(txtptr, "%f", &userContours[nruserContours++]);
+       printf("contour %d = %f\n", nruserContours, userContours[nruserContours-1]);
+     }
+     txtptr = strtok(NULL, ",");
+   }while(txtptr != NULL);
+   redraw = 1;
+   break;
  }
  redraw = 1;
  break;
@@ -1625,7 +1683,7 @@ int main(int argc, char **argv)
  break;
       case 110:
  fixedContours = 0;
- nruserContours = 0;
+ nrBeamWidthuserContours = 0;
  printf("Nr contour levels: ");
  fflush(stdout);
  if(macrofilename == 0) {
@@ -1674,11 +1732,11 @@ int main(int argc, char **argv)
    printwarning(application.verbose_state.debug, "WARNING: empty string. If not correct, try F again.");
  }
  txtptr = strtok(txt, ",");
- nruserContours = 0;
+ nrBeamWidthuserContours = 0;
  do {
    if(txtptr != NULL) {
-     sscanf(txtptr, "%f", &userContours[nruserContours++]);
-     printf("contour %d = %f\n", nruserContours, userContours[nruserContours-1]);
+     sscanf(txtptr, "%f", &userBeamWidthContours[nrBeamWidthuserContours++]);
+     printf("contour %d = %f\n", nrBeamWidthuserContours, userBeamWidthContours[nrBeamWidthuserContours-1]);
    }
    txtptr = strtok(NULL, ",");
  }while(txtptr != NULL);
@@ -1832,10 +1890,10 @@ int main(int argc, char **argv)
  ppgask(0);
  cpgslct(PSDeviceID);
  if(invertGrayscale) {
-   PlotGrid(chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, level, suppress_fac, PSDeviceID, bestalpha, bestbeta, boxlw, labelcharheight, boxlabelcharheight, drawCross, title_txt, drawcontours, nogray,
+   PlotGrid(chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, level, suppress_fac, PSDeviceID, bestalpha, bestbeta, boxlw, labelcharheight, boxlabelcharheight, drawCross, title_txt, nr_contours, nruserContours, userContours, nogray,
      chimax, chimin, PPGPLOT_INVERTED_GRAYSCALE, showwedge, showwedge_label);
  }else {
-   PlotGrid(chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, level, suppress_fac, PSDeviceID, bestalpha, bestbeta, boxlw, labelcharheight, boxlabelcharheight, drawCross, title_txt, drawcontours, nogray,
+   PlotGrid(chigrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, level, suppress_fac, PSDeviceID, bestalpha, bestbeta, boxlw, labelcharheight, boxlabelcharheight, drawCross, title_txt, nr_contours, nruserContours, userContours, nogray,
      chimax, chimin, PPGPLOT_GRAYSCALE, showwedge, showwedge_label);
  }
  if(calculate_beam_widths != 0 && contour_plot) {
@@ -1846,25 +1904,25 @@ int main(int argc, char **argv)
      int ret;
      do {
        if(calculate_interpulse_widths == 0)
-  ret = fscanf(beamwidth_params_fin, "%lf %f", &fitterinfo.pulse_width, &userContours[0]);
+  ret = fscanf(beamwidth_params_fin, "%lf %f", &fitterinfo.pulse_width, &userBeamWidthContours[0]);
        else
-  ret = fscanf(beamwidth_params_fin, "%lf %f", &pulse_width2, &userContours[0]);
+  ret = fscanf(beamwidth_params_fin, "%lf %f", &pulse_width2, &userBeamWidthContours[0]);
        if(ret == 2) {
-  nruserContours = 1;
+  nrBeamWidthuserContours = 1;
   calculate_beam_widths = 1;
   if(calculate_interpulse_widths == 0)
-    printf("Calculating contours with W=%lf deg and rho=%f deg\n", fitterinfo.pulse_width, userContours[0]);
+    printf("Calculating contours with W=%lf deg and rho=%f deg\n", fitterinfo.pulse_width, userBeamWidthContours[0]);
   else
-    printf("Calculating contours for ip with W=%f deg and rho=%f deg\n", pulse_width2, userContours[0]);
+    printf("Calculating contours for ip with W=%f deg and rho=%f deg\n", pulse_width2, userBeamWidthContours[0]);
   calcBeamWidths(nalpha, nbeta, alphastart, alphaend, betastart, betaend,
           calculate_beam_widths, calculate_interpulse_widths, pulse_width2, rhogrid, rhogrid2, application.verbose_state.nocounters);
-  PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, PSDeviceID, contour_txt, contourcolor, fixedContours, nruserContours, userContours, boxlw, dotted);
+  PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, PSDeviceID, contour_txt, contourcolor, fixedContours, nrBeamWidthuserContours, userBeamWidthContours, boxlw, dotted);
        }
      }while(ret == 2);
    }else {
      dotted = 1;
-     PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, PSDeviceID, contour_txt, contourcolor, fixedContours, nruserContours, userContours, boxlw, dotted);
-     PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, PSDeviceID, contour_txt, contourcolor, fixedContours, nruserContours, userContours, boxlw, dotted);
+     PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, PSDeviceID, contour_txt, contourcolor, fixedContours, nrBeamWidthuserContours, userBeamWidthContours, boxlw, dotted);
+     PlotContours(rhogrid, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels, TR, PSDeviceID, contour_txt, contourcolor, fixedContours, nrBeamWidthuserContours, userBeamWidthContours, boxlw, dotted);
    }
  }
  if(calculate_interpulse_widths != 0 && contour_plot) {
@@ -1875,24 +1933,24 @@ int main(int argc, char **argv)
      int ret;
      do {
        if(calculate_interpulse_widths == 0)
-  ret = fscanf(beamwidth_params_fin, "%lf %f", &fitterinfo.pulse_width, &userContours[0]);
+  ret = fscanf(beamwidth_params_fin, "%lf %f", &fitterinfo.pulse_width, &userBeamWidthContours[0]);
        else
-  ret = fscanf(beamwidth_params_fin, "%lf %f", &pulse_width2, &userContours[0]);
+  ret = fscanf(beamwidth_params_fin, "%lf %f", &pulse_width2, &userBeamWidthContours[0]);
        if(ret == 2) {
-  nruserContours = 1;
+  nrBeamWidthuserContours = 1;
   calculate_interpulse_widths = 1;
   if(calculate_interpulse_widths == 0)
-    printf("Calculating contours with W=%lf deg and rho=%f deg\n", fitterinfo.pulse_width, userContours[0]);
+    printf("Calculating contours with W=%lf deg and rho=%f deg\n", fitterinfo.pulse_width, userBeamWidthContours[0]);
   else
-    printf("Calculating contours for ip with W=%f deg and rho=%f deg\n", pulse_width2, userContours[0]);
+    printf("Calculating contours for ip with W=%f deg and rho=%f deg\n", pulse_width2, userBeamWidthContours[0]);
   calcBeamWidths(nalpha, nbeta, alphastart, alphaend, betastart, betaend,
           calculate_beam_widths, calculate_interpulse_widths, pulse_width2, rhogrid, rhogrid2, application.verbose_state.nocounters);
-  PlotContours(rhogrid2, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels2, TR, GridDeviceID, contour_txt, contourcolorIP, fixedContours, nruserContours, userContours, boxlw, dotted);
+  PlotContours(rhogrid2, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels2, TR, GridDeviceID, contour_txt, contourcolorIP, fixedContours, nrBeamWidthuserContours, userBeamWidthContours, boxlw, dotted);
        }
      }while(ret == 2);
    }else {
      dotted = 1;
-     PlotContours(rhogrid2, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels2, TR, GridDeviceID, contour_txt, contourcolorIP, fixedContours, nruserContours, userContours, boxlw, dotted);
+     PlotContours(rhogrid2, alphastart, alphaend, betastart, betaend, nalpha, nbeta, nrcontourlevels2, TR, GridDeviceID, contour_txt, contourcolorIP, fixedContours, nrBeamWidthuserContours, userBeamWidthContours, boxlw, dotted);
    }
  }
  ppgclos();
@@ -1945,9 +2003,9 @@ int main(int argc, char **argv)
     if(application.verbose_state.verbose) printf("\n#\n#After %d steps the downhill-simplex found:\n#pa0 = %f and l0 = %f with chi2 = %e\n", nfunk, fit_pa0, fit_l0, chi);
     if(application.verbose_state.verbose) printf("#\n");
     if(printfit == 1) {
-      dpa0 = paswing_double(alpha0, beta0, i, fit_pa0, fit_l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, fit_dh0);
+      dpa0 = paswing_double(alpha0, beta0, i, fit_pa0, fit_l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, fit_dh0, fitterinfo.height_diff_bcw_only);
       for(i = 0; i < 360; i++) {
- pa0 = paswing_double(alpha0, beta0, i, fit_pa0, fit_l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, fit_dh0);
+ pa0 = paswing_double(alpha0, beta0, i, fit_pa0, fit_l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, fit_dh0, fitterinfo.height_diff_bcw_only);
  if(printsmooth) {
    if(pa0 - dpa0 > 90)
      pa0 -= 180;
@@ -1989,8 +2047,11 @@ double funk(double x[])
   if(fabs(fitterinfo.l0_start-x[1]) > fitterinfo.max_l0_diff) {
     return 1e10;
   }
+  if(fabs(heightshift) > fitterinfo.max_height_diff && fitterinfo.add_height_longitude < 100000) {
+    return 1e10;
+  }
   if(fitterinfo.force_set) {
-    pa = paswing_double(alpha, beta, fitterinfo.force_l, x[0], x[1], fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, heightshift);
+    pa = paswing_double(alpha, beta, fitterinfo.force_l, x[0], x[1], fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, heightshift, fitterinfo.height_diff_bcw_only);
     if(fitterinfo.autojump)
       dy = dy_90(pa, fitterinfo.force_pa);
     else
@@ -1999,7 +2060,7 @@ double funk(double x[])
       return 1e10;
   }
   for(i = 0; i < fitterinfo.NrDataPoints; i++) {
-    pa = paswing_double(alpha, beta, fitterinfo.data_l[i], x[0], x[1], fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, heightshift);
+    pa = paswing_double(alpha, beta, fitterinfo.data_l[i], x[0], x[1], fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, heightshift, fitterinfo.height_diff_bcw_only);
     y1 = fitterinfo.data_pa[i];
     if(fitterinfo.autojump)
       dy = dy_90(pa, y1);
@@ -2169,7 +2230,7 @@ void DoFitting(double alpha0, double beta0, double pa0, double dpa0, double l0, 
     fprintf(reportStream, "\n     reduced chi^2=%f (tot=%f) %d params and %d points\n", *chi/(double)(fitterinfo.NrDataPoints-(*nfitparameters)), *chi, *nfitparameters, fitterinfo.NrDataPoints);
   }
 }
-void PlotGrid(float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, double level, double suppress_fac, int GridDeviceID, double alpha, double beta, double lwbox, double labelcharheight, double boxlabelcharheight, int drawCross, int draw_title, int drawcontours, int nogray,
+void PlotGrid(float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, double level, double suppress_fac, int GridDeviceID, double alpha, double beta, double lwbox, double labelcharheight, double boxlabelcharheight, int drawCross, int draw_title, int nr_contours, int nruserContours, float *userContours, int nogray,
        double chimax, double chimin, int maptype, int showwedge, char *showwedge_label)
 {
   int i;
@@ -2178,12 +2239,19 @@ void PlotGrid(float *chigrid, double alphastart, double alphaend, double betasta
   verbose_definition noverbose;
   cleanVerboseState(&noverbose);
   noverbose.nocounters = 1;
-    for(i = 0; i < drawcontours; i++) {
-      contours[i] = (chimax - (i+2)*chimin)/(chimax - chimin);
+    if(nruserContours == 0) {
+      for(i = 0; i < nr_contours; i++) {
+ contours[i] = (chimax - (i+2)*chimin)/(chimax - chimin);
+      }
+    }else {
+      for(i = 0; i < nruserContours; i++) {
+ contours[i] = (chimax - chimin - userContours[i])/(chimax - chimin);
+      }
+      nr_contours = nruserContours;
     }
-  if(drawcontours > 200) {
+  if(nr_contours > 200) {
     printwarning(noverbose.debug, "Maximum allowed number contours is 200");
-    drawcontours = 200;
+    nr_contours = 200;
   }
   if(draw_title) {
     sprintf(txt1, "\\(2148)\\u2\\d grid");
@@ -2205,7 +2273,7 @@ void PlotGrid(float *chigrid, double alphastart, double alphaend, double betasta
   pgplot_options.box.box_labelsize = boxlabelcharheight;
   pgplot_options.box.box_lw = lwbox;
   pgplot_options.box.label_lw = lwbox;
-  pgplotMap(&pgplot_options, chigrid, nalpha, nbeta, alphastart, alphaend, alphastart, alphaend, betastart, betaend, betastart, betaend, maptype, 0, nogray, drawcontours, contours, lwbox, 0, 1, 1, level, suppress_fac, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, noverbose);
+  pgplotMap(&pgplot_options, chigrid, nalpha, nbeta, alphastart, alphaend, alphastart, alphaend, betastart, betaend, betastart, betaend, maptype, 0, nogray, nr_contours, contours, lwbox, 0, 1, 1, level, suppress_fac, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, noverbose);
   if(showwedge) {
     ppgsch(boxlabelcharheight*0.5);
     ppgslw(lwbox);
@@ -2273,7 +2341,7 @@ int define_contours_from_list_points(float *alpha, float *beta, int *contnr, int
   }while(findnextcontour);
   return curcont-1;
 }
-void calcIntersectionRhoAndBanana(float *rhogrid, float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nruserContours, float *userContours, double chimax, double chimin, verbose_definition verbose)
+void calcIntersectionRhoAndBanana(float *rhogrid, float *chigrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nrBeamWidthuserContours, float *userBeamWidthContours, double chimax, double chimin, verbose_definition verbose)
 {
   int i, j, k, ialpha, ibeta, ialpha2, ibeta2, nfound, nfoundbest, *contnr, nrcontoursfound;
   float *alpha, *beta, *chi, chibest, maxsep;
@@ -2285,8 +2353,8 @@ void calcIntersectionRhoAndBanana(float *rhogrid, float *chigrid, double alphast
     printerror(verbose.debug, "ERROR ppolFit: Cannot allocate memory");
     return;
   }
-  if(nruserContours > 0) {
-    for(i = 0; i < nruserContours; i++) {
+  if(nrBeamWidthuserContours > 0) {
+    for(i = 0; i < nrBeamWidthuserContours; i++) {
       nfound = 0;
       for(ialpha = 0; ialpha < nalpha; ialpha++) {
  for(ibeta = 0; ibeta < nbeta; ibeta++) {
@@ -2294,7 +2362,7 @@ void calcIntersectionRhoAndBanana(float *rhogrid, float *chigrid, double alphast
    ibeta2 = ibeta;
    if(ialpha2 >= nalpha)
      ialpha2 = ialpha;
-   if((rhogrid[nalpha*ibeta+ialpha] < userContours[i] && rhogrid[nalpha*ibeta2+ialpha2] > userContours[i]) || (rhogrid[nalpha*ibeta+ialpha] > userContours[i] && rhogrid[nalpha*ibeta2+ialpha2] < userContours[i])) {
+   if((rhogrid[nalpha*ibeta+ialpha] < userBeamWidthContours[i] && rhogrid[nalpha*ibeta2+ialpha2] > userBeamWidthContours[i]) || (rhogrid[nalpha*ibeta+ialpha] > userBeamWidthContours[i] && rhogrid[nalpha*ibeta2+ialpha2] < userBeamWidthContours[i])) {
      alpha[nfound] = 0.5*(ialpha+ialpha2)*(alphaend-alphastart)/(double)(nalpha-1)+alphastart;
      beta[nfound] = 0.5*(ibeta+ibeta2)*(betaend-betastart)/(double)(nbeta-1)+betastart;
      chi[nfound] = 0.5*(chigrid[nalpha*ibeta+ialpha] + chigrid[nalpha*ibeta2+ialpha2]);
@@ -2305,7 +2373,7 @@ void calcIntersectionRhoAndBanana(float *rhogrid, float *chigrid, double alphast
    ibeta2 = ibeta+1;
    if(ibeta2 >= nbeta)
      ibeta2 = ibeta;
-   if((rhogrid[nalpha*ibeta+ialpha] < userContours[i] && rhogrid[nalpha*ibeta2+ialpha2] > userContours[i]) || (rhogrid[nalpha*ibeta+ialpha] > userContours[i] && rhogrid[nalpha*ibeta2+ialpha2] < userContours[i])) {
+   if((rhogrid[nalpha*ibeta+ialpha] < userBeamWidthContours[i] && rhogrid[nalpha*ibeta2+ialpha2] > userBeamWidthContours[i]) || (rhogrid[nalpha*ibeta+ialpha] > userBeamWidthContours[i] && rhogrid[nalpha*ibeta2+ialpha2] < userBeamWidthContours[i])) {
      alpha[nfound] = 0.5*(ialpha+ialpha2)*(alphaend-alphastart)/(double)(nalpha-1)+alphastart;
      beta[nfound] = 0.5*(ibeta+ibeta2)*(betaend-betastart)/(double)(nbeta-1)+betastart;
      chi[nfound] = 0.5*(chigrid[nalpha*ibeta+ialpha] + chigrid[nalpha*ibeta2+ialpha2]);
@@ -2356,7 +2424,7 @@ void calcIntersectionRhoAndBanana(float *rhogrid, float *chigrid, double alphast
   ppgsci(1);
   ppgslw(1);
 }
-void PlotContours(float *rhogrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nrlevels, float *TR, int GridDeviceID, int contour_txt, int contourcolor, int fixedContours, int nruserContours, float *userContours, int lwbox, int dotted)
+void PlotContours(float *rhogrid, double alphastart, double alphaend, double betastart, double betaend, int nalpha, int nbeta, int nrlevels, float *TR, int GridDeviceID, int contour_txt, int contourcolor, int fixedContours, int nrBeamWidthuserContours, float *userBeamWidthContours, int lwbox, int dotted)
 {
   float C[500];
   char txt[100];
@@ -2390,11 +2458,11 @@ void PlotContours(float *rhogrid, double alphastart, double alphaend, double bet
     C[22] = 180;
     nrlevels = 23;
   }
-  if(nruserContours > 0) {
-    for(i = 0; i < nruserContours; i++)
-      C[i] = userContours[i];
-    nrlevels = nruserContours;
-  }else if( nruserContours == -1){
+  if(nrBeamWidthuserContours > 0) {
+    for(i = 0; i < nrBeamWidthuserContours; i++)
+      C[i] = userBeamWidthContours[i];
+    nrlevels = nrBeamWidthuserContours;
+  }else if( nrBeamWidthuserContours == -1){
     C[0] = 5;
     C[1] = 10;
     C[2] = 15;
@@ -2522,10 +2590,10 @@ void PlotPAswing(double alpha, double beta, double pa0, double l0, int PlotFit, 
   }
   if(PlotFit) {
     ppgsci(2);
-    oldpa = paswing_double(alpha, beta, 0, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh);
+    oldpa = paswing_double(alpha, beta, 0, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh, fitterinfo.height_diff_bcw_only);
     ppgmove(0, oldpa);
     for(i = 1; i < 3600; i++) {
-      newpa = paswing_double(alpha, beta, 0.1*i, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh);
+      newpa = paswing_double(alpha, beta, 0.1*i, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh, fitterinfo.height_diff_bcw_only);
       if(fabs(newpa-oldpa) < 100)
  ppgdraw(0.1*i, newpa);
       else
@@ -2592,7 +2660,7 @@ void print_steepness(double alpha, double beta, double l0, double pa0, int verbo
   if(verbose) printf("Resolution = %f degrees\n", resolution);
   for(i = 0; i < fitterinfo.NrDataPoints; i++) {
     l = fitterinfo.data_l[i];
-    psi = paswing_double(alpha, beta, l, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh);
+    psi = paswing_double(alpha, beta, l, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh, fitterinfo.height_diff_bcw_only);
     if(i > 0) {
       dpsi = psi-psi_old;
       dpsidphi = dpsi/(fitterinfo.data_l[i]-fitterinfo.data_l[i-1]);

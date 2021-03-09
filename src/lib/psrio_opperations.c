@@ -440,7 +440,7 @@ double get_tsub(datafile_definition datafile, long subint, verbose_definition ve
   }else {
     printerror(verbose.debug, "ERROR get_tsub: Unknown subint duration mode", datafile.tsubMode);
     if(verbose.debug) {
-      printerror(verbose.debug, "Subint duration mode is set to %d", datafile.tsubMode);
+      printerror(verbose.debug, "ERROR get_tsub: Subint duration mode is set to %d", datafile.tsubMode);
     }
     exit(0);
   }

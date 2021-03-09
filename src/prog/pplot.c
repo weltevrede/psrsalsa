@@ -28,11 +28,6 @@ enum xUnitsSwitch_values {
   XUNIT_TIME,
   XUNIT_ENDOFLIST
 };
-float ypos(float *stackI, int bin, long PulseNr, float scale, int NrBins, long pulse_bottom, long pulse_top, long subint_start, float yUnitCmdLine, float dyshift);
-int setBaselineParams(datafile_definition fin, float *baseline, float *dxshift, int *xUnitsSwitch, verbose_definition verbose);
-int zapVectors(int nrZappedVectors, int *zappedVectors, long subint_start, datafile_definition fin, float *dataSubset, int onlysinglechannel, verbose_definition verbose);
-int zapSubints(int nrZappedSubints, int *zappedSubints, long subint_start, int didtranspose_orig_nrbin, datafile_definition fin, float *dataSubset, int onlysinglesubint, verbose_definition verbose);
-void yvec2unit(datafile_definition fin, int yUnitsSwitch, int vectorMinMaxSpecified, float vectorMin, float vectorMax, int didtranspose_orig_nrbin, int type, float valuein, float *valueout, int mapmode, int inverse, verbose_definition verbose);
 typedef struct {
   long subint_start, subint_end;
   long x1, x2;
@@ -40,6 +35,13 @@ typedef struct {
   int nrcontours;
   int nrZappedVectors, nrZappedSubints;
 }plot_state_def;
+float ypos(float *stackI, int bin, long PulseNr, float scale, int NrBins, long pulse_bottom, long pulse_top, long subint_start, float yUnitCmdLine, float dyshift);
+int setBaselineParams(datafile_definition fin, float *baseline, float *dxshift, int *xUnitsSwitch, verbose_definition verbose);
+int zapVectors(int nrZappedVectors, int *zappedVectors, long subint_start, datafile_definition fin, float *dataSubset, int onlysinglechannel, verbose_definition verbose);
+int zapSubints(int nrZappedSubints, int *zappedSubints, long subint_start, int didtranspose_orig_nrbin, datafile_definition fin, float *dataSubset, int onlysinglesubint, verbose_definition verbose);
+void yvec2unit(datafile_definition fin, int yUnitsSwitch, int vectorMinMaxSpecified, float vectorMin, float vectorMax, int didtranspose_orig_nrbin, int type, float valuein, float *valueout, int mapmode, int inverse, verbose_definition verbose);
+int writeZapFile(int write_tmp_file, int zapmode, int *zappedVectors, int *zappedSubints, datafile_definition *fin, plot_state_def *stack_state, int didtranspose_orig_nrbin, char *inputfilename, verbose_definition verbose);
+int readZapFile(int zapmode, int *zappedVectors, int *zappedSubints, plot_state_def *stack_state, int didtranspose_orig_nrbin, char *inputfilename, verbose_definition verbose);
 void copystackstate(plot_state_def state1, plot_state_def *state2)
 {
   state2->subint_start = state1.subint_start;
@@ -632,7 +634,7 @@ int main(int argc, char **argv)
       strcpy(title, inputfilename);
     }
     int firstPulsedataSubset;
-    int ytitle_set_to_intensity, ytitle_set_to_pulsenumber, ytitle_set_to_subint, ytitle_set_to_freqchannel, ytitle_set_to_fluctuationFreq, ytitle_set_to_padist, ytitle_set_to_elldist, ytitle_set_to_pulselongitude, ytitle_set_to_p3fold, ytitle_set_to_spectral_power, ytitle_set_to_harmonic_number, ytitle_set_to_lag_number;
+    int ytitle_set_to_intensity, ytitle_set_to_pulsenumber, ytitle_set_to_subint, ytitle_set_to_freqchannel, ytitle_set_to_fluctuationFreq, ytitle_set_to_padist, ytitle_set_to_elldist, ytitle_set_to_pulselongitude, ytitle_set_to_p3fold, ytitle_set_to_spectral_power, ytitle_set_to_harmonic_number, ytitle_set_to_lag_number, ytitle_set_to_gen_lr_dist, ytitle_set_to_gen_lr_cumdist;
     ytitle_set_to_intensity = 0;
     ytitle_set_to_pulsenumber = 0;
     ytitle_set_to_subint = 0;
@@ -645,7 +647,10 @@ int main(int argc, char **argv)
     ytitle_set_to_spectral_power = 0;
     ytitle_set_to_harmonic_number = 0;
     ytitle_set_to_lag_number = 0;
+    ytitle_set_to_gen_lr_dist = 0;
+    ytitle_set_to_gen_lr_cumdist = 0;
     firstPulsedataSubset = 0;
+    int shouldwritetmpzapfile = 0;
     do {
       float currentPanelScaling, currentPanelScalingx, currentPanelScalingy;
       float viewport_startyCurrentPanel, viewport_endyCurrentPanel;
@@ -815,6 +820,8 @@ int main(int argc, char **argv)
  ytitle_set_to_spectral_power = 0;
  ytitle_set_to_harmonic_number = 0;
  ytitle_set_to_lag_number = 0;
+ ytitle_set_to_gen_lr_dist = 0;
+ ytitle_set_to_gen_lr_cumdist = 0;
  if(fin.NrFreqChan > 1) {
    datafile_definition clone;
    didtranspose_orig_nrbin = fin.NrBins;
@@ -851,6 +858,10 @@ int main(int argc, char **argv)
    if(ytitleset == 0) {
      if((fin.gentype == GENTYPE_2DFS || fin.gentype == GENTYPE_LRFS || fin.gentype == GENTYPE_S2DFSP3 || fin.gentype == GENTYPE_S2DFSP2) && (vectorMinMaxSpecified == 0 && fin.yrangeset == 1)) {
        ytitle_set_to_fluctuationFreq = 1;
+     }else if(fin.gentype == GENTYPE_GEN_LR_DIST) {
+       ytitle_set_to_gen_lr_dist = 1;
+     }else if(fin.gentype == GENTYPE_GEN_LR_CUMDIST) {
+       ytitle_set_to_gen_lr_cumdist = 1;
      }else if(fin.gentype == GENTYPE_P3FOLD) {
        ytitle_set_to_p3fold = 1;
      }else if(fin.gentype == GENTYPE_HRFS_UNFOLDED) {
@@ -1047,13 +1058,18 @@ int main(int argc, char **argv)
       if(stack_state[current_stack_pos-1].grayscalemode) {
  float max, min, oldmin, oldmax;
  float xleft, xright, xleft2, xright2;
- min = max = dataSubset[stack_state[current_stack_pos-1].x1+ignorebins];
  for(i = stack_state[current_stack_pos-1].x1; i <= stack_state[current_stack_pos-1].x2; i++) {
    for(j = 0; j <= stack_state[current_stack_pos-1].subint_end-stack_state[current_stack_pos-1].subint_start; j++) {
-     if(dataSubset[(j+stack_state[current_stack_pos-1].subint_start-firstPulsedataSubset)*fin.NrBins+i] > max)
-       max = dataSubset[(j+stack_state[current_stack_pos-1].subint_start-firstPulsedataSubset)*fin.NrBins+i];
-     if(dataSubset[(j+stack_state[current_stack_pos-1].subint_start-firstPulsedataSubset)*fin.NrBins+i] < min)
-       min = dataSubset[(j+stack_state[current_stack_pos-1].subint_start-firstPulsedataSubset)*fin.NrBins+i];
+     float value;
+     value = dataSubset[(j+stack_state[current_stack_pos-1].subint_start-firstPulsedataSubset)*fin.NrBins+i];
+     if(j == 0 && i == stack_state[current_stack_pos-1].x1) {
+       min = value;
+       max = value;
+     }
+     if(value > max)
+       max = value;
+     if(value < min)
+       min = value;
    }
  }
  oldmin = min;
@@ -1131,17 +1147,17 @@ int main(int argc, char **argv)
    max = scalerange_max;
  }
  if(stack_state[current_stack_pos-1].grayscalemode == 1) {
-   if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 0, 0, NULL, 1, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
+   if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 0, 0, NULL, 1, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, 0, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot data.");
      return 0;
    }
  }else if(stack_state[current_stack_pos-1].grayscalemode == 2) {
-   if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 1, stack_state[current_stack_pos-1].nrcontours, NULL, plotlw, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
+   if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 1, stack_state[current_stack_pos-1].nrcontours, NULL, plotlw, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, 0, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot data.");
      return 0;
    }
  }else {
-   if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 0, stack_state[current_stack_pos-1].nrcontours, NULL, plotlw, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
+   if(pgplotMap(&pgplot_options, fin.data, fin.NrBins, fin.NrSubints, xleft2, xright2, xleft, xright, dummyf1, dummyf2, dummyf3, dummyf4, application.cmap, application.itf, 0, stack_state[current_stack_pos-1].nrcontours, NULL, plotlw, 0, 1, levelset, min, max, 1, 2, dummyi, 0, showtop, 0, plotlw, showwedge, 0, !application.do_noplotsubset, showTwice_flag, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR pplot: Cannot plot data.");
      return 0;
    }
@@ -1453,7 +1469,7 @@ int main(int argc, char **argv)
        strcpy(xtitle, "fluctuation frequency (cycles/period)");
      }
    }else {
-     if(fin.gentype == GENTYPE_PROFILE || fin.gentype == GENTYPE_PULSESTACK || fin.gentype == GENTYPE_SUBINTEGRATIONS || fin.gentype == GENTYPE_DYNAMICSPECTRUM || fin.gentype == GENTYPE_LRFS || fin.gentype == GENTYPE_P3FOLD || fin.gentype == GENTYPE_LRCC || fin.gentype == GENTYPE_PADIST || fin.gentype == GENTYPE_ELLDIST) {
+     if(fin.gentype == GENTYPE_PROFILE || fin.gentype == GENTYPE_PULSESTACK || fin.gentype == GENTYPE_SUBINTEGRATIONS || fin.gentype == GENTYPE_DYNAMICSPECTRUM || fin.gentype == GENTYPE_LRFS || fin.gentype == GENTYPE_P3FOLD || fin.gentype == GENTYPE_LRCC || fin.gentype == GENTYPE_PADIST || fin.gentype == GENTYPE_ELLDIST || fin.gentype == GENTYPE_GEN_LR_DIST || fin.gentype == GENTYPE_GEN_LR_CUMDIST) {
        sprintf(xtitle, "Pulse longitude (bins)");
      }else if(fin.gentype == GENTYPE_S2DFSP3 || fin.gentype == GENTYPE_S2DFSP2) {
        sprintf(xtitle, "Block number (pulses)");
@@ -1495,6 +1511,12 @@ int main(int argc, char **argv)
      strcpy(ytitle, "fluctuation frequency (cycles/period)");
    }else if(ytitle_set_to_fluctuationFreq && yUnitsSwitch == 0) {
      strcpy(ytitle, "fluctuation frequency (bin)");
+   }else if(ytitle_set_to_gen_lr_dist && yUnitsSwitch) {
+     strcpy(ytitle, "Binned quantity (quantity value)");
+   }else if(ytitle_set_to_gen_lr_dist && yUnitsSwitch == 0) {
+     strcpy(ytitle, "Binned quantity (bin number)");
+   }else if(ytitle_set_to_gen_lr_cumdist && yUnitsSwitch == 0) {
+     strcpy(ytitle, "Cumulative distribution bin number");
    }else if(ytitle_set_to_padist && yUnitsSwitch) {
      strcpy(ytitle, "PA (deg)");
    }else if(ytitle_set_to_padist && yUnitsSwitch == 0) {
@@ -1539,7 +1561,6 @@ int main(int argc, char **argv)
       if(interactive_flag) {
  do {
    int key, key2;
-   FILE *fout;
    if(data_read == 2)
      data_read = 1;
    if(data_read == 0) {
@@ -1578,10 +1599,16 @@ int main(int argc, char **argv)
      else
        printf("Z       Zap subints (horizontal axis, change to vectors with 'z'). This only affects the plot, not the input-data.\n");
      if(change_filename_extension(inputfilename, txt3, "zap", 999, application.verbose_state) == 1) {
-       if(zapmode == 0)
+       if(zapmode == 0) {
   printf("W       Write out list of zapped vectors to %s (change to subints with 'z')\n", txt3);
-       else
+       }else {
   printf("W       Write out list of zapped subints to %s (change to vectors with 'z')\n", txt3);
+       }
+     }
+     if(zapmode == 0) {
+       printf("ctrl-w    Read in previously generated list of zapped vectors (change to subints with 'z')\n");
+     }else {
+       printf("ctrl-w    Read in previously generated list of zapped subints (change to vectors with 'z')\n");
      }
      printf(",/. Move to the left/right (if zoomed in)\n");
      printf("?   This help\n");
@@ -1768,85 +1795,59 @@ int main(int argc, char **argv)
      }
      break;
    case 'W':
-     if(zapmode == 0) {
-       if(stack_state[current_stack_pos-1].nrZappedVectors == 0) {
-  printwarning(application.verbose_state.debug, "WARNING pplot: No vectors are zapped, so writing out of a zapfile is ignored.");
-       }else {
-  int ret;
-  if(fin.NrFreqChan == 1 && didtranspose_orig_nrbin == 0) {
-    ret = change_filename_extension(inputfilename, txt3, "subint.zap", 999, application.verbose_state);
-  }else {
-    ret = change_filename_extension(inputfilename, txt3, "freq.zap", 999, application.verbose_state);
-  }
-  if(ret == 1) {
-    fout = fopen(txt3, "w");
-    if(fout != NULL) {
-      long largest, count;
-      count = 0;
-      largest = zappedVectors[0];
-      for(i = 0; i < stack_state[current_stack_pos-1].nrZappedVectors; i++) {
-        if(zappedVectors[i] > largest) {
-   largest = zappedVectors[i];
-        }
-      }
-      for(j = 0; j <= largest; j++) {
-        for(i = 0; i < stack_state[current_stack_pos-1].nrZappedVectors; i++) {
-   if(zappedVectors[i] == j) {
-     fprintf(fout, "%d\n", zappedVectors[i]);
-     count++;
+     if(writeZapFile(0, zapmode, zappedVectors, zappedSubints, &fin, &(stack_state[current_stack_pos-1]), didtranspose_orig_nrbin, inputfilename, application.verbose_state) == 0) {
+       return 0;
+     }
+     shouldwritetmpzapfile = 0;
      break;
-   }
-        }
-      }
-      printf("pplot: Written %ld vector numbers to %s\n", count, txt3);
-      fclose(fout);
-    }else {
-      printerror(application.verbose_state.debug, "ERROR pplot: Cannot open zapfile %s.", txt3);
-      return 0;
-    }
-  }else {
-    printerror(application.verbose_state.debug, "ERROR pplot: Filename is too long.");
-    return 0;
-  }
-       }
+   case 23:
+     if(current_stack_pos >= max_nr_stack) {
+       printwarning(application.verbose_state.debug, "WARNING: Stack is full");
+       current_stack_pos--;
      }else {
-       if(stack_state[current_stack_pos-1].nrZappedSubints == 0) {
-  printwarning(application.verbose_state.debug, "WARNING pplot: No subints are zapped, so writing out of a zapfile is ignored.");
+       copystackstate(stack_state[current_stack_pos-1], &stack_state[current_stack_pos]);
+     }
+     printf("Specify filename: ");
+     fflush(stdout);
+     char *zapinputfilename;
+     zapinputfilename = malloc(MaxFilenameLength+1);
+     if(zapinputfilename == NULL) {
+       printerror(application.verbose_state.debug, "ERROR pplot: Memory allocation error.");
+       return 0;
+     }
+     if(application.macro_ptr == NULL) {
+       scanf("%s", zapinputfilename);
+     }else {
+       int ret;
+       ret = fscanf(application.macro_ptr, "%s", zapinputfilename);
+       if(ret != 1) {
+  printf("\nReached end of macro, switching to keyboard input: type in the filename\n");
+  scanf("%s", zapinputfilename);
+  fclose(application.macro_ptr);
+  application.macro_ptr = NULL;
        }else {
-  if(change_filename_extension(inputfilename, txt3, "subint.zap", 999, application.verbose_state) == 1) {
-    fout = fopen(txt3, "w");
-    if(fout != NULL) {
-      long largest, count;
-      count = 0;
-      largest = zappedSubints[0];
-      for(i = 0; i < stack_state[current_stack_pos-1].nrZappedSubints; i++) {
-        if(zappedSubints[i] > largest) {
-   largest = zappedSubints[i];
-        }
-      }
-      for(j = 0; j <= largest; j++) {
-        for(i = 0; i < stack_state[current_stack_pos-1].nrZappedSubints; i++) {
-   if(zappedSubints[i] == j) {
-     fprintf(fout, "%d\n", zappedSubints[i]);
-     count++;
-     break;
-   }
-        }
-      }
-      printf("pplot: Written %ld subint numbers to %s\n", count, txt3);
-      fclose(fout);
-    }else {
-      printerror(application.verbose_state.debug, "ERROR pplot: Cannot open zapfile %s.", txt3);
-      return 0;
-    }
-  }else {
-    printerror(application.verbose_state.debug, "ERROR pplot: Filename is too long.");
-    return 0;
-  }
+  printf("%s\n", zapinputfilename);
        }
      }
+     if(readZapFile(zapmode, zappedVectors, zappedSubints, &(stack_state[current_stack_pos]), didtranspose_orig_nrbin, zapinputfilename, application.verbose_state) == 0) {
+       return 0;
+     }
+     free(zapinputfilename);
+     shouldwritetmpzapfile = 1;
+     if(zapmode == 0) {
+       if(zapVectors(stack_state[current_stack_pos].nrZappedVectors, zappedVectors, subint_start, fin, dataSubset, -1, application.verbose_state) == 0) {
+  return 0;
+       }
+     }else {
+       if(zapSubints(stack_state[current_stack_pos].nrZappedSubints, zappedSubints, subint_start, didtranspose_orig_nrbin, fin, dataSubset, -1, application.verbose_state) == 0) {
+  return 0;
+       }
+     }
+     current_stack_pos++;
+     redraw = 1;
      break;
    case 'Z':
+     shouldwritetmpzapfile = 1;
      if(current_stack_pos >= max_nr_stack) {
        printwarning(application.verbose_state.debug, "WARNING: Stack is full");
        current_stack_pos--;
@@ -2197,6 +2198,11 @@ int main(int argc, char **argv)
       if(curpanelnry == nrpanelsy)
  curpanelnry = 0;
     }while(interactive_flag);
+    if(shouldwritetmpzapfile) {
+      if(writeZapFile(1, zapmode, zappedVectors, zappedSubints, &fin, &(stack_state[current_stack_pos-1]), didtranspose_orig_nrbin, inputfilename, application.verbose_state) == 0) {
+ return 0;
+      }
+    }
     if(dataSubset_allocated) {
       free(dataSubset);
       dataSubset_allocated = 0;
@@ -2283,7 +2289,7 @@ int setBaselineParams(datafile_definition fin, float *baseline, float *dxshift, 
       *baseline = get_tsamp(fin, 0, verbose)*fin.NrBins;
     }
     if(verbose.verbose && xUnitsSwitch != XUNIT_BINS) {
-      printf("Based on sampling time and pulse period the baseline appears to be %f.\n", *baseline);
+      printf("Based on sampling time and pulse period the baseline length appears to be %f.\n", *baseline);
     }
   }
   return 1;
@@ -2381,4 +2387,176 @@ void yvec2unit(datafile_definition fin, int yUnitsSwitch, int vectorMinMaxSpecif
   }else {
     *valueout = valuein;
   }
+}
+int writeZapFile(int write_tmp_file, int zapmode, int *zappedVectors, int *zappedSubints, datafile_definition *fin, plot_state_def *stack_state, int didtranspose_orig_nrbin, char *inputfilename, verbose_definition verbose)
+{
+  FILE *fout;
+  char *outputfilename;
+  long i, j;
+  int ret;
+  outputfilename = malloc(strlen(inputfilename)+strlen(PSRSALSA_TEMPDIRECTORY)+100);
+  if(outputfilename == NULL) {
+    printerror(verbose.debug, "ERROR pplot: Memory allocation error.");
+    return 0;
+  }
+  if(zapmode == 0 || write_tmp_file) {
+    if(stack_state->nrZappedVectors == 0) {
+      if(write_tmp_file == 0) {
+ printwarning(verbose.debug, "WARNING pplot: No vectors are zapped, so writing out of a zapfile is ignored.");
+      }
+    }else {
+      if(fin->NrFreqChan == 1 && didtranspose_orig_nrbin == 0) {
+ if(write_tmp_file == 0) {
+   ret = change_filename_extension(inputfilename, outputfilename, "subint.zap", strlen(inputfilename)+strlen(PSRSALSA_TEMPDIRECTORY)+999, verbose);
+ }else {
+   sprintf(outputfilename, "%spplot.subint.zap", PSRSALSA_TEMPDIRECTORY);
+   ret = 1;
+ }
+      }else {
+ if(write_tmp_file == 0) {
+   ret = change_filename_extension(inputfilename, outputfilename, "freq.zap", strlen(inputfilename)+strlen(PSRSALSA_TEMPDIRECTORY)+999, verbose);
+ }else {
+   sprintf(outputfilename, "%spplot.freq.zap", PSRSALSA_TEMPDIRECTORY);
+   ret = 1;
+ }
+      }
+      if(ret == 1) {
+ fout = fopen(outputfilename, "w");
+ if(fout != NULL) {
+   long largest, count;
+   count = 0;
+   largest = zappedVectors[0];
+   for(i = 0; i < stack_state->nrZappedVectors; i++) {
+     if(zappedVectors[i] > largest) {
+       largest = zappedVectors[i];
+     }
+   }
+   for(j = 0; j <= largest; j++) {
+     for(i = 0; i < stack_state->nrZappedVectors; i++) {
+       if(zappedVectors[i] == j) {
+  fprintf(fout, "%d\n", zappedVectors[i]);
+  count++;
+  break;
+       }
+     }
+   }
+   printf("pplot: Written %ld vector numbers to %s\n", count, outputfilename);
+   fclose(fout);
+ }else {
+   printerror(verbose.debug, "ERROR pplot: Cannot open zapfile %s.", outputfilename);
+   free(outputfilename);
+   return 0;
+ }
+      }else {
+ printerror(verbose.debug, "ERROR pplot: Filename is too long.");
+ free(outputfilename);
+ return 0;
+      }
+    }
+  }
+  if(zapmode != 0 || write_tmp_file) {
+    if(stack_state->nrZappedSubints == 0) {
+      if(write_tmp_file == 0) {
+ printwarning(verbose.debug, "WARNING pplot: No subints are zapped, so writing out of a zapfile is ignored.");
+      }
+    }else {
+      if(write_tmp_file == 0) {
+ ret = change_filename_extension(inputfilename, outputfilename, "subint.zap", strlen(inputfilename)+strlen(PSRSALSA_TEMPDIRECTORY)+999, verbose);
+      }else {
+ sprintf(outputfilename, "%spplot.subint.zap", PSRSALSA_TEMPDIRECTORY);
+ ret = 1;
+      }
+      if(ret == 1) {
+ fout = fopen(outputfilename, "w");
+ if(fout != NULL) {
+   long largest, count;
+   count = 0;
+   largest = zappedSubints[0];
+   for(i = 0; i < stack_state->nrZappedSubints; i++) {
+     if(zappedSubints[i] > largest) {
+       largest = zappedSubints[i];
+     }
+   }
+   for(j = 0; j <= largest; j++) {
+     for(i = 0; i < stack_state->nrZappedSubints; i++) {
+       if(zappedSubints[i] == j) {
+  fprintf(fout, "%d\n", zappedSubints[i]);
+  count++;
+  break;
+       }
+     }
+   }
+   printf("pplot: Written %ld subint numbers to %s\n", count, outputfilename);
+   fclose(fout);
+ }else {
+   printerror(verbose.debug, "ERROR pplot: Cannot open zapfile %s.", outputfilename);
+   free(outputfilename);
+   return 0;
+ }
+      }else {
+ printerror(verbose.debug, "ERROR pplot: Filename is too long.");
+ free(outputfilename);
+ return 0;
+      }
+    }
+  }
+  free(outputfilename);
+  return 1;
+}
+int readZapFile(int zapmode, int *zappedVectors, int *zappedSubints, plot_state_def *stack_state, int didtranspose_orig_nrbin, char *inputfilename, verbose_definition verbose)
+{
+  FILE *fin;
+  long i, count;
+  int found, newzap;
+  fin = fopen(inputfilename, "r");
+  if(fin == NULL) {
+    printerror(verbose.debug, "ERROR pplot: Cannot open zapfile %s.", inputfilename);
+    return 0;
+  }
+  if(zapmode == 0) {
+    count = 0;
+    while(fscanf(fin, "%d", &newzap) == 1) {
+      found = 0;
+      for(i = 0; i < stack_state->nrZappedVectors; i++) {
+ if(zappedVectors[i] == newzap) {
+   found = 1;
+   break;
+ }
+      }
+      if(found == 0) {
+ if(stack_state->nrZappedVectors >= max_nr_zap) {
+   printwarning(verbose.debug, "WARNING: Maximum number of zapped vectors exceeded.");
+ }else {
+   count++;
+   zappedVectors[stack_state->nrZappedVectors] = newzap;
+   (stack_state->nrZappedVectors)++;
+ }
+      }
+    }
+    printf("pplot: Imported %ld (additional) vector numbers to zap from %s\n", count, inputfilename);
+  }
+  if(zapmode != 0) {
+    count = 0;
+    while(fscanf(fin, "%d", &newzap) == 1) {
+      found = 0;
+      for(i = 0; i < stack_state->nrZappedSubints; i++) {
+ if(zappedSubints[i] == newzap) {
+   found = 1;
+   break;
+ }
+      }
+      if(found == 0) {
+ if(stack_state->nrZappedSubints >= max_nr_zap) {
+   printwarning(verbose.debug, "WARNING: Maximum number of zapped subints exceeded.");
+ }else {
+   count++;
+   zappedSubints[stack_state->nrZappedSubints] = newzap;
+   (stack_state->nrZappedSubints)++;
+ }
+      }
+    }
+    printf("pplot: Imported %ld (additional) subint numbers to zap from %s\n", count, inputfilename);
+  }
+  fclose(fin);
+  return 1;
 }

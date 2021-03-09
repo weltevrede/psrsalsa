@@ -31,7 +31,7 @@ void randomize_idnum(long *idnum)
 {
   *idnum = -randomUnsignedInt();
 }
-int find_peak_correlation(float *data1, float *data2, int ndata, int zeropad, int circularpad, int duplicate, int *lag, float *correl_max, verbose_definition verbose)
+int find_peak_correlation(float *data1, float *data2, int ndata, int zeropad, int circularpad, int duplicate, int remove_baseline, int *lag, float *correl_max, verbose_definition verbose)
 {
   int i, lag_max;
   int npoints;
@@ -85,7 +85,7 @@ int find_peak_correlation(float *data1, float *data2, int ndata, int zeropad, in
     paddata1[i] = data1[i-duplicate-zeropad-ndata];
     paddata2[i] = data2[i-duplicate-zeropad-ndata];
   }
-  if(crosscorrelation_fft(paddata1, paddata2, npoints, ans, verbose) == 0) {
+  if(crosscorrelation_fft(paddata1, paddata2, npoints, ans, remove_baseline, verbose) == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR find_peak_correlation: Cross correlation failed.");
     return 0;

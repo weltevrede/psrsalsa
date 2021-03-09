@@ -127,10 +127,221 @@ void pgplot_makeframe(pgplot_frame_def_internal *frame)
     }
   }
 }
-int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int showEll, pgplot_options_definition *pgplot, char *xlabel, char *ylabel, char *ylabel_pa, char *ylabel_ell, float longitude_left, float longitude_right, int xunit_type, float Imin, float Imax, float pa_bottom, float pa_top, float PAoffset, float sigma_limit, float datalinewidth, float ysize2, int dashed, int noynumbers, char *textoption, char *herrorbaroption, char *herrorbaroption2, char *verrorbaroption, char *verrorbaroption2, int argc, char **argv, int outline_txt, int outline_lw, int outline_color, int overlayPA, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, datafile_definition *padist, float padist_pamin, float padist_pamax, float padist_saturize, datafile_definition *elldist, float elldist_saturize, int nowedge, verbose_definition verbose)
+int pgplot_process_text_option(char *textoption, int outline_txt, int outline_lw, int outline_color, int argc, char **argv, int xunit_type, datafile_definition data, verbose_definition verbose)
 {
-  int deviceID, text_ci, text_lw, text_f, ok, domove, showPAdist, showELLdist;
-  float ymin, ymax, text_x, text_y, text_ch, I, Iold, overallplotscaling;
+  int i, j;
+  float text_x, text_y, text_ch;
+  int text_ci, text_lw, text_f;
+  char *newtext;
+  if(textoption != NULL && argv != NULL && argc != 0) {
+    for(j = 0; j < argc; j++) {
+      if(strcmp(argv[j], textoption) == 0) {
+ i = sscanf(argv[j+1], "%f %f %f %d %d %d", &text_x, &text_y, &text_ch, &text_lw, &text_f, &text_ci);
+ if(xunit_type == 1) {
+   text_x /= 360.0;
+ }
+ if(i != 6) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR pgplot_process_text_option: Error parsing %s option. Expected 6 items, but could only parse %d items.", textoption, i);
+   return 0;
+ }
+ ppgsch(text_ch);
+ ppgscf(text_f);
+ newtext = str_replace_header_params(data, argv[j+2], verbose);
+ if(newtext == NULL) {
+   printerror(verbose.debug, "ERROR pgplotPAplot: Cannot substiture header parameter in -text option");
+   return 0;
+ }
+ if(outline_txt > 0) {
+   ppgslw(text_lw+outline_lw);
+   ppgsci(outline_color);
+   ppgptxt(text_x, text_y, 0, 0, newtext);
+ }
+ ppgsci(text_ci);
+ ppgslw(text_lw);
+ ppgptxt(text_x, text_y, 0, 0, newtext);
+ ppgscf(1);
+ ppgsch(1);
+ ppgslw(1);
+ ppgsci(1);
+ j += 2;
+ free(newtext);
+      }
+    }
+  }
+  return 1;
+}
+int pgplot_process_errorbars_options(char *herrorbaroption, char *herrorbaroption2, char *verrorbaroption, char *verrorbaroption2, int argc, char **argv, int xunit_type, pgplot_frame_def_internal *frame, verbose_definition verbose)
+{
+  int i, j;
+  if(herrorbaroption != NULL && argv != NULL && argc != 0) {
+    for(j = 0; j < argc; j++) {
+      float herr_x1, herr_x2, herr_x3, herr_y, herr_size, herr_lw;
+      int herr_ci, ok;
+      ok = 0;
+      if(strcmp(argv[j], herrorbaroption) == 0) {
+ ok = 1;
+      }else if(herrorbaroption2 != NULL) {
+ if(strcmp(argv[j], herrorbaroption2) == 0) {
+   ok = 1;
+ }
+      }
+      if(ok) {
+ i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &herr_x1, &herr_x2, &herr_x3, &herr_y, &herr_size, &herr_lw, &herr_ci);
+ if(xunit_type == 1) {
+   herr_x1 /= 360.0;
+   herr_x2 /= 360.0;
+   herr_x3 /= 360.0;
+ }
+ if(i != 7) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR pgplot_process_errorbars_options: Error parsing %s option. Expected 7 arguments, but only parsed %d.", herrorbaroption, i);
+   return 0;
+ }
+ ppgsch(herr_size);
+ ppgsci(herr_ci);
+ ppgslw(herr_lw);
+ if(frame == NULL) {
+   ppgpt1(herr_x2, herr_y, 2);
+   ppgerr1(1, herr_x2, herr_y, herr_x3-herr_x2, herr_size);
+   ppgerr1(3, herr_x2, herr_y, herr_x2-herr_x1, herr_size);
+ }else {
+   ppgpt1(herr_x2, herr_y*(frame->swin_y2-frame->swin_y1)+frame->swin_y1, 2);
+   ppgerr1(1, herr_x2, herr_y*(frame->swin_y2-frame->swin_y1)+frame->swin_y1, herr_x3-herr_x2, herr_size);
+   ppgerr1(3, herr_x2, herr_y*(frame->swin_y2-frame->swin_y1)+frame->swin_y1, herr_x2-herr_x1, herr_size);
+ }
+ ppgsch(1);
+ ppgslw(1);
+ ppgsci(1);
+ j += 1;
+      }
+    }
+  }
+  if(verrorbaroption != NULL && argv != NULL && argc != 0) {
+    for(j = 0; j < argc; j++) {
+      float verr_y1, verr_y2, verr_y3, verr_x, verr_size, verr_lw;
+      int verr_ci, ok;
+      ok = 0;
+      if(strcmp(argv[j], verrorbaroption) == 0) {
+ ok = 1;
+      }else if(verrorbaroption2 != NULL) {
+ if(strcmp(argv[j], verrorbaroption2) == 0) {
+   ok = 1;
+ }
+      }
+      if(ok) {
+ i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &verr_x, &verr_y1, &verr_y2, &verr_y3, &verr_size, &verr_lw, &verr_ci);
+ if(xunit_type == 1) {
+   verr_x /= 360.0;
+ }
+ if(i != 7) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR pgplot_process_errorbars_options: Error parsing %s option. Expected 7 arguments, but only parsed %d.", verrorbaroption, i);
+   return 0;
+ }
+ ppgsch(verr_size);
+ ppgsci(verr_ci);
+ ppgslw(verr_lw);
+ if(frame == NULL) {
+   ppgpt1(verr_x, verr_y2, 2);
+   ppgerr1(2, verr_x, verr_y2, verr_y3-verr_y2, verr_size);
+   ppgerr1(4, verr_x, verr_y2, verr_y2-verr_y1, verr_size);
+ }else {
+   ppgpt1(verr_x, verr_y2*(frame->swin_y2-frame->swin_y1)+frame->swin_y1, 2);
+   ppgerr1(2, verr_x, verr_y2*(frame->swin_y2-frame->swin_y1)+frame->swin_y1, verr_y3-verr_y2, verr_size);
+   ppgerr1(4, verr_x, verr_y2*(frame->swin_y2-frame->swin_y1)+frame->swin_y1, verr_y2-verr_y1, verr_size);
+ }
+ ppgsch(1);
+ ppgslw(1);
+ ppgsci(1);
+ j += 1;
+      }
+    }
+  }
+  return 1;
+}
+void pgplot_overlay_paswing(datafile_definition data, int xunit_type, float pa_bottom, float PAoffset, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, verbose_definition verbose)
+{
+  long i, j;
+  float x, xold, I, Iold;
+  for(j = 0; j < (data.NrBins); j++) {
+    for(i = 0; i < overlayPAfine; i++) {
+      x = get_pulse_longitude(data, 0, j, verbose);
+      if(j == data.NrBins-1) {
+ x += (get_pulse_longitude(data, 0, j, verbose)-get_pulse_longitude(data, 0, j-1, verbose))*i/(float)overlayPAfine;
+      }else {
+ x += (get_pulse_longitude(data, 0, j+1, verbose)-get_pulse_longitude(data, 0, j, verbose))*i/(float)overlayPAfine;
+      }
+      I = paswing(overlayalpha, overlaybeta, x, overlaypa0-PAoffset, overlayl0, nrJumps, jump_longitudes, jump_offsets, 0, 0, 0);
+      if(xunit_type == 1) {
+ x /= 360.0;
+      }
+      if(I > 180)
+ I -= 180;
+      if(I > 180)
+ I -= 180;
+      if(I < 0)
+ I += 180;
+      if(I < 0)
+ I += 180;
+      I += PAoffset;
+      if(j != 0 || i != 0) {
+ if(fabs(I-Iold-180) < fabs(I-Iold))
+   Iold -= 180;
+ if(fabs(I-Iold+180) < fabs(I-Iold))
+   Iold += 180;
+ if(fabs(I-Iold) < 30) {
+   ppgmove(xold, Iold);
+   ppgdraw(x, I);
+   if(pa_bottom < -10) {
+     ppgmove(xold, Iold-180);
+     ppgdraw(x, I-180);
+   }
+ }
+      }
+      Iold = I;
+      xold = x;
+    }
+  }
+}
+void draw_papoints(datafile_definition data, float sigma_limit, float loffset, float PAoffset, int xunit_type, verbose_definition verbose)
+{
+  long j;
+  int ok;
+  float I;
+  for(j = 0; j < (data.NrBins); j++) {
+    ok = 1;
+    if(data.offpulse_rms != NULL) {
+      if(data.data[j+data.NrBins] < sigma_limit*data.offpulse_rms[1])
+ ok = 0;
+    }
+    if(data.data[j+4*data.NrBins] < 0)
+      ok = 0;
+    if(ok && !isnan(data.data[j+3*data.NrBins]) && !isnan(get_pulse_longitude(data, 0, j, verbose))) {
+      I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) + 180.0;
+      float xpos;
+      xpos = get_pulse_longitude(data, 0, j, verbose)+loffset;
+      if(xunit_type == 1) {
+ xpos /= 360.0;
+      }
+      ppgpt1(xpos, I, -2);
+      ppgerr1(6, xpos, I, data.data[j+4*data.NrBins], 1.0);
+      I = derotate_180(data.data[j+3*data.NrBins]+PAoffset);
+      ppgpt1(xpos, I, -2);
+      ppgerr1(6, xpos, I, data.data[j+4*data.NrBins], 1.0);
+      I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) - 180.0;
+      ppgpt1(xpos, I, -2);
+      ppgerr1(6, xpos, I, data.data[j+4*data.NrBins], 1.0);
+      I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) - 360.0;
+      ppgpt1(xpos, I, -2);
+      ppgerr1(6, xpos, I, data.data[j+4*data.NrBins], 1.0);
+    }
+  }
+}
+int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int showEll, pgplot_options_definition *pgplot, char *xlabel, char *ylabel, char *ylabel_pa, char *ylabel_ell, char *ylabel_spstatfrac, float longitude_left, float longitude_right, int xunit_type, float loffset, float Imin, float Imax, float pa_bottom, float pa_top, float PAoffset, float sigma_limit, float datalinewidth, float ysize2, int dashed, int noynumbers, char *textoption, char *textoption_pa, char *textoption_ell, char *textoption_padist, char *textoption_elldist, char *textoption_spstat, char *herrorbaroption, char *herrorbaroptionpa, char *herrorbaroptionpa2, char *herrorbaroptionell, char *herrorbaroptionpadist, char *herrorbaroptionelldist, char *verrorbaroption, char *verrorbaroptionpa, char *verrorbaroptionpa2, char *verrorbaroptionell, int argc, char **argv, int outline_txt, int outline_lw, int outline_color, int overlayPA, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, datafile_definition *padist, float padist_pamin, float padist_pamax, float padist_saturize, int padist_overlayavpa, int padist_paswing, datafile_definition *elldist, float elldist_saturize, int nowedge, datafile_definition *spstatfrac, verbose_definition verbose)
+{
+  int deviceID, ok, domove, showPAdist, showELLdist, showspstatfrac;
+  float ymin, ymax, I, overallplotscaling;
   long i, j;
   char *newtext;
   pgplot_frame_def_internal frame;
@@ -139,7 +350,60 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
   if(nowedge)
     showwedge = 0;
   showPAdist = 0;
+  if(padist != NULL) {
+    if(padist->format != MEMORY_format) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: PA distribution does not appear to be loaded into memory\n");
+      return 0;
+    }
+    if(padist->NrPols != 1) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: PA distribution is expected to have a single polarization channel\n");
+      return 0;
+    }
+    if(padist->gentype != GENTYPE_PADIST) {
+      printwarning(verbose.debug, "WARNING pgplotPAplot: The file opened as a PA distribution does not have a gentype set to be a PA distribution. It is currently set to %s.", returnGenType_str(padist->gentype));
+      return 0;
+    }
+    if(padist->NrBins != data.NrBins) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: The number of pulse longitude bins is different in the PA distribution compared to the profile.");
+      return 0;
+    }
+    if(padist_pamax - padist_pamin < 0) {
+      float junk;
+      junk = padist_pamax;
+      padist_pamax = padist_pamin;
+      padist_pamin = junk;
+    }
+    if(padist_pamax - padist_pamin > 360) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: The PA distribution cannot cover more than 360 degrees.");
+      return 0;
+    }
+    showPAdist = 1;
+  }
   showELLdist = 0;
+  if(elldist != NULL) {
+    if(elldist->format != MEMORY_format) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Ellipticity angle distribution does not appear to be loaded into memory\n");
+      return 0;
+    }
+    if(elldist->NrPols != 1) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Ellipticity angle distribution is expected to have a single polarization channel\n");
+      return 0;
+    }
+    if(elldist->gentype != GENTYPE_ELLDIST) {
+      printwarning(verbose.debug, "WARNING pgplotPAplot: The file opened as an ellipticity angle distribution does not have a gentype set to be an ellipticity angle distribution. It is currently set to %s.", returnGenType_str(elldist->gentype));
+      return 0;
+    }
+    if(elldist->NrBins != data.NrBins) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: The number of pulse longitude bins is different in the ellipticity angle distribution compared to the profile.");
+      return 0;
+    }
+    showELLdist = 1;
+  }
+  showspstatfrac = 0;
+  if(overlayPAfine)
+    overlayPAfine = 100;
+  else
+    overlayPAfine = 1;
   overallplotscaling = 1;
   if(showEll && (showPAdist == 0 && showELLdist == 0)) {
     overallplotscaling = 0.78;
@@ -151,6 +415,9 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
   if(showPAdist && showELLdist) {
     overallplotscaling = 0.4;
   }
+  if(showPAdist && showELLdist && showspstatfrac) {
+    overallplotscaling = 0.35;
+  }
   pgplot_backup = (pgplot_options_definition *)malloc(sizeof(pgplot_options_definition));
   if(pgplot_backup == NULL) {
     printerror(verbose.debug, "ERROR pgplotPAplot: Memory allocation error\n");
@@ -159,17 +426,24 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
   memcpy(pgplot_backup, pgplot, sizeof(pgplot_options_definition));
   pgplot->box.box_labelsize *= overallplotscaling;
   pgplot->box.label_ch *= overallplotscaling;
-  float vp_left, vp_right, vp_profile_top, vp_profile_bottom, vp_paswing_top, vp_paswing_bottom, vp_ellswing_top, vp_ellswing_bottom, vp_padist_top, vp_padist_bottom, vp_elldist_top, vp_elldist_bottom;
+  float vp_left, vp_right, vp_profile_top, vp_profile_bottom, vp_spstatfrac_top, vp_spstatfrac_bottom, vp_paswing_top, vp_paswing_bottom, vp_ellswing_top, vp_ellswing_bottom, vp_padist_top, vp_padist_bottom, vp_elldist_top, vp_elldist_bottom;
   vp_left = 0.1+pgplot->viewport.dxplot;
   vp_right = 0.1+pgplot->viewport.dxplot+0.8*pgplot->viewport.xsize*overallplotscaling;
   vp_profile_bottom = 0.35+(1-overallplotscaling)*0.6+pgplot->viewport.dyplot;
   vp_profile_top = vp_profile_bottom +0.55*pgplot->viewport.ysize*overallplotscaling;
-  if(nopaswing == 0) {
-    vp_paswing_bottom = vp_profile_bottom -0.25*pgplot->viewport.ysize*ysize2*overallplotscaling;
-    vp_paswing_top = vp_profile_top - 0.55*pgplot->viewport.ysize*overallplotscaling;
+  if(showspstatfrac) {
+    vp_spstatfrac_bottom = vp_profile_bottom -0.25*pgplot->viewport.ysize*ysize2*overallplotscaling;
+    vp_spstatfrac_top = vp_profile_top - 0.55*pgplot->viewport.ysize*overallplotscaling;
   }else {
-    vp_paswing_bottom = vp_profile_bottom;
-    vp_paswing_top = vp_profile_bottom + overallplotscaling*0.25*pgplot->viewport.ysize*ysize2;
+    vp_spstatfrac_bottom = vp_profile_bottom;
+    vp_spstatfrac_top = vp_profile_bottom + overallplotscaling*0.25*pgplot->viewport.ysize*ysize2;
+  }
+  if(nopaswing == 0) {
+    vp_paswing_bottom = vp_spstatfrac_bottom - overallplotscaling*0.25*pgplot->viewport.ysize*ysize2;
+    vp_paswing_top = vp_spstatfrac_top - overallplotscaling*0.25*pgplot->viewport.ysize*ysize2;
+  }else {
+    vp_paswing_bottom = vp_spstatfrac_bottom;
+    vp_paswing_top = vp_spstatfrac_bottom + overallplotscaling*0.25*pgplot->viewport.ysize*ysize2;
   }
   if(showEll) {
     vp_ellswing_bottom = vp_paswing_bottom - overallplotscaling*0.25*pgplot->viewport.ysize*ysize2;
@@ -281,7 +555,7 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
     frame.swin_y2 = ymax+(ymax-ymin)*0.05;
     ppgswin(frame.swin_x1,frame.swin_x2,ymin-(ymax-ymin)*0.05,ymax+(ymax-ymin)*0.05);
   }
-  if(nopaswing == 1 && showEll == 0 && showPAdist == 0 && showELLdist == 0) {
+  if(showspstatfrac == 0 && nopaswing == 1 && showEll == 0 && showPAdist == 0 && showELLdist == 0) {
     strcpy(pgplot->box.xlabel, xlabel);
     strcpy(pgplot->box.box_xopt, "bcnst");
   }else {
@@ -307,7 +581,7 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
   domove = 1;
   for(j = 0; j < (data.NrBins); j++) {
     float xpos;
-    xpos = get_pulse_longitude(data, 0, j, verbose);
+    xpos = get_pulse_longitude(data, 0, j, verbose)+loffset;
     if(xunit_type == 1) {
       xpos /= 360.0;
     }
@@ -329,7 +603,7 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
   domove = 1;
   for(j = 0; j < (data.NrBins); j++) {
     float xpos;
-    xpos = get_pulse_longitude(data, 0, j, verbose);
+    xpos = get_pulse_longitude(data, 0, j, verbose)+loffset;
     if(xunit_type == 1) {
       xpos /= 360.0;
     }
@@ -355,7 +629,7 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
     domove = 1;
     for(j = 0; j < (data.NrBins); j++) {
       float xpos;
-      xpos = get_pulse_longitude(data, 0, j, verbose);
+      xpos = get_pulse_longitude(data, 0, j, verbose)+loffset;
       if(xunit_type == 1) {
  xpos /= 360.0;
       }
@@ -376,7 +650,7 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
   domove = 1;
   for(j = 0; j < (data.NrBins); j++) {
     float xpos;
-    xpos = get_pulse_longitude(data, 0, j, verbose);
+    xpos = get_pulse_longitude(data, 0, j, verbose)+loffset;
     if(xunit_type == 1) {
       xpos /= 360.0;
     }
@@ -392,105 +666,16 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
     }
   }
   ppgsls(1);
-  if(textoption != NULL && argv != NULL && argc != 0) {
-    for(j = 0; j < argc; j++) {
-      if(strcmp(argv[j], textoption) == 0) {
- i = sscanf(argv[j+1], "%f %f %f %d %d %d", &text_x, &text_y, &text_ch, &text_lw, &text_f, &text_ci);
- if(xunit_type == 1) {
-   text_x /= 360.0;
- }
- if(i != 6) {
-   fflush(stdout);
-   printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", textoption);
-   memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
-   free(pgplot_backup);
-   return 0;
- }
- ppgsch(text_ch);
- ppgscf(text_f);
- newtext = str_replace_header_params(data, argv[j+2], verbose);
- if(newtext == NULL) {
-   printerror(verbose.debug, "ERROR pgplotPAplot: Cannot substuture header parameter in -text option");
-   memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
-   free(pgplot_backup);
-   return 0;
- }
- if(outline_txt > 0) {
-   ppgslw(text_lw+outline_lw);
-   ppgsci(outline_color);
-   ppgptxt(text_x, text_y, 0, 0, newtext);
- }
- ppgsci(text_ci);
- ppgslw(text_lw);
- ppgptxt(text_x, text_y, 0, 0, newtext);
- ppgscf(1);
- ppgsch(1);
- ppgslw(1);
- ppgsci(1);
- j += 2;
- free(newtext);
-      }
-    }
+  if(pgplot_process_errorbars_options(herrorbaroption, NULL, verrorbaroption, NULL, argc, argv, xunit_type, &frame, verbose) == 0) {
+    printerror(verbose.debug, "ERROR pgplotPAplot: Error processing the %s and %s options", herrorbaroption, verrorbaroption);
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
+    return 0;
   }
-  if(herrorbaroption != NULL && argv != NULL && argc != 0) {
-    for(j = 0; j < argc; j++) {
-      float herr_x1, herr_x2, herr_x3, herr_y, herr_size, herr_lw;
-      int herr_ci;
-      if(strcmp(argv[j], herrorbaroption) == 0) {
- i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &herr_x1, &herr_x2, &herr_x3, &herr_y, &herr_size, &herr_lw, &herr_ci);
- if(xunit_type == 1) {
-   herr_x1 /= 360.0;
-   herr_x2 /= 360.0;
-   herr_x3 /= 360.0;
- }
- if(i != 7) {
-   fflush(stdout);
-   printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", herrorbaroption);
-   memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
-   free(pgplot_backup);
-   return 0;
- }
- ppgsch(herr_size);
- ppgsci(herr_ci);
- ppgslw(herr_lw);
- ppgpt1(herr_x2, herr_y*(frame.swin_y2-frame.swin_y1)+frame.swin_y1, 2);
- ppgerr1(1, herr_x2, herr_y*(frame.swin_y2-frame.swin_y1)+frame.swin_y1, herr_x3-herr_x2, herr_size);
- ppgerr1(3, herr_x2, herr_y*(frame.swin_y2-frame.swin_y1)+frame.swin_y1, herr_x2-herr_x1, herr_size);
- ppgsch(1);
- ppgslw(1);
- ppgsci(1);
- j += 1;
-      }
-    }
-  }
-  if(verrorbaroption != NULL && argv != NULL && argc != 0) {
-    for(j = 0; j < argc; j++) {
-      float verr_y1, verr_y2, verr_y3, verr_x, verr_size, verr_lw;
-      int verr_ci;
-      if(strcmp(argv[j], verrorbaroption) == 0) {
- i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &verr_x, &verr_y1, &verr_y2, &verr_y3, &verr_size, &verr_lw, &verr_ci);
- if(xunit_type == 1) {
-   verr_x /= 360.0;
- }
- if(i != 7) {
-   fflush(stdout);
-   printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", verrorbaroption);
-   memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
-   free(pgplot_backup);
-   return 0;
- }
- ppgsch(verr_size);
- ppgsci(verr_ci);
- ppgslw(verr_lw);
- ppgpt1(verr_x, verr_y2*(frame.swin_y2-frame.swin_y1)+frame.swin_y1, 2);
- ppgerr1(2, verr_x, verr_y2*(frame.swin_y2-frame.swin_y1)+frame.swin_y1, verr_y3-verr_y2, verr_size);
- ppgerr1(4, verr_x, verr_y2*(frame.swin_y2-frame.swin_y1)+frame.swin_y1, verr_y2-verr_y1, verr_size);
- ppgsch(1);
- ppgslw(1);
- ppgsci(1);
- j += 1;
-      }
-    }
+  if(pgplot_process_text_option(textoption, outline_txt, outline_lw, outline_color, argc, argv, xunit_type, data, verbose) == 0) {
+    printerror(verbose.debug, "ERROR pgplotPAplot: Error processing %s option.", textoption);
+    memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+    free(pgplot_backup);
   }
   if(nopaswing == 0) {
     ppgsls(1);
@@ -521,142 +706,24 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
       pgplot->box.ylabel[0] = 0;
     }
     pgplot_drawbox(&(pgplot->box));
-    float x, xold;
     ppgslw(datalinewidth);
-    if(overlayPAfine)
-      overlayPAfine = 100;
-    else
-      overlayPAfine = 1;
     if(overlayPA) {
       ppgsci(2);
-      for(j = 0; j < (data.NrBins); j++) {
- for(i = 0; i < overlayPAfine; i++) {
-   x = get_pulse_longitude(data, 0, j, verbose);
-   if(j == data.NrBins-1) {
-     x += (get_pulse_longitude(data, 0, j, verbose)-get_pulse_longitude(data, 0, j-1, verbose))*i/(float)overlayPAfine;
-   }else {
-     x += (get_pulse_longitude(data, 0, j+1, verbose)-get_pulse_longitude(data, 0, j, verbose))*i/(float)overlayPAfine;
-   }
-   I = paswing(overlayalpha, overlaybeta, x, overlaypa0, overlayl0, nrJumps, jump_longitudes, jump_offsets, 0, 0);
-   if(xunit_type == 1) {
-     x /= 360.0;
-   }
-   if(I > 180)
-     I -= 180;
-   if(I > 180)
-     I -= 180;
-   if(I < 0)
-     I += 180;
-   if(I < 0)
-     I += 180;
-   if(j != 0 || i != 0) {
-     if(fabs(I-Iold-180) < fabs(I-Iold))
-       Iold -= 180;
-     if(fabs(I-Iold+180) < fabs(I-Iold))
-       Iold += 180;
-     if(fabs(I-Iold) < 30) {
-       ppgmove(xold, Iold);
-       ppgdraw(x, I);
-       if(pa_bottom < -10) {
-  ppgmove(xold, Iold-180);
-  ppgdraw(x, I-180);
-       }
-     }
-   }
-   Iold = I;
-   xold = x;
- }
-      }
+      pgplot_overlay_paswing(data, xunit_type, pa_bottom, 0.0, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayPAfine, nrJumps, jump_longitudes, jump_offsets, verbose);
       ppgsci(1);
     }
     ppgsci(1);
-    for(j = 0; j < (data.NrBins); j++) {
-      ok = 1;
-      if(data.offpulse_rms != NULL) {
- if(data.data[j+data.NrBins] < sigma_limit*data.offpulse_rms[1])
-   ok = 0;
-      }
-      if(data.data[j+4*data.NrBins] < 0)
- ok = 0;
-      if(ok && !isnan(data.data[j+3*data.NrBins]) && !isnan(get_pulse_longitude(data, 0, j, verbose))) {
- I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) + 180.0;
- float xpos;
- xpos = get_pulse_longitude(data, 0, j, verbose);
- if(xunit_type == 1) {
-   xpos /= 360.0;
- }
- ppgpt1(xpos, I, -2);
- ppgerr1(6, xpos, I, data.data[j+4*data.NrBins], 1.0);
- I = derotate_180(data.data[j+3*data.NrBins]+PAoffset);
- ppgpt1(xpos, I, -2);
- ppgerr1(6, xpos, I, data.data[j+4*data.NrBins], 1.0);
- I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) - 180.0;
- ppgpt1(xpos, I, -2);
- ppgerr1(6, xpos, I, data.data[j+4*data.NrBins], 1.0);
- I = derotate_180(data.data[j+3*data.NrBins]+PAoffset) - 360.0;
- ppgpt1(xpos, I, -2);
- ppgerr1(6, xpos, I, data.data[j+4*data.NrBins], 1.0);
-      }
+    draw_papoints(data, sigma_limit, loffset, PAoffset, xunit_type, verbose);
+    if(pgplot_process_errorbars_options(herrorbaroptionpa, herrorbaroptionpa2, verrorbaroptionpa, verrorbaroptionpa2, argc, argv, xunit_type, NULL, verbose) == 0) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Error processing the %s and %s options", herrorbaroptionpa, verrorbaroptionpa);
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
+      return 0;
     }
-    if(herrorbaroption2 != NULL && argv != NULL && argc != 0) {
-      for(j = 0; j < argc; j++) {
- float herr_x1, herr_x2, herr_x3, herr_y, herr_size, herr_lw;
- int herr_ci;
- if(strcmp(argv[j], herrorbaroption2) == 0) {
-   i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &herr_x1, &herr_x2, &herr_x3, &herr_y, &herr_size, &herr_lw, &herr_ci);
-   if(xunit_type == 1) {
-     herr_x1 /= 360.0;
-     herr_x2 /= 360.0;
-     herr_x3 /= 360.0;
-   }
-   if(i != 7) {
-     fflush(stdout);
-     printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", herrorbaroption2);
-     memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
-     free(pgplot_backup);
-     return 0;
-   }
-   ppgsch(herr_size);
-   ppgsci(herr_ci);
-   ppgslw(herr_lw);
-   ppgpt1(herr_x2, herr_y, 2);
-   ppgerr1(1, herr_x2, herr_y, herr_x3-herr_x2, herr_size);
-   ppgerr1(3, herr_x2, herr_y, herr_x2-herr_x1, herr_size);
-   ppgsch(1);
-   ppgslw(1);
-   ppgsci(1);
-   j += 1;
- }
-      }
-    }
-    if(verrorbaroption2 != NULL && argv != NULL && argc != 0) {
-      for(j = 0; j < argc; j++) {
- float verr_y1, verr_y2, verr_y3, verr_x, verr_size, verr_lw;
- int verr_ci;
- if(strcmp(argv[j], verrorbaroption2) == 0) {
-   i = sscanf(argv[j+1], "%f %f %f %f %f %f %d", &verr_x, &verr_y1, &verr_y2, &verr_y3, &verr_size, &verr_lw, &verr_ci);
-   if(xunit_type == 1) {
-     verr_x /= 360.0;
-   }
-   if(i != 7) {
-     fflush(stdout);
-     printerror(verbose.debug, "ERROR pgplotPAplot: Error parsing %s option", verrorbaroption);
-     memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
-     free(pgplot_backup);
-     return 0;
-   }
-   ppgsch(verr_size);
-   ppgsci(verr_ci);
-   ppgslw(verr_lw);
-   ppgpt1(verr_x, verr_y2, 2);
-   ppgerr1(2, verr_x, verr_y2, verr_y3-verr_y2, verr_size);
-   ppgerr1(4, verr_x, verr_y2, verr_y2-verr_y1, verr_size);
-   ppgsch(1);
-   ppgslw(1);
-   ppgsci(1);
-   j += 1;
- }
-      }
+    if(pgplot_process_text_option(textoption_pa, outline_txt, outline_lw, outline_color, argc, argv, xunit_type, data, verbose) == 0) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Error processing %s option.", textoption_pa);
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
     }
   }
   if(showEll) {
@@ -700,7 +767,7 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
       if(ok && !isnan(data.data[j+6*data.NrBins]) && !isnan(get_pulse_longitude(data, 0, j, verbose))) {
  I = derotate_90(data.data[j+6*data.NrBins]) + 90.0;
  float xpos;
- xpos = get_pulse_longitude(data, 0, j, verbose);
+ xpos = get_pulse_longitude(data, 0, j, verbose)+loffset;
  if(xunit_type == 1) {
    xpos /= 360.0;
  }
@@ -716,6 +783,17 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
  ppgpt1(xpos, I, -2);
  ppgerr1(6, xpos, I, data.data[j+7*data.NrBins], 1.0);
       }
+    }
+    if(pgplot_process_errorbars_options(herrorbaroptionell, NULL, verrorbaroptionell, NULL, argc, argv, xunit_type, NULL, verbose) == 0) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Error processing the %s and %s options", herrorbaroptionell, verrorbaroptionell);
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
+      return 0;
+    }
+    if(pgplot_process_text_option(textoption_ell, outline_txt, outline_lw, outline_color, argc, argv, xunit_type, data, verbose) == 0) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Error processing %s option.", textoption_ell);
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
     }
   }
   int cmaptype;
@@ -747,8 +825,8 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
     pgplot->viewport.dontopen = 1;
     pgplot->viewport.dontclose = 1;
     float xpos1, xpos2, xpos_start, xpos_end;
-    xpos1 = get_pulse_longitude(data, 0, 0, verbose);
-    xpos2 = get_pulse_longitude(data, 0, padist->NrBins-1, verbose);
+    xpos1 = get_pulse_longitude(data, 0, 0, verbose)+loffset;
+    xpos2 = get_pulse_longitude(data, 0, padist->NrBins-1, verbose)+loffset;
     xpos_start = longitude_left;
     xpos_end = longitude_right;
     if(xunit_type) {
@@ -788,17 +866,43 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
     }
     ymin_data += 0.5*(180.0/(float)padist->NrSubints);
     ymax_data -= 0.5*(180.0/(float)padist->NrSubints);
-    if(pgplotMap(pgplot, data_ptr, padist->NrBins, wraps*padist->NrSubints, xpos1, xpos2, xpos_start, xpos_end, ymin_data, ymax_data, padist_pamin, padist_pamax, cmaptype, 0, 0, 0, NULL, 0, 0, padist_saturize, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, showwedge, 1, 0, verbose) == 0) {
+    if(pgplotMap(pgplot, data_ptr, padist->NrBins, wraps*padist->NrSubints, xpos1, xpos2, xpos_start, xpos_end, ymin_data, ymax_data, padist_pamin, padist_pamax, cmaptype, 0, 0, 0, NULL, 0, 0, padist_saturize, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, showwedge, 0, 1, 0, verbose) == 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR pgplotPAplot: Plotting of the PA distribution failed.");
       memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
       free(pgplot_backup);
       return 0;
     }
+    if(padist_overlayavpa) {
+      ppgsci(2);
+      draw_papoints(data, sigma_limit, loffset, PAoffset, xunit_type, verbose);
+      if(padist_overlayavpa == 2) {
+ ppgsci(3);
+ draw_papoints(data, sigma_limit, loffset, PAoffset+90, xunit_type, verbose);
+      }
+      ppgsci(1);
+    }
+    ppgslw(datalinewidth);
+    if(padist_paswing) {
+      ppgsci(2);
+      pgplot_overlay_paswing(data, xunit_type, pa_bottom, -90.0, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayPAfine, nrJumps, jump_longitudes, jump_offsets, verbose);
+      ppgsci(1);
+    }
     if(wraps > 1) {
       free(data_ptr);
     }
     pgplot_drawbox(&(pgplot->box));
+    if(pgplot_process_errorbars_options(herrorbaroptionpadist, NULL, NULL, NULL, argc, argv, xunit_type, NULL, verbose) == 0) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Error processing the %s option", herrorbaroptionpadist);
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
+      return 0;
+    }
+    if(pgplot_process_text_option(textoption_padist, outline_txt, outline_lw, outline_color, argc, argv, xunit_type, data, verbose) == 0) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Error processing %s option.", textoption_padist);
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
+    }
   }
   if(showELLdist) {
     ppgsls(1);
@@ -818,8 +922,8 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
     pgplot->viewport.dontopen = 1;
     pgplot->viewport.dontclose = 1;
     float xpos1, xpos2, xpos_start, xpos_end;
-    xpos1 = get_pulse_longitude(data, 0, 0, verbose);
-    xpos2 = get_pulse_longitude(data, 0, elldist->NrBins-1, verbose);
+    xpos1 = get_pulse_longitude(data, 0, 0, verbose)+loffset;
+    xpos2 = get_pulse_longitude(data, 0, elldist->NrBins-1, verbose)+loffset;
     xpos_start = longitude_left;
     xpos_end = longitude_right;
     if(xunit_type) {
@@ -828,7 +932,7 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
       xpos_start /= 360.0;
       xpos_end /= 360.0;
     }
-    if(pgplotMap(pgplot, elldist->data, elldist->NrBins, elldist->NrSubints, xpos1, xpos2, xpos_start, xpos_end, -45+0.5*(90.0/(float)elldist->NrSubints), 45-0.5*(90.0/(float)elldist->NrSubints), -45, 45, cmaptype, 0, 0, 0, NULL, 0, 0, elldist_saturize, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, showwedge, 1, 0, verbose) == 0) {
+    if(pgplotMap(pgplot, elldist->data, elldist->NrBins, elldist->NrSubints, xpos1, xpos2, xpos_start, xpos_end, -45+0.5*(90.0/(float)elldist->NrSubints), 45-0.5*(90.0/(float)elldist->NrSubints), -45, 45, cmaptype, 0, 0, 0, NULL, 0, 0, elldist_saturize, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, showwedge, 0, 1, 0, verbose) == 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR pgplotPAplot: Plotting of the ellipticity angle distribution failed.");
       memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
@@ -836,6 +940,17 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
       return 0;
     }
     pgplot_drawbox(&(pgplot->box));
+    if(pgplot_process_errorbars_options(herrorbaroptionelldist, NULL, NULL, NULL, argc, argv, xunit_type, NULL, verbose) == 0) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Error processing the %s option", herrorbaroptionelldist);
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
+      return 0;
+    }
+    if(pgplot_process_text_option(textoption_elldist, outline_txt, outline_lw, outline_color, argc, argv, xunit_type, data, verbose) == 0) {
+      printerror(verbose.debug, "ERROR pgplotPAplot: Error processing %s option.", textoption_elldist);
+      memcpy(pgplot, pgplot_backup, sizeof(pgplot_options_definition));
+      free(pgplot_backup);
+    }
   }
   if(pgplot->viewport.dontclose == 0)
     ppgclos();
@@ -1448,7 +1563,7 @@ void pgplot_drawbox(pgplot_box_definition *box)
   ppgslw(1);
   ppgscf(1);
 }
-int pgplotMap(pgplot_options_definition *pgplot, float *cmap, int nrx, int nry, float xmin, float xmax, float xminshow, float xmaxshow, float ymin, float ymax, float yminshow, float ymaxshow, int maptype, int itf, int nogray, int nrcontours, float *contours, int contourlw, int forceMinZero, float saturize, int levelset, float levelmin, float levelmax, int levelInversion, int onlyData, int sideright, int forceMinZeroRight, int sidetop, int forceMinZeroTop, int sidelw, int showwedge, int plotSubset, int showTwice, verbose_definition verbose)
+int pgplotMap(pgplot_options_definition *pgplot, float *cmap, int nrx, int nry, float xmin, float xmax, float xminshow, float xmaxshow, float ymin, float ymax, float yminshow, float ymaxshow, int maptype, int itf, int nogray, int nrcontours, float *contours, int contourlw, int forceMinZero, float saturize, int levelset, float levelmin, float levelmax, int levelInversion, int onlyData, int sideright, int forceMinZeroRight, int sidetop, int forceMinZeroTop, int sidelw, int showwedge, int showwedge_actualmax, int plotSubset, int showTwice, verbose_definition verbose)
 {
   float datamin, datamax, xmin2, xmax2;
   float *collapse, x, y, remember2_x1, remember2_x2, remember2_y1, remember2_y2;
@@ -1534,6 +1649,8 @@ int pgplotMap(pgplot_options_definition *pgplot, float *cmap, int nrx, int nry, 
   if(verbose.debug) printf("pgplotMap -- Data range: %e to %e\n", datamin, datamax);
   if(forceMinZero)
     datamin = 0;
+  double datamax_actual;
+  datamax_actual = datamax;
   datamax = datamin + (datamax-datamin)/saturize;
   if(levelset) {
     datamax = levelmax;
@@ -1627,10 +1744,35 @@ int pgplotMap(pgplot_options_definition *pgplot, float *cmap, int nrx, int nry, 
     ppgimag(cmap_subset, subset_nrx, subset_nry, 1, subset_nrx, 1, subset_nry, datamax, datamin, pgplot_frame_internal.TR);
   }
   if(showwedge && sideright == 0) {
+    int free_txt;
+    char *txt;
+    free_txt = 0;
+    if(showwedge_actualmax == 0) {
+      txt = pgplot->box.wedgelabel;
+    }else {
+      txt = malloc(1000);
+      if(txt == NULL) {
+ printerror(verbose.debug, "ERROR pgplotMap: Cannot allocate memory");
+ return 0;
+      }
+      free_txt = 1;
+      if(fabs(datamax_actual) >= 1.0) {
+ sprintf(txt, "Max. = %.2f", datamax_actual);
+      }else if(fabs(datamax_actual) >= 0.1) {
+ sprintf(txt, "Max. = %.3f", datamax_actual);
+      }else if(fabs(datamax_actual) >= 0.01) {
+ sprintf(txt, "Max. = %.4f", datamax_actual);
+      }else {
+ sprintf(txt, "Max. = %.2e", datamax_actual);
+      }
+    }
     ppgsch(pgplot->box.box_labelsize*0.5);
     ppgslw(ceil(0.5*pgplot->box.box_lw));
-    ppgwedg("RI", 0, 6, datamax, datamin, pgplot->box.wedgelabel);
+    ppgwedg("RI", 0, 6, datamax, datamin, txt);
     ppgslw(1);
+    if(free_txt) {
+      free(txt);
+    }
   }
   if(nrcontours > 0) {
     int didallocate_contours = 0;
@@ -2093,6 +2235,26 @@ void region_int_to_frac(pulselongitude_regions_definition *region, float scale, 
     }
   }
 }
+int region_make_even(int regionnr, pulselongitude_regions_definition *region, int nrx)
+{
+  long nrx2, junk_int;
+  nrx2 = region->right_bin[regionnr]-region->left_bin[regionnr] + 1;
+  junk_int = nrx2 / 2;
+  junk_int *= 2;
+  junk_int -= nrx2;
+  if(junk_int == 0) {
+    return 1;
+  }else {
+    if(region->right_bin[regionnr] < nrx - 1) {
+      region->right_bin[regionnr]++;
+      return 2;
+    }else if(region->left_bin[regionnr] > 0) {
+      region->left_bin[regionnr]--;
+      return 2;
+    }
+  }
+  return 1;
+}
 void regionShowNextTimeUse(pulselongitude_regions_definition region, char *option, char *optionFrac, FILE *where)
 {
   int i, ok;
@@ -2219,6 +2381,139 @@ int cmap_parse_commandline(int argc, char **argv, int debug)
     }
   }
   return type;
+}
+void drawSphericalGrid(float dlat, float dlong, float rot_long, float rot_lat, int lw, int projection)
+{
+  float lat, lon, t, dt, x, y, sign, weight;
+  int first, side, side2, oldside, oldside2, ok;
+  ppgslw(lw);
+  dlat *= M_PI/180.0;
+  dlong *= M_PI/180.0;
+  rot_long *= M_PI/180.0;
+  rot_lat *= M_PI/180.0;
+  dt = 0.01;
+  if(projection != 3) {
+    for(side = 0; side < 2; side++) {
+      first = 1;
+      for(t = 0; t <= 2.0*M_PI+2.0*dt; t += dt) {
+ ok = 1;
+ if(projection == 1) {
+   x = 2*cos(t);
+   y = sin(t);
+   if(side == 1)
+     ok = 0;
+ }else if(projection == 2) {
+   x = cos(t);
+   y = sin(t);
+   if(side == 0)
+     x -= 1.125;
+   else
+     x += 1.125;
+ }
+ if(first && ok) {
+   ppgmove(x, y);
+   first = 0;
+ }else if(ok) {
+   ppgdraw(x, y);
+ }
+      }
+    }
+  }
+  for(sign = -1; sign < 1.1; sign += 2) {
+    for(lat = 0; lat <= 0.5*M_PI+2.0*dt; lat += dlat) {
+      first = 1;
+      oldside = -1;
+      oldside2 = -1;
+      for(t = -M_PI; t <= M_PI+2.0*dt; t += dt) {
+ lon = t;
+ if(lon > M_PI)
+   lon = M_PI;
+ if(projection == 1) {
+   projectionHammerAitoff_xy(lon, sign*lat, rot_long, rot_lat, &x, &y);
+   if(x < 0)
+     side = 0;
+   if(x > 0)
+     side = 1;
+   if(side != oldside)
+     first = 1;
+   oldside = side;
+ }else if(projection == 2) {
+   side = projection_sphere_xy(lon, sign*lat, rot_long, rot_lat, &x, &y, &weight);
+   if(side != oldside)
+     first = 1;
+   oldside = side;
+ }else if(projection == 3) {
+   projection_longlat_xy(lon, sign*lat, rot_long, rot_lat, &x, &y);
+   if(x < 0)
+     side = 0;
+   if(x > 0)
+     side = 1;
+   if(y < 0)
+     side2 = 0;
+   if(y > 0)
+     side2 = 1;
+   if(side != oldside || side2 != oldside2)
+     first = 1;
+   oldside = side;
+   oldside2 = side2;
+ }
+ if(first) {
+   ppgmove(x, y);
+   first = 0;
+ }else {
+   ppgdraw(x, y);
+ }
+      }
+    }
+  }
+  for(sign = -1; sign < 1.1; sign += 2) {
+    for(lon = 0; lon <= M_PI; lon += dlong) {
+      first = 1;
+      oldside = -1;
+      oldside2 = -1;
+      for(t = -0.5*M_PI; t <= 0.5*M_PI+2.0*dt; t += dt) {
+ lat = t;
+ if(lat > 0.5*M_PI)
+   lat = 0.5*M_PI;
+ if(projection == 1) {
+   projectionHammerAitoff_xy(sign*lon, lat, rot_long, rot_lat, &x, &y);
+   if(x < 0)
+     side = 0;
+   if(x > 0)
+     side = 1;
+   if(side != oldside)
+     first = 1;
+   oldside = side;
+ }else if(projection == 2) {
+   side = projection_sphere_xy(sign*lon, lat, rot_long, rot_lat, &x, &y, &weight);
+   if(side != oldside)
+     first = 1;
+   oldside = side;
+ }else if(projection == 3) {
+   projection_longlat_xy(sign*lon, lat, rot_long, rot_lat, &x, &y);
+   if(x < 0)
+     side = 0;
+   if(x > 0)
+     side = 1;
+   if(y < 0)
+     side2 = 0;
+   if(y > 0)
+     side2 = 1;
+   if(side != oldside || side2 != oldside2)
+     first = 1;
+   oldside = side;
+   oldside2 = side2;
+ }
+ if(first) {
+   ppgmove(x, y);
+   first = 0;
+ }else {
+   ppgdraw(x, y);
+ }
+      }
+    }
+  }
+  ppgslw(1);
 }
 int pgplot_device_type(char *devicename, verbose_definition verbose)
 {

@@ -24,14 +24,18 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
   #include "nr.h"
   #include "nrutil.h"
 #endif
-int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *twodfs, pulselongitude_regions_definition *onpulse, int region, verbose_definition verbose)
+int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *twodfs, pulselongitude_regions_definition *onpulse, int region, float *var_rms, verbose_definition verbose)
 {
   unsigned long nr_fftblocks;
-  float junk_float;
-  long junk_int, i, nf, nb, nb2, np, nrx2, bin_offpulse_left;
+  float junk_float, pwr;
+  long junk_int, i, nf, nb, nb2, np, nrx2, bin_offpulse_left, avrg_squares_offpulse_nrsamples;
   int ok;
+  double avrg_offpulse_2dfs, avrg_squares_offpulse_2dfs;
+  avrg_squares_offpulse_nrsamples = 0;
+  avrg_offpulse_2dfs = 0.0;
+  avrg_squares_offpulse_2dfs = 0.0;
   #ifdef USEFFTW3
-    float *inputdata, pwr;
+    float *inputdata;
     fftwf_complex *fftdata;
     fftwf_plan plan;
   #else
@@ -193,9 +197,13 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
       if(nb2 >= nrx2)
  nb2 -= nrx2;
       for(np = 0; np < fft_size/2+1; np++) {
- if(np != 0)
+ if(np != 0) {
    pwr = cabs(fftdata[nb*(fft_size/2+1)+np]);
    twodfs[np*nrx2+nb2] -= pwr*pwr;
+   avrg_squares_offpulse_nrsamples++;
+   avrg_offpulse_2dfs += pwr*pwr;
+   avrg_squares_offpulse_2dfs += pwr*pwr*pwr*pwr;
+ }
       }
     }
 #else
@@ -205,8 +213,13 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
  if(nb2 >= nrx2)
    nb2 -= nrx2;
  for(np = 0; np < fft_size/2; np++) {
-   if(np != 0)
-     twodfs[np*nrx2+nb2] -= inputdata[1][nb+1][2*np+1]*inputdata[1][nb+1][2*np+1]+inputdata[1][nb+1][2*np+2]*inputdata[1][nb+1][2*np+2];
+   if(np != 0) {
+     pwr = inputdata[1][nb+1][2*np+1]*inputdata[1][nb+1][2*np+1]+inputdata[1][nb+1][2*np+2]*inputdata[1][nb+1][2*np+2];
+     twodfs[np*nrx2+nb2] -= pwr;
+     avrg_squares_offpulse_nrsamples++;
+     avrg_offpulse_2dfs += pwr;
+     avrg_squares_offpulse_2dfs += pwr*pwr;
+   }
  }
  twodfs[(fft_size/2)*nrx2+nb2] -= speq[1][2*nb+1]*speq[1][2*nb+1]+speq[1][2*nb+2]*speq[1][2*nb+2];
       }
@@ -215,6 +228,15 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
     if(nr_fftblocks > 1 && verbose.nocounters == 0) {
       printf("Block %ld of the %ld     \r", nf+1, nr_fftblocks);
       fflush(stdout);
+    }
+  }
+  if(var_rms != NULL) {
+    if(avrg_squares_offpulse_nrsamples == 0) {
+      *var_rms = -1.0;
+    }else {
+      avrg_offpulse_2dfs /= (double)(avrg_squares_offpulse_nrsamples);
+      avrg_squares_offpulse_2dfs /= (double)(avrg_squares_offpulse_nrsamples);
+      *var_rms = sqrt(avrg_squares_offpulse_2dfs-avrg_offpulse_2dfs*avrg_offpulse_2dfs);
     }
   }
   if(nr_fftblocks > 1 && verbose.nocounters == 0)
@@ -234,7 +256,7 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
   long fftblock, binnr, pulsenr;
   unsigned long nr_fftblocks;
   float *data1, *lrfs_tmp, pwr, pwrtot, freq, var_mean;
-  double avr_power_subtracted_from_lrfs;
+  double avrg_power_subtracted_from_lrfs;
   long i, j, n, tot_var_rms_samples;
   float zapmin, zapmax, p3;
   int k;
@@ -248,7 +270,7 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
     *var_rms = 0;
     var_mean = 0;
     tot_var_rms_samples = 0;
-    avr_power_subtracted_from_lrfs = 0;
+    avrg_power_subtracted_from_lrfs = 0;
   }
   phase_track_complex_template = NULL;
   phase_track_complex = NULL;
@@ -375,7 +397,7 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
    for(binnr = 0; binnr < nrx; binnr++) {
      lrfs_tmp[i*nrx+binnr] -= pwrtot;
    }
-   avr_power_subtracted_from_lrfs += pwrtot;
+   avrg_power_subtracted_from_lrfs += pwrtot;
  }
       }
     }
@@ -520,14 +542,14 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
   }
   if(verbose.verbose && verbose.nocounters == 0)
     printf("Done                       \n");
-  avr_power_subtracted_from_lrfs /= (double)(fft_size/2+1);
+  avrg_power_subtracted_from_lrfs /= (double)(fft_size/2+1);
   if(avrg_offpulse_lrfs_power != NULL) {
-    *avrg_offpulse_lrfs_power = avr_power_subtracted_from_lrfs;
+    *avrg_offpulse_lrfs_power = avrg_power_subtracted_from_lrfs;
   }
   if(verbose.debug) {
     if(regions != NULL) {
       if(regions->nrRegions > 0) {
- printf("  Average (off-pulse) power subtracted from LRFS per frequency/pulse longitude bin: %e\n", avr_power_subtracted_from_lrfs);
+ printf("  Average (off-pulse) power subtracted from LRFS per frequency/pulse longitude bin: %e\n", avrg_power_subtracted_from_lrfs);
       }
     }
   }
@@ -543,14 +565,17 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
 #endif
   return 1;
 }
-void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size, unsigned long nrpulses, float *sigma, float *rms_sigma, float *modind, float *rms_modind, pulselongitude_regions_definition *regions, float var_rms, float *avrg_offpulse_lrfs_power, verbose_definition verbose)
+void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size, unsigned long nrpulses, float *sigma, float *rms_sigma, float *modind, float *rms_modind, pulselongitude_regions_definition *regions, float var_rms, float *avrg_offpulse_lrfs_power, float *avrg_mod, verbose_definition verbose)
 {
   long b, f, n, nrblocks;
   float var, max, rms, av_sigma, rms_var;
   for(b = 0; b < nrx; b++) {
     var = 0;
     for(f = 0; f <= fft_size/2; f++) {
-      var += lrfs[f*nrx+b];
+      if(f == fft_size/2)
+ var += 0.5*lrfs[f*nrx+b];
+      else
+ var += lrfs[f*nrx+b];
     }
     sigma[b] = var;
   }
