@@ -87,7 +87,9 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
     printerror(verbose.debug, "ERROR calc2DFS: Cannot calculate 2dfs for %ld pulses (fft size = %ld)", nry, fft_size);
     return 0;
   }
-  if(verbose.verbose) printf("Calculating 2DFS (%ld blocks)\n", nr_fftblocks);
+  if(verbose.verbose) {
+    printf("Calculating 2DFS (%ld blocks)\n", nr_fftblocks);
+  }
   if(onpulse == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR calc2DFS: Onpulse region is undefined.");
@@ -138,9 +140,13 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
       bin_offpulse_left = -1;
   }
   if(bin_offpulse_left >= 0) {
-    if(verbose.verbose) printf("  Found suitable offpulse region (%ld %ld).\n", bin_offpulse_left, bin_offpulse_left+nrx2-1);
+    if(verbose.verbose) {
+      printf("  Found suitable offpulse region (%ld %ld).\n", bin_offpulse_left, bin_offpulse_left+nrx2-1);
+    }
   }else {
-    if(verbose.verbose) printwarning(verbose.debug, "  WARNING calc2DFS: Didn't found suitable offpulse region.");
+    if(verbose.verbose) {
+      printwarning(verbose.debug, "  WARNING calc2DFS: Didn't found suitable offpulse region.");
+    }
   }
   for(i = 0; i < nrx2*(1+fft_size/2); i++)
     twodfs[i] = 0;
@@ -276,7 +282,9 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
   phase_track_complex = NULL;
   nspecbins = 0;
   nr_fftblocks = nry/fft_size;
-  if(verbose.verbose) printf("Calculating LRFS (%ld blocks)\n", nr_fftblocks);
+  if(verbose.verbose) {
+    printf("Calculating LRFS (%ld blocks)\n", nr_fftblocks);
+  }
   if(nr_fftblocks == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR calcLRFS: Cannot calculate lrfs for %ld pulses (smaller than fft size = %ld)", nry, fft_size);
@@ -421,7 +429,9 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
     int itteration_max = 100;
     double complex corr, phase, *phases;
     float total_phase_offset;
-    if(verbose.verbose) printf("  Coherently add phase tracks\n");
+    if(verbose.verbose) {
+      printf("  Coherently add phase tracks\n");
+    }
     phases = (double complex *)malloc(nrphasetracks*sizeof(double complex));
     if(phases == NULL) {
       fflush(stdout);

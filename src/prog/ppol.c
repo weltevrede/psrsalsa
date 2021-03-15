@@ -587,7 +587,7 @@ int main(int argc, char **argv)
  strcpy(pgplot_options.box.title, datain.filename);
       pgplot_options.box.title_ch = titlech;
       pgplot_options.box.title_lw = titlelw;
-      pgplotPAplot(datain, extendedPol, 0, extendedPol, &pgplot_options, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", "\\gx [deg]", "Fraction", plotl1, plotl2, 0, 0.0, plotI1, plotI2, plotp1, plotp2, 0.0, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-text_pa", "-text_ell", "-text_padist", "-text_elldist", "-text_spstat", "-herrorbar", "-herrorbarpa", "-herrorbar2", NULL, NULL, NULL, "-verrorbar", "-verrorbarpa", "-verrorbar2", NULL, argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, NULL, -90, 90, 1.0, 0, 0, NULL, 1.0, 0, NULL, application.verbose_state);
+      pgplotPAplot(datain, extendedPol, 0, extendedPol, &pgplot_options, "Pulse longitude [deg]", "I,Linear,V", "PA [deg]", "\\gx [deg]", "Fraction", plotl1, plotl2, 0, 0.0, plotI1, plotI2, plotp1, plotp2, 0.0, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-text_pa", 0.0, 0, "-text_ell", 0.0, 0, "-text_padist", "-text_elldist", "-text_spstat", "-herrorbar", "-herrorbarpa", "-herrorbar2", NULL, NULL, NULL, "-verrorbar", "-verrorbarpa", "-verrorbar2", NULL, argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, NULL, -90, 90, 1.0, 0, 0, NULL, 1.0, 0, NULL, application.verbose_state);
       if(firstfiletoopen) {
  ppgqid(&deviceID);
       }

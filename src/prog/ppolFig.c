@@ -23,12 +23,12 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 int main(int argc, char **argv)
 {
   int index, firstfiletoopen, curpanelnrx, curpanelnry, nokeypresses, showtotPol, nopaswing;
-  int deviceID, nrpanelsx, nrpanelsy, nxsub;
+  int deviceID, nrpanelsx, nrpanelsy, nxsub, nysub_pa, nysub_ell;
   int titleset, dashed, datalinewidth, noylabel, overlayPA, overlayFine, nrJumps;
   int outline, outline_color, xunit_type, nowedge;
   long i;
   float sigma_limit, titlech, boxch, labelch;
-  float xsize, ysize, ysizepa, xtick, plotI1, plotI2;
+  float xsize, ysize, ysizepa, xtick, ytick_pa, ytick_ell, plotI1, plotI2;
   float plotl1, plotl2, plotp1, plotp2, plotp1_padist, plotp2_padist, PAoffset, loffset;
   float overlayalpha, overlaybeta, overlaypa0, overlayl0;
   float jump_longitude[MaxNrJumps], jump_offset[MaxNrJumps];
@@ -64,7 +64,11 @@ int main(int argc, char **argv)
   ysize = 1.0;
   ysizepa = 1.0;
   xtick = 0.0;
+  ytick_pa = 0.0;
+  ytick_ell = 0.0;
   nxsub = 0;
+  nysub_pa = 0;
+  nysub_ell = 0;
   sigma_limit = 3.0;
   titleset = 0;
   title[0] = 0;
@@ -158,6 +162,8 @@ int main(int argc, char **argv)
     fprintf(stdout, "-ysize         Set ysize of the plot [def=%.1f].\n", ysize);
     fprintf(stdout, "-ysizepa       Set relative ysize of PA plot [def=%.1f].\n", ysizepa);
     fprintf(stdout, "-xticks        \"XTICK NXSUB\"  Adjust PGPLOT tickmarks [def=\"%.0f %d\"].\n", xtick, nxsub);
+    fprintf(stdout, "-yticks_pa     As -xticks, but for the PA-swing panel [def=\"%.0f %d\"].\n", ytick_pa, nysub_pa);
+    fprintf(stdout, "-yticks_ell     As -xticks, but for the ellipticity-swing panel [def=\"%.0f %d\"].\n", ytick_ell, nysub_ell);
     printf("\n");
     printf("Please use the appropriate citation when using results of this software in your publications:\n\n");
     printf("More information about fitting position-angle swings and using the beam-width information can be found in:\n");
@@ -304,6 +310,18 @@ int main(int argc, char **argv)
         i++;
       }else if(strcmp(argv[i], "-xticks") == 0) {
  if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %d", &xtick, &nxsub, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR ppolFig: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
+        i++;
+      }else if(strcmp(argv[i], "-yticks_pa") == 0) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %d", &ytick_pa, &nysub_pa, NULL) == 0) {
+   printerror(application.verbose_state.debug, "ERROR ppolFig: Cannot parse '%s' option.", argv[i]);
+   return 0;
+ }
+        i++;
+      }else if(strcmp(argv[i], "-yticks_ell") == 0) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f %d", &ytick_ell, &nysub_ell, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR ppolFig: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -530,7 +548,7 @@ int main(int argc, char **argv)
     if(elldist_filename_index) {
       elldist_ptr = &elldist_data;
     }
-    pgplotPAplot(datain, showtotPol, nopaswing, showEll, &pgplot_options, label_x, label_I, label_pa, label_ell, "Fraction", plotl1, plotl2, xunit_type, loffset, plotI1, plotI2, plotp1, plotp2, PAoffset, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-text_pa", "-text_ell", "-text_padist", "-text_elldist", "-text_spstat", "-herrorbar", "-herrorbarpa", "-herrorbar2", "-herrorbarell", "-herrorbarpadist", "-herrorbarelldist", "-verrorbar", "-verrorbarpa", "-verrorbar2", "-verrorbarell", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, padist_ptr, plotp1_padist, plotp2_padist, padist_saturize, padist_overlayavpa, padist_paswing, elldist_ptr, elldist_saturize, nowedge, spstatfrac_ptr, application.verbose_state);
+    pgplotPAplot(datain, showtotPol, nopaswing, showEll, &pgplot_options, label_x, label_I, label_pa, label_ell, "Fraction", plotl1, plotl2, xunit_type, loffset, plotI1, plotI2, plotp1, plotp2, PAoffset, sigma_limit, datalinewidth, ysizepa, dashed, noylabel, "-text", "-text_pa", ytick_pa, nysub_pa, "-text_ell", ytick_ell, nysub_ell, "-text_padist", "-text_elldist", "-text_spstat", "-herrorbar", "-herrorbarpa", "-herrorbar2", "-herrorbarell", "-herrorbarpadist", "-herrorbarelldist", "-verrorbar", "-verrorbarpa", "-verrorbar2", "-verrorbarell", argc, argv, outline, outline, outline_color, overlayPA, overlayalpha, overlaybeta, overlaypa0, overlayl0, overlayFine, nrJumps, jump_longitude, jump_offset, padist_ptr, plotp1_padist, plotp2_padist, padist_saturize, padist_overlayavpa, padist_paswing, elldist_ptr, elldist_saturize, nowedge, spstatfrac_ptr, application.verbose_state);
     if(firstfiletoopen) {
       ppgqid(&deviceID);
     }

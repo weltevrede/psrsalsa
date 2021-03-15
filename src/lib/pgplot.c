@@ -338,7 +338,7 @@ void draw_papoints(datafile_definition data, float sigma_limit, float loffset, f
     }
   }
 }
-int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int showEll, pgplot_options_definition *pgplot, char *xlabel, char *ylabel, char *ylabel_pa, char *ylabel_ell, char *ylabel_spstatfrac, float longitude_left, float longitude_right, int xunit_type, float loffset, float Imin, float Imax, float pa_bottom, float pa_top, float PAoffset, float sigma_limit, float datalinewidth, float ysize2, int dashed, int noynumbers, char *textoption, char *textoption_pa, char *textoption_ell, char *textoption_padist, char *textoption_elldist, char *textoption_spstat, char *herrorbaroption, char *herrorbaroptionpa, char *herrorbaroptionpa2, char *herrorbaroptionell, char *herrorbaroptionpadist, char *herrorbaroptionelldist, char *verrorbaroption, char *verrorbaroptionpa, char *verrorbaroptionpa2, char *verrorbaroptionell, int argc, char **argv, int outline_txt, int outline_lw, int outline_color, int overlayPA, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, datafile_definition *padist, float padist_pamin, float padist_pamax, float padist_saturize, int padist_overlayavpa, int padist_paswing, datafile_definition *elldist, float elldist_saturize, int nowedge, datafile_definition *spstatfrac, verbose_definition verbose)
+int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int showEll, pgplot_options_definition *pgplot, char *xlabel, char *ylabel, char *ylabel_pa, char *ylabel_ell, char *ylabel_spstatfrac, float longitude_left, float longitude_right, int xunit_type, float loffset, float Imin, float Imax, float pa_bottom, float pa_top, float PAoffset, float sigma_limit, float datalinewidth, float ysize2, int dashed, int noynumbers, char *textoption, char *textoption_pa, float ytick_pa, int nysub_pa, char *textoption_ell, float ytick_ell, int nysub_ell, char *textoption_padist, char *textoption_elldist, char *textoption_spstat, char *herrorbaroption, char *herrorbaroptionpa, char *herrorbaroptionpa2, char *herrorbaroptionell, char *herrorbaroptionpadist, char *herrorbaroptionelldist, char *verrorbaroption, char *verrorbaroptionpa, char *verrorbaroptionpa2, char *verrorbaroptionell, int argc, char **argv, int outline_txt, int outline_lw, int outline_color, int overlayPA, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, datafile_definition *padist, float padist_pamin, float padist_pamax, float padist_saturize, int padist_overlayavpa, int padist_paswing, datafile_definition *elldist, float elldist_saturize, int nowedge, datafile_definition *spstatfrac, verbose_definition verbose)
 {
   int deviceID, ok, domove, showPAdist, showELLdist, showspstatfrac;
   float ymin, ymax, I, overallplotscaling;
@@ -705,7 +705,13 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
     }else {
       pgplot->box.ylabel[0] = 0;
     }
+    float tmp_ytick = pgplot->box.box_ytick;
+    int tmp_nysub = pgplot->box.box_nysub;
+    pgplot->box.box_ytick = ytick_pa;
+    pgplot->box.box_nysub = nysub_pa;
     pgplot_drawbox(&(pgplot->box));
+    pgplot->box.box_ytick = tmp_ytick;
+    pgplot->box.box_nysub = tmp_nysub;
     ppgslw(datalinewidth);
     if(overlayPA) {
       ppgsci(2);
@@ -754,7 +760,13 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
       pgplot->box.xlabel[0] = 0;
       strcpy(pgplot->box.box_xopt, "bcst");
     }
+    float tmp_ytick = pgplot->box.box_ytick;
+    int tmp_nysub = pgplot->box.box_nysub;
+    pgplot->box.box_ytick = ytick_ell;
+    pgplot->box.box_nysub = nysub_ell;
     pgplot_drawbox(&(pgplot->box));
+    pgplot->box.box_ytick = tmp_ytick;
+    pgplot->box.box_nysub = tmp_nysub;
     ppgslw(datalinewidth);
     for(j = 0; j < (data.NrBins); j++) {
       ok = 1;
