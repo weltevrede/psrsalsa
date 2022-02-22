@@ -114,7 +114,7 @@ int main(int argc, char **argv)
  printf("ra            Right ascension\n");
  printf("reffreq       Reference frequency (used for dedispersion etc)\n");
  printf("rm            Rotation measure\n");
- printf("rmstable      Show the rms'es (if supported in file)\n");
+ printf("rms_table     Show the rms'es (if supported in file)\n");
  printf("scanid        Scan identifier string\n");
  printf("tsub          Average subintegration time, and a list of individual tsub times\n");
  printf("weights       Show weights (if supported in file)\n");
@@ -175,7 +175,7 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "hist") == 0) {
       }else if(strcasecmp(cmd, "weights") == 0) {
  noweights = 0;
-      }else if(strcasecmp(cmd, "rmstable") == 0) {
+      }else if(strcasecmp(cmd, "rms_table") == 0) {
  normstable = 0;
       }else if(strcasecmp(cmd, "observatory") == 0) {
       }else if(strcasecmp(cmd, "gentype") == 0) {
@@ -276,7 +276,7 @@ int main(int argc, char **argv)
      }
    }
    didfreqlist = 1;
- }else if(strcasecmp(cmd, "rmstable") == 0) {
+ }else if(strcasecmp(cmd, "rms_table") == 0) {
    printf("RMS table for %s\n", filename_ptr);
    if(datain[i].offpulse_rms == NULL) {
      printf("  no RMS'es defined in file\n");
@@ -458,7 +458,7 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "hist") == 0) {
       }else if(strcasecmp(cmd, "weights") == 0) {
       }else if(strcasecmp(cmd, "freqlist") == 0) {
-      }else if(strcasecmp(cmd, "rmstable") == 0) {
+      }else if(strcasecmp(cmd, "rms_table") == 0) {
       }else if(strcasecmp(cmd, "observatory") == 0) {
  printf(" observatory");
  for(j = 0; j < maxobservatorylength - strlen("observatory"); j++)
@@ -633,7 +633,7 @@ int main(int argc, char **argv)
  }else if(strcasecmp(cmd, "hist") == 0) {
  }else if(strcasecmp(cmd, "weights") == 0) {
  }else if(strcasecmp(cmd, "freqlist") == 0) {
- }else if(strcasecmp(cmd, "rmstable") == 0) {
+ }else if(strcasecmp(cmd, "rms_table") == 0) {
  }else {
    printerror(application.verbose_state.verbose, "\nERROR pheader: Unknown header parameter (%s), specify -H for a list", cmd);
    return 0;
