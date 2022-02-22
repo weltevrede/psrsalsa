@@ -698,16 +698,16 @@ int main(int argc, char **argv)
    }
    if(!openPSRData(&padist_data, ofilename, oformat, 1, 0, 0, application.verbose_state))
      return 0;
-   if(!writeHeaderPSRData(&padist_data, argc, argv, application.history_cmd_only, application.verbose_state))
+   if(!writeHeaderPSRData(&padist_data, argc, argv, application.history_cmd_only, NULL, application.verbose_state))
      return 0;
    if(writePSRData(&padist_data, padist_data.data, application.verbose_state) != 1)
      return 0;
  }
       }
-      closePSRData(&padist_data, 0, application.verbose_state);
+      closePSRData(&padist_data, 0, 0, application.verbose_state);
     }
     if(subtractFile) {
-      closePSRData(&subtract_fin, 0, application.verbose_state);
+      closePSRData(&subtract_fin, 0, 0, application.verbose_state);
     }
     if(writeout && (show_pa_dist == 0
       ) && doprojection == 0) {
@@ -735,7 +735,7 @@ int main(int argc, char **argv)
  dataout.fptr_hdr = stdout;
  dataout.format = application.oformat;
       }
-      if(!writeHeaderPSRData(&dataout, argc, argv, application.history_cmd_only, application.verbose_state))
+      if(!writeHeaderPSRData(&dataout, argc, argv, application.history_cmd_only, NULL, application.verbose_state))
  return 0;
       if(application.oformat == PPOL_format) {
  extended = 1;
@@ -765,11 +765,11 @@ int main(int argc, char **argv)
  }
       }
     }
-    closePSRData(&datain, 0, application.verbose_state);
+    closePSRData(&datain, 0, 0, application.verbose_state);
     if(dataout.format == PPOL_format || dataout.format == PPOL_SHORT_format) {
       dataout.offpulse_rms = NULL;
     }
-    closePSRData(&dataout, 0, application.verbose_state);
+    closePSRData(&dataout, 0, 0, application.verbose_state);
     firstfiletoopen = 0;
     if(compute_PA) {
       free(profileI);

@@ -599,7 +599,7 @@ int main(int argc, char **argv)
  cleanPSRData(&dataout, application.verbose_state);
  copy_params_PSRData(datain, &dataout, application.verbose_state);
       }
-      closePSRData(&datain, 0, application.verbose_state);
+      closePSRData(&datain, 0, 0, application.verbose_state);
     }else {
       if(twoDmode || cdf || select) {
  nrdatacolumns = 2;
@@ -1065,7 +1065,7 @@ int main(int argc, char **argv)
       if(long_resolved == 0) {
  fclose(ofile);
       }else {
- closePSRData(&dataout, 0, application.verbose_state);
+ closePSRData(&dataout, 0, 0, application.verbose_state);
       }
       free(oname);
     }

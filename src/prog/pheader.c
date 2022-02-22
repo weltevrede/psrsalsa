@@ -26,7 +26,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 psrsalsaApplication application;
 int main(int argc, char **argv)
 {
-  int index, c_index, nrwords, iformat_initial_value, didhistory, didweights, didfreqlist, nohead, noweights, show_linenumber;
+  int index, c_index, nrwords, iformat_initial_value, didhistory, didweights, didrmstable, didfreqlist, nohead, noweights, normstable, show_linenumber;
   int maxfilenamelength, maxobservatorylength, maxgentypelength, maxscanidlength, maxobserverlength, maxprojectidlength, maxinstrumentlength, maxfileformatlength, j;
   int showfootnotes, footnote_length, footnote_length2, footnote_search, footnote_parang, precision;
   long i;
@@ -41,6 +41,7 @@ int main(int argc, char **argv)
   application.switch_filelist = 1;
   nohead = 0;
   noweights = 1;
+  normstable = 1;
   showfootnotes = 1;
   footnote_length = 0;
   footnote_length2 = 0;
@@ -113,6 +114,7 @@ int main(int argc, char **argv)
  printf("ra            Right ascension\n");
  printf("reffreq       Reference frequency (used for dedispersion etc)\n");
  printf("rm            Rotation measure\n");
+ printf("rmstable      Show the rms'es (if supported in file)\n");
  printf("scanid        Scan identifier string\n");
  printf("tsub          Average subintegration time, and a list of individual tsub times\n");
  printf("weights       Show weights (if supported in file)\n");
@@ -173,6 +175,8 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "hist") == 0) {
       }else if(strcasecmp(cmd, "weights") == 0) {
  noweights = 0;
+      }else if(strcasecmp(cmd, "rmstable") == 0) {
+ normstable = 0;
       }else if(strcasecmp(cmd, "observatory") == 0) {
       }else if(strcasecmp(cmd, "gentype") == 0) {
       }else if(strcasecmp(cmd, "long") == 0) {
@@ -217,9 +221,17 @@ int main(int argc, char **argv)
     }
     verbose_definition verbose2;
     copyVerboseState(application.verbose_state, &verbose2);
-    if(c_index == 0)
+    if(c_index == 0) {
       verbose2.verbose = 1;
-    if(readHeaderPSRData(&datain[i], noweights, 0, verbose2) == 0) {
+    }
+    int noscales_option = 1;
+    if(noweights == 0) {
+      noscales_option = 0;
+    }
+    if(normstable == 0) {
+      noscales_option = 0;
+    }
+    if(readHeaderPSRData(&datain[i], noscales_option, 0, verbose2) == 0) {
       printerror(application.verbose_state.verbose, "pheader: Error reading header");
       return 0;
     }
@@ -238,6 +250,7 @@ int main(int argc, char **argv)
       }
       didweights = 0;
       didfreqlist = 0;
+      didrmstable = 0;
       pickWordFromString(argv[c_index], 1, &nrwords, 0, ' ', application.verbose_state);
       for(j = 0; j < nrwords; j++) {
  sscanf(pickWordFromString(argv[c_index], j+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
@@ -263,6 +276,21 @@ int main(int argc, char **argv)
      }
    }
    didfreqlist = 1;
+ }else if(strcasecmp(cmd, "rmstable") == 0) {
+   printf("RMS table for %s\n", filename_ptr);
+   if(datain[i].offpulse_rms == NULL) {
+     printf("  no RMS'es defined in file\n");
+   }else {
+     long nsub, nfreq, npol;
+     for(nsub = 0; nsub < datain[i].NrSubints; nsub++) {
+       for(nfreq = 0; nfreq < datain[i].NrFreqChan; nfreq++) {
+  for(npol = 0; npol < datain[i].NrPols; npol++) {
+    printf("  subint %04ld channel %04ld = %lf MHz pol %ld: %e\n", nsub, nfreq, get_weighted_channel_freq(datain[i], nsub, nfreq, application.verbose_state), npol, datain[i].offpulse_rms[nsub*(datain[i].NrFreqChan*datain[i].NrPols)+nfreq*(datain[i].NrPols)+npol]);
+  }
+       }
+     }
+   }
+   didrmstable = 1;
  }
       }
       pickWordFromString(argv[c_index], 1, &nrwords, 0, ' ', application.verbose_state);
@@ -280,20 +308,20 @@ int main(int argc, char **argv)
  }
       }
     }
-    closePSRData(&datain[i], 1, application.verbose_state);
+    closePSRData(&datain[i], 1, 0, application.verbose_state);
     i++;
   }
   if(c_index == 0) {
     for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
-      closePSRData(&datain[i], 0, application.verbose_state);
+      closePSRData(&datain[i], 0, 0, application.verbose_state);
     }
     free(datain);
     terminateApplication(&application);
     return 0;
   }
-  if(nrwords == didhistory + didweights + didfreqlist) {
+  if(nrwords == didhistory + didweights + didfreqlist + didrmstable) {
     for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
-      closePSRData(&datain[i], 0, application.verbose_state);
+      closePSRData(&datain[i], 0, 0, application.verbose_state);
     }
     free(datain);
     terminateApplication(&application);
@@ -430,6 +458,7 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "hist") == 0) {
       }else if(strcasecmp(cmd, "weights") == 0) {
       }else if(strcasecmp(cmd, "freqlist") == 0) {
+      }else if(strcasecmp(cmd, "rmstable") == 0) {
       }else if(strcasecmp(cmd, "observatory") == 0) {
  printf(" observatory");
  for(j = 0; j < maxobservatorylength - strlen("observatory"); j++)
@@ -604,6 +633,7 @@ int main(int argc, char **argv)
  }else if(strcasecmp(cmd, "hist") == 0) {
  }else if(strcasecmp(cmd, "weights") == 0) {
  }else if(strcasecmp(cmd, "freqlist") == 0) {
+ }else if(strcasecmp(cmd, "rmstable") == 0) {
  }else {
    printerror(application.verbose_state.verbose, "\nERROR pheader: Unknown header parameter (%s), specify -H for a list", cmd);
    return 0;
@@ -628,7 +658,7 @@ int main(int argc, char **argv)
     }
   }
   for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
-    closePSRData(&datain[i], 0, application.verbose_state);
+    closePSRData(&datain[i], 0, 0, application.verbose_state);
   }
   free(datain);
   terminateApplication(&application);

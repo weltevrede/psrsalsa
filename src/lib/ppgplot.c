@@ -533,3 +533,12 @@ int ppgslct(int id)
     return 0;
   }
 }
+void ppgsclp(int state)
+{
+  if(ppgdevice_internal == NULL) {
+    cpgsclp(state);
+    return;
+  }else {
+    fprintf(ppgdevice_internal, "pgsclp %d\n", state);
+  }
+}

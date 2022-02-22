@@ -332,7 +332,14 @@ int algorithm, int mode, int showcovariance, verbose_definition verbose)
   int fnr, nrvalues, paramnr, n, n2;
   if(mode == 0) {
     countnrparameters_fitfunction(function, nrfitparameters);
-    if(verbose.verbose) printf("  Initializing fitter with %d fit parameters\n", *nrfitparameters);
+    if(verbose.verbose) {
+      printf("  Initializing fitter with %d fit parameters\n", *nrfitparameters);
+    }
+    if(*nrfitparameters > nrdatapoints) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR levmar_initialize: The number of fit parameters (%d) exceeds the number of data points (%d).", *nrfitparameters, nrdatapoints);
+      return 5;
+    }
   }else if(mode == 1) {
     levmar_internal_fitter_data.n = nrdatapoints;
     levmar_internal_fitter_data.x = datax;
@@ -344,7 +351,7 @@ int algorithm, int mode, int showcovariance, verbose_definition verbose)
     if(*func_params == NULL || *func_params_err == NULL) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR levmar_initialize: Cannot allocate memory");
-      return 0;
+      return 1;
     }
     paramnr = 0;
     for(fnr = 0; fnr < function->nrfuncs; fnr++) {
@@ -353,7 +360,7 @@ int algorithm, int mode, int showcovariance, verbose_definition verbose)
       }else {
  fflush(stdout);
  printerror(verbose.debug, "ERROR levmar_initialize: Unknown funtional type.");
- return 0;
+ return 1;
       }
       for(n = 0; n < nrvalues; n++) {
  if(function->func[fnr].fit_flag[n]) {
@@ -384,7 +391,7 @@ int algorithm, int mode, int showcovariance, verbose_definition verbose)
       psrsalsa_params->beta_tmp = malloc(sizeof(double)*(*nrfitparameters));
       if(psrsalsa_params->func_params_laststep == NULL || psrsalsa_params->beta == NULL || psrsalsa_params->derivatives == NULL || psrsalsa_params->alpha == NULL || psrsalsa_params->covar == NULL || psrsalsa_params->beta_tmp == NULL || psrsalsa_params->alpha_tmp == NULL) {
  printerror(verbose.debug, "ERROR levmar_initialize: Memory allocation error");
- return 0;
+ return 1;
       }
       psrsalsa_params->nrfitparams = *nrfitparameters;
       psrsalsa_params->data = &levmar_internal_fitter_data;
@@ -396,7 +403,7 @@ int algorithm, int mode, int showcovariance, verbose_definition verbose)
       nr_params->func_params_laststep = malloc(sizeof(double)*(*nrfitparameters));
       if(nr_params->ia == NULL || nr_params->func_params_laststep == NULL) {
  printerror(verbose.debug, "ERROR levmar_initialize: Memory allocation error");
- return 0;
+ return 1;
       }
       for(n = 0; n < *nrfitparameters; n++)
  nr_params->ia[n] = 1;
@@ -410,7 +417,7 @@ int algorithm, int mode, int showcovariance, verbose_definition verbose)
       mrqmin_nr_d(levmar_internal_fitter_data.x-1, levmar_internal_fitter_data.y-1, levmar_internal_fitter_data.sigma-1, nrdatapoints, (*func_params)-1, nr_params->ia-1, *nrfitparameters, nr_params->covar, nr_params->alpha, &nr_params->chisq, levmar_itteration_calc_func_and_deriv_internal_nr, &(nr_params->alambda));
 #else
       printerror(verbose.debug, "ERROR levmar_initialize: Code is not compiled with NR support");
-      return 0;
+      return 10;
 #endif
     }
   }else if(mode == 2) {
@@ -421,7 +428,7 @@ int algorithm, int mode, int showcovariance, verbose_definition verbose)
       }else {
  fflush(stdout);
  printerror(0, "ERROR levmar_initialize: Unknown funtional type.");
- return 0;
+ return 1;
       }
       for(n = 0; n < nrvalues; n++) {
  if(function->func[fnr].fit_flag[n]) {
@@ -478,13 +485,13 @@ int algorithm, int mode, int showcovariance, verbose_definition verbose)
       free(nr_params->func_params_laststep);
 #else
       printerror(verbose.debug, "ERROR levmar_initialize: Code is not compiled with NR support");
-      return 0;
+      return 10;
 #endif
     }
     free(*func_params);
     free(*func_params_err);
   }
-  return 1;
+  return 0;
 }
 int fit_levmar_internal(int algorithm, int nrdatapoints, int nrfitparameters, double *func_params, double *func_params_err, levmar_internal_gsl_info *gsl_params, levmar_internal_psrsalsa_info *psrsalsa_params,
 #ifdef NRAVAIL
@@ -672,7 +679,7 @@ int fit_levmar_internal(int algorithm, int nrdatapoints, int nrfitparameters, do
     }
 #endif
   }
-  if(levmar_internal_fitter_data.iter == maxiter)
+  if(iter == maxiter)
     return 2;
   if(algorithm == 1) {
     if(status == 0)
@@ -682,14 +689,14 @@ int fit_levmar_internal(int algorithm, int nrdatapoints, int nrfitparameters, do
     }
     if(status == GSL_ENOPROG) {
       fflush(stdout);
-      printerror(verbose.debug, "fit_levmar_internal: Cannot determine suitable trial step. Continue itterating might help");
+      printerror(verbose.debug, "fit_levmar_internal: Itteration doesn't appear to make progress towards a solution.");
       return 4;
     }
   }else if(algorithm == 2 || algorithm == 3) {
     return 0;
   }
   fflush(stdout);
-  printerror(verbose.debug, "fit_levmar_internal: UNKNOWN RETURN CODE");
+  printerror(verbose.debug, "fit_levmar_internal: UNKNOWN RETURN CODE (status=%d iter=%ld)", status, levmar_internal_fitter_data.iter);
   return 10;
 }
 int fit_levmar(int algorithm, fitfunc_collection_type *function, double *data_x, double *data_y, double *data_sigma, long ndata, int oneatatime, int force_chi2_1, double epsabs, double epsrel, int maxiter, int *status, int showresults, int showcovariance, verbose_definition verbose)
@@ -699,6 +706,7 @@ int fit_levmar(int algorithm, fitfunc_collection_type *function, double *data_x,
   verbose_definition noverbose;
   levmar_internal_gsl_info gsl_params;
   levmar_internal_psrsalsa_info psrsalsa_params;
+  *status = 0;
 #ifndef NRAVAIL
   if(algorithm == 3) {
     printerror(verbose.debug, "ERROR fit_levmar: Code is not compiled with NR support");
@@ -729,21 +737,32 @@ int fit_levmar(int algorithm, fitfunc_collection_type *function, double *data_x,
     free_data_sigma = 1;
     force_chi2_1 = 1;
   }
-  if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+  int ret;
+  ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
          &nr_params,
 #endif
-         algorithm, 0, showcovariance, verbose) == 0) {
-    return 1;
+    algorithm, 0, showcovariance, verbose);
+  if(ret != 0) {
+    if(free_data_sigma) {
+      free(data_sigma);
+      data_sigma = NULL;
+    }
+    return ret;
   }
   levmar_internal_fitter_data.iter = 0;
   if(oneatatime == 0) {
-    if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+    ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
     &nr_params,
 #endif
-    algorithm, 1, showcovariance, verbose) == 0) {
-      return 1;
+       algorithm, 1, showcovariance, verbose);
+    if(ret != 0) {
+      if(free_data_sigma) {
+ free(data_sigma);
+ data_sigma = NULL;
+      }
+      return ret;
     }
     *status = fit_levmar_internal(algorithm, ndata, nrfitparameters, func_params, func_params_err, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
@@ -755,6 +774,10 @@ int fit_levmar(int algorithm, fitfunc_collection_type *function, double *data_x,
     original_function = malloc(sizeof(fitfunc_collection_type));
     if(original_function == NULL) {
       printerror(verbose.debug, "ERROR fit_levmar: Memory allocation error.");
+      if(free_data_sigma) {
+ free(data_sigma);
+ data_sigma = NULL;
+      }
       return 1;
     }
     memcpy(original_function, function, sizeof(fitfunc_collection_type));
@@ -769,6 +792,10 @@ int fit_levmar(int algorithm, fitfunc_collection_type *function, double *data_x,
  }else {
    fflush(stdout);
    printerror(verbose.debug, "ERROR fit_levmar: Unknown funtional type.");
+   if(free_data_sigma) {
+     free(data_sigma);
+     data_sigma = NULL;
+   }
    return 1;
  }
  for(valuenr = 0; valuenr < nrvalues; valuenr++) {
@@ -782,34 +809,49 @@ int fit_levmar(int algorithm, fitfunc_collection_type *function, double *data_x,
        printf("  Loop %d: chi2 = %f", loopnr, old_chi2);
        printf("\n");
      }
-     if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters_one, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+     ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters_one, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
      &nr_params,
 #endif
-     algorithm, 0, showcovariance, noverbose) == 0) {
+        algorithm, 0, showcovariance, noverbose);
+     if(ret != 0) {
        free(original_function);
-       return 1;
+       if(free_data_sigma) {
+  free(data_sigma);
+  data_sigma = NULL;
+       }
+       return ret;
      }
-     if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters_one, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+     ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters_one, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
      &nr_params,
 #endif
-     algorithm, 1, showcovariance, verbose) == 0) {
+        algorithm, 1, showcovariance, verbose);
+     if(ret != 0) {
        free(original_function);
-       return 1;
+       if(free_data_sigma) {
+  free(data_sigma);
+  data_sigma = NULL;
+       }
+       return ret;
      }
      *status = fit_levmar_internal(algorithm, ndata, nrfitparameters_one, func_params, func_params_err, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
        &nr_params,
 #endif
        epsabs, epsrel, maxiter, verbose);
-     if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters_one, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+     ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters_one, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
      &nr_params,
 #endif
-     algorithm, 2, showcovariance, verbose) == 0) {
+        algorithm, 2, showcovariance, verbose);
+     if(ret != 0) {
        free(original_function);
-       return 1;
+       if(free_data_sigma) {
+  free(data_sigma);
+  data_sigma = NULL;
+       }
+       return ret;
      }
      if(function->chi2 < old_chi2 || old_chi2 < 0) {
        old_chi2 = function->chi2;
@@ -825,21 +867,31 @@ int fit_levmar(int algorithm, fitfunc_collection_type *function, double *data_x,
       for(k = 0; k < MaxNrFitParameters; k++)
  function->func[j].fit_flag[k] = original_function->func[j].fit_flag[k];
     }
-    if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+    ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
     &nr_params,
 #endif
-    algorithm, 0, showcovariance, verbose) == 0) {
+       algorithm, 0, showcovariance, verbose);
+    if(ret != 0) {
       free(original_function);
-      return 1;
+      if(free_data_sigma) {
+ free(data_sigma);
+ data_sigma = NULL;
+      }
+      return ret;
     }
-    if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+    ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
     &nr_params,
 #endif
-    algorithm, 1, showcovariance, verbose) == 0) {
+       algorithm, 1, showcovariance, verbose);
+    if(ret != 0) {
       free(original_function);
-      return 1;
+      if(free_data_sigma) {
+ free(data_sigma);
+ data_sigma = NULL;
+      }
+      return ret;
     }
     *status = fit_levmar_internal(algorithm, ndata, nrfitparameters, func_params, func_params_err, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
@@ -851,43 +903,63 @@ int fit_levmar(int algorithm, fitfunc_collection_type *function, double *data_x,
   if(verbose.verbose) {
     printf("  After %ld iterations found chisq/dof = %g\n", levmar_internal_fitter_data.iter, levmar_internal_fitter_data.fitfunction->chi2_red);
   }
-  if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+  ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
          &nr_params,
 #endif
-         algorithm, 2, showcovariance, verbose) == 0) {
-    return 1;
+     algorithm, 2, showcovariance, verbose);
+  if(ret != 0) {
+    if(free_data_sigma) {
+      free(data_sigma);
+      data_sigma = NULL;
+    }
+    return ret;
   }
   if(force_chi2_1) {
     sig_scale = sqrt(function->chi2_red);
     for(i = 0; i < ndata; i++) {
       data_sigma[i] *= sig_scale;
     }
-    if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+    ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
     &nr_params,
 #endif
-    algorithm, 0, showcovariance, verbose) == 0) {
-      return 1;
+       algorithm, 0, showcovariance, verbose);
+    if(ret != 0) {
+      if(free_data_sigma) {
+ free(data_sigma);
+ data_sigma = NULL;
+      }
+      return ret;
     }
-    if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+    ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
     &nr_params,
 #endif
-    algorithm, 1, showcovariance, verbose) == 0) {
-      return 1;
+       algorithm, 1, showcovariance, verbose);
+    if(ret != 0) {
+      if(free_data_sigma) {
+ free(data_sigma);
+ data_sigma = NULL;
+      }
+      return ret;
     }
     *status = fit_levmar_internal(algorithm, ndata, nrfitparameters, func_params, func_params_err, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
       &nr_params,
 #endif
       epsabs, epsrel, maxiter, verbose);
-    if(levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
+    ret = levmar_initialize(function, &func_params, &func_params_err, &nrfitparameters, data_x, data_y, data_sigma, ndata, &gsl_params, &psrsalsa_params,
 #ifdef NRAVAIL
     &nr_params,
 #endif
-    algorithm, 2, showcovariance, verbose) == 0) {
-      return 1;
+      algorithm, 2, showcovariance, verbose);
+    if(ret != 0) {
+      if(free_data_sigma) {
+ free(data_sigma);
+ data_sigma = NULL;
+      }
+      return ret;
     }
   }
   if(verbose.verbose || showresults) {

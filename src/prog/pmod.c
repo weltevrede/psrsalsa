@@ -342,8 +342,8 @@ int main(int argc, char **argv)
     }
     if(isValidPSRDATA_format(application.iformat) == 0) {
       printerror(application.verbose_state.debug, "ERROR pmod: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", filename_ptr);
-      closePSRData(&dataout, 0, application.verbose_state);
-      closePSRData(&dataout2, 0, application.verbose_state);
+      closePSRData(&dataout, 0, 0, application.verbose_state);
+      closePSRData(&dataout2, 0, 0, application.verbose_state);
       gsl_rng_free(rand_num_gen);
       terminateApplication(&application);
       return 0;
@@ -507,6 +507,18 @@ int main(int argc, char **argv)
       }
     region_int_to_frac(&(application.onpulse), 1.0/(float)datain.NrBins, 0);
     regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
+    if(application.verbose_state.verbose) {
+      long nronpulsebins, nroffpulsebins;
+      nronpulsebins = nroffpulsebins = 0;
+      for(j = 0; j < datain.NrBins; j++) {
+ if(checkRegions(j, &(application.onpulse), 0, application.verbose_state) != 0) {
+   nronpulsebins++;
+ }else {
+   nroffpulsebins++;
+ }
+      }
+      printf("Nr onpulse bins defined = %ld and the number of offpulse bins = %ld\n", nronpulsebins, nroffpulsebins);
+    }
     if(baseline_length) {
       for(i = 0; i < baseline_length; i++)
  zapMask[i] = 0;
@@ -576,7 +588,7 @@ int main(int argc, char **argv)
       printf("Cannot open %s\n\n", output_name);
       return 0;
     }
-    if(writeHeaderPSRData(&dataout, argc, argv, application.history_cmd_only, application.verbose_state) == 0) {
+    if(writeHeaderPSRData(&dataout, argc, argv, application.history_cmd_only, NULL, application.verbose_state) == 0) {
       printf("Cannot write header to %s\n\n", output_name);
       return 0;
     }
@@ -589,7 +601,7 @@ int main(int argc, char **argv)
    printf("Cannot open %s\n\n", output_name);
    return 0;
  }
- if(writeHeaderPSRData(&dataout2, argc, argv, application.history_cmd_only, application.verbose_state) == 0) {
+ if(writeHeaderPSRData(&dataout2, argc, argv, application.history_cmd_only, NULL, application.verbose_state) == 0) {
    printf("Cannot write header to %s\n\n", output_name);
    return 0;
  }
@@ -753,9 +765,9 @@ int main(int argc, char **argv)
     free(runningRMS);
     free(zapMask);
     free(fzapMask);
-    closePSRData(&datain, 0, application.verbose_state);
-    closePSRData(&dataout, 0, application.verbose_state);
-    closePSRData(&dataout2, 0, application.verbose_state);
+    closePSRData(&datain, 0, 0, application.verbose_state);
+    closePSRData(&dataout, 0, 0, application.verbose_state);
+    closePSRData(&dataout2, 0, 0, application.verbose_state);
     if(deviceOpened) {
       ppgclos();
       ppgend();

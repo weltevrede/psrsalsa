@@ -79,6 +79,7 @@ typedef struct {
   char *cmd;
   char *user;
   char *hostname;
+  char *notes;
   void *nextEntry;
 }datafile_history_entry_definition;
 typedef struct

@@ -777,7 +777,7 @@ int preprocess_addsuccessivepulses(datafile_definition original, datafile_defini
   free(pulse);
   free(addedpulse);
   if(use_depar) {
-    closePSRData(&clone_depar, 0, verbose);
+    closePSRData(&clone_depar, 0, 0, verbose);
   }
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
@@ -2327,7 +2327,7 @@ int preprocess_make_profile(datafile_definition original, datafile_definition *p
     printerror(verbose.debug, "ERROR preprocess_make_profile: summing subints failed, cannot construct profile");
     return 0;
   }
-  closePSRData(&clone, 0, verbose);
+  closePSRData(&clone, 0, 0, verbose);
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");

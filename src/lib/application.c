@@ -175,7 +175,7 @@ void terminateApplication(psrsalsaApplication *application)
   free(application->genusage);
   freePulselongitudeRegion(&(application->onpulse));
   freePulselongitudeRegion(&(application->onpulse2));
-  closePSRData(&(application->template_file), 0, application->verbose_state);
+  closePSRData(&(application->template_file), 0, 0, application->verbose_state);
  }
 void printCitationInfo()
 {
@@ -725,7 +725,7 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     return 1;
   }else if(strcmp(argv[*index], "-templatedata") == 0 && application->switch_templatedata) {
     application->template_data_index = ++(*index);
-    closePSRData(&(application->template_file), 0, application->verbose_state);
+    closePSRData(&(application->template_file), 0, 0, application->verbose_state);
     if(openPSRData(&(application->template_file), argv[application->template_data_index], 0, 0, 1, 0, application->verbose_state) == 0) {
       fflush(stdout);
       printerror(application->verbose_state.debug, "Cannot open template file.");
@@ -787,6 +787,11 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     }
     application->onpulse.frac_defined[application->onpulse.nrRegions] = 1;
     (application->onpulse.nrRegions)++;
+    if(application->onpulse.nrRegions == MAX_pulselongitude_regions) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "processCommandLine: To many regions selected.");
+      exit(-1);
+    }
     return 1;
   }else if(strcmp(argv[*index], "-onpulsef2") == 0 && application->switch_onpulsef2) {
     if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, -1, "%f %f", &(application->onpulse2.left_frac[application->onpulse2.nrRegions]), &(application->onpulse2.right_frac[application->onpulse2.nrRegions]), NULL) == 0) {
@@ -796,6 +801,11 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     }
     application->onpulse2.frac_defined[application->onpulse2.nrRegions] = 1;
     (application->onpulse2.nrRegions)++;
+    if(application->onpulse.nrRegions == MAX_pulselongitude_regions) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "processCommandLine: To many regions selected.");
+      exit(-1);
+    }
     return 1;
   }else if(strcmp(argv[*index], "-ext") == 0 && application->switch_ext) {
     application->extension = argv[++(*index)];
@@ -1235,8 +1245,8 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
  application->shiftPhase = -x;
       }
     }
-    closePSRData(&clone2, 0, verbose2);
-    closePSRData(&clone, 0, verbose2);
+    closePSRData(&clone2, 0, 0, verbose2);
+    closePSRData(&clone, 0, 0, verbose2);
     if(verbose1.verbose) {
       for(i = 0; i < verbose1.indent; i++)
  printf(" ");
@@ -1293,7 +1303,7 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     selectRegions(clone.data, clone.NrBins, pgplot_options, 0, 0, 0, &(application->onpulse), verbose2);
     if(device)
       ppgslct(device);
-    closePSRData(&clone, 0, verbose2);
+    closePSRData(&clone, 0, 0, verbose2);
     regionShowNextTimeUse(application->onpulse, "-onpulse", "-onpulsef", stdout);
     if(verbose1.verbose) {
       for(i = 0; i < verbose1.indent; i++)

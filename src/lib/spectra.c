@@ -24,7 +24,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
   #include "nr.h"
   #include "nrutil.h"
 #endif
-int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *twodfs, pulselongitude_regions_definition *onpulse, int region, float *var_rms, verbose_definition verbose)
+int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *twodfs, pulselongitude_regions_definition *onpulse, int region, int allow_cat_offpulse, int noise_subtract_mode, float *var_rms, verbose_definition verbose)
 {
   unsigned long nr_fftblocks;
   float junk_float, pwr;
@@ -139,13 +139,28 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
     if(ok == 0)
       bin_offpulse_left = -1;
   }
+  int total_nr_offpulse_bins;
+  total_nr_offpulse_bins = 0;
+  if(onpulse != NULL) {
+    for(i = 0; i < nrx; i++) {
+      if(checkRegions(i, onpulse, 0, verbose) == 0) {
+ total_nr_offpulse_bins++;
+      }
+    }
+  }
   if(bin_offpulse_left >= 0) {
     if(verbose.verbose) {
-      printf("  Found suitable offpulse region (%ld %ld).\n", bin_offpulse_left, bin_offpulse_left+nrx2-1);
+      printf("  Found wide enough offpulse region (%ld %ld).\n", bin_offpulse_left, bin_offpulse_left+nrx2-1);
     }
   }else {
-    if(verbose.verbose) {
-      printwarning(verbose.debug, "  WARNING calc2DFS: Didn't found suitable offpulse region.");
+    if(allow_cat_offpulse == 0) {
+      printwarning(verbose.debug, "  WARNING calc2DFS: Didn't find an offpulse region as wide as the onpulse region used in the 2dfs calculation. The offpulse spectrum is not subtracted from the onpulse 2dfs.");
+    }else {
+      if(total_nr_offpulse_bins < nrx2) {
+ printwarning(verbose.debug, "  WARNING calc2DFS: Didn't find an offpulse region as wide as the onpulse region used in the 2dfs calculation, even when allowing the offpulse region to be discontinuous. The offpulse spectrum is not subtracted from the onpulse 2dfs.");
+      }else {
+ printf("  Found wide enough offpulse region by using different bits of offpulse region.\n");
+      }
     }
   }
   for(i = 0; i < nrx2*(1+fft_size/2); i++)
@@ -186,14 +201,33 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
       twodfs[(fft_size/2)*nrx2+nb2] += speq[1][2*nb+1]*speq[1][2*nb+1]+speq[1][2*nb+2]*speq[1][2*nb+2];
     }
 #endif
-    if(bin_offpulse_left >= 0) {
-      for(nb = 0; nb < nrx2; nb++) {
- for(np = 0; np < fft_size; np++) {
+    if(noise_subtract_mode != 0 && (bin_offpulse_left >= 0 || (allow_cat_offpulse && total_nr_offpulse_bins >= nrx2))) {
+      if(bin_offpulse_left >= 0) {
+ for(nb = 0; nb < nrx2; nb++) {
+   for(np = 0; np < fft_size; np++) {
 #ifdef USEFFTW3
-   inputdata[nb*fft_size + np] = data[(nf*fft_size+np)*nrx + nb + bin_offpulse_left];
+     inputdata[nb*fft_size + np] = data[(nf*fft_size+np)*nrx + nb + bin_offpulse_left];
 #else
-   inputdata[1][nb+1][np+1] = data[(nf*fft_size+np)*nrx + nb + bin_offpulse_left];
+     inputdata[1][nb+1][np+1] = data[(nf*fft_size+np)*nrx + nb + bin_offpulse_left];
 #endif
+   }
+ }
+      }else {
+ nb2 = 0;
+ for(nb = 0; nb < nrx; nb++) {
+   if(checkRegions(nb, onpulse, 0, verbose) == 0) {
+     for(np = 0; np < fft_size; np++) {
+#ifdef USEFFTW3
+       inputdata[nb2*fft_size + np] = data[(nf*fft_size+np)*nrx + nb];
+#else
+       inputdata[1][nb2+1][np+1] = data[(nf*fft_size+np)*nrx + nb];
+#endif
+     }
+     nb2++;
+     if(nb2 == nrx2) {
+       break;
+     }
+   }
  }
       }
 #ifdef USEFFTW3
@@ -205,15 +239,52 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
       for(np = 0; np < fft_size/2+1; np++) {
  if(np != 0) {
    pwr = cabs(fftdata[nb*(fft_size/2+1)+np]);
-   twodfs[np*nrx2+nb2] -= pwr*pwr;
+   pwr *= pwr;
    avrg_squares_offpulse_nrsamples++;
-   avrg_offpulse_2dfs += pwr*pwr;
-   avrg_squares_offpulse_2dfs += pwr*pwr*pwr*pwr;
+   avrg_offpulse_2dfs += pwr;
+   avrg_squares_offpulse_2dfs += pwr*pwr;
+   inputdata[np*nrx2+nb2] = pwr;
+ }
+      }
+    }
+    if(noise_subtract_mode == 2 || noise_subtract_mode == 3) {
+      for(np = 0; np < fft_size/2+1; np++) {
+ if(np != 0) {
+   for(nb = 1; nb < nrx2; nb++) {
+     inputdata[np*nrx2] += inputdata[np*nrx2+nb];
+   }
+   inputdata[np*nrx2] /= (float)nrx2;
+   for(nb = 1; nb < nrx2; nb++) {
+     inputdata[np*nrx2+nb] = inputdata[np*nrx2];
+   }
+ }
+      }
+      if(noise_subtract_mode == 3) {
+ for(nb = 0; nb < nrx2; nb++) {
+   for(np = 2; np < fft_size/2+1; np++) {
+     inputdata[nrx2+nb] += inputdata[np*nrx2+nb];
+   }
+   inputdata[nrx2+nb] /= (float)(fft_size/2);
+   for(np = 2; np < fft_size/2+1; np++) {
+     inputdata[np*nrx2+nb] = inputdata[nrx2+nb];
+   }
+ }
+      }
+    }
+    for(nb = 0; nb < nrx2; nb++) {
+      for(np = 0; np < fft_size/2+1; np++) {
+ if(np != 0) {
+   pwr = inputdata[np*nrx2+nb];
+   twodfs[np*nrx2+nb] -= pwr;
  }
       }
     }
 #else
-      rlft3(inputdata, speq, 1, nrx2, fft_size, 1);
+    if(noise_subtract_mode != 1) {
+      printf("ERROR: noise_subtract_mode not implemented for NR.\n");
+      exit(0);
+    }
+    rlft3(inputdata, speq, 1, nrx2, fft_size, 1);
       for(nb = 0; nb < nrx2; nb++) {
        nb2 = nb+nrx2/2;
  if(nb2 >= nrx2)
@@ -243,6 +314,14 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
       avrg_offpulse_2dfs /= (double)(avrg_squares_offpulse_nrsamples);
       avrg_squares_offpulse_2dfs /= (double)(avrg_squares_offpulse_nrsamples);
       *var_rms = sqrt(avrg_squares_offpulse_2dfs-avrg_offpulse_2dfs*avrg_offpulse_2dfs);
+      *var_rms *= sqrt(nr_fftblocks);
+      if(noise_subtract_mode == 1) {
+ *var_rms *= sqrt(2);
+      }else if(noise_subtract_mode == 2) {
+ *var_rms *= sqrt(1.0+1.0/(float)nrx);
+      }else if(noise_subtract_mode == 3) {
+ *var_rms *= sqrt(1.0+2.0/(float)(nrx*fft_size));
+      }
     }
   }
   if(nr_fftblocks > 1 && verbose.nocounters == 0)
@@ -400,7 +479,7 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
      pwrtot /= (float)n;
    }else if(i == 0 && fftblock == 0) {
      fflush(stdout);
-     printwarning(verbose.debug, "WARNING: onpulse region is defined, but no offpulse region is available!");
+     printwarning(verbose.debug, "WARNING calcLRFS: onpulse region is defined, but no offpulse region is available!");
    }
    for(binnr = 0; binnr < nrx; binnr++) {
      lrfs_tmp[i*nrx+binnr] -= pwrtot;
@@ -575,7 +654,7 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
 #endif
   return 1;
 }
-void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size, unsigned long nrpulses, float *sigma, float *rms_sigma, float *modind, float *rms_modind, pulselongitude_regions_definition *regions, float var_rms, float *avrg_offpulse_lrfs_power, float *avrg_mod, verbose_definition verbose)
+void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size, unsigned long nrpulses, float *sigma, float *rms_sigma, float *modind, float *rms_modind, pulselongitude_regions_definition *regions, float var_rms, float *avrg_offpulse_lrfs_power, float *avrg_mod, int avrg_mod_squared, verbose_definition verbose)
 {
   long b, f, n, nrblocks;
   float var, max, rms, av_sigma, rms_var;
@@ -612,7 +691,8 @@ void calcModindex(float *lrfs, float *profile, long nrx, unsigned long fft_size,
   for(b = 0; b < nrx; b++) {
     profile[b] /= max;
     sigma[b] /= max*max;
-    sigma[b] = sqrt(fabs(sigma[b])*nrpulses*2.0/(float)fft_size);
+    var = sigma[b]*nrpulses*2.0/(float)fft_size;
+    sigma[b] = sqrt(fabs(var));
   }
   rms = 0;
   rms_var = 0;

@@ -193,10 +193,12 @@ int main(int argc, char **argv)
   if(preprocessApplication(&application, &datain) == 0) {
     return 0;
   }
-  if(preprocess_dedisperse(&datain, 0, 0, 0, application.verbose_state) == 0)
+  if(preprocess_dedisperse(&datain, 0, 0, 0, application.verbose_state) == 0) {
     return 0;
-    if(!preprocess_addsuccessiveFreqChans(datain, &profiledata, datain.NrFreqChan, NULL, application.verbose_state))
+  }
+    if(!preprocess_addsuccessiveFreqChans(datain, &profiledata, datain.NrFreqChan, NULL, application.verbose_state)) {
       return 0;
+    }
   pgplot_clear_options(&pgplot_options);
   if(pgplot_profiledevice)
     strcpy(pgplot_options.viewport.plotDevice, argv[pgplot_profiledevice]);
@@ -510,11 +512,12 @@ int main(int argc, char **argv)
   }
   if(application.verbose_state.verbose)
     printf("Adding frequency channels\n");
-  closePSRData(&clone, 0, application.verbose_state);
+  closePSRData(&clone, 0, 0, application.verbose_state);
   if(!preprocess_addsuccessiveFreqChans(datain, &clone, datain.NrFreqChan, NULL, application.verbose_state))
     return 0;
-  if(application.verbose_state.verbose)
+  if(application.verbose_state.verbose) {
     printf("Calculating L from Q and U\n");
+  }
     if(make_paswing_fromIQUV(&clone, 0, 0, -1, 0, application.onpulse2, 0, 1, 0, 1, 1, 0, 0.0, 0.0, NULL, 1.0, 0, application.verbose_state) == 0) {
       printerror(application.verbose_state.debug, "Creation of L profile failed, cannot determine analytic errorbar");
       return 0;
@@ -546,7 +549,7 @@ int main(int argc, char **argv)
       printf("Expected FWHM RM synthesis peak = %f\n", fwhm);
       printf("Expected errorbar on RM = %f\n", expectedRMerror);
     }
-  closePSRData(&clone, 0, application.verbose_state);
+  closePSRData(&clone, 0, 0, application.verbose_state);
   if(collapse || write_ascii == 0) {
     for(binnr = 0; binnr < datain.NrBins; binnr++) {
       if(checkRegions(binnr, &application.onpulse, 0, application.verbose_state) != 0 || application.onpulse.nrRegions == 0 || collapse) {
@@ -610,8 +613,8 @@ int main(int argc, char **argv)
   free(cmap);
   free(rmestimate);
   free(rmcurestimate);
-  closePSRData(&datain, 0, application.verbose_state);
-  closePSRData(&profiledata, 0, application.verbose_state);
+  closePSRData(&datain, 0, 0, application.verbose_state);
+  closePSRData(&profiledata, 0, 0, application.verbose_state);
   gsl_rng_free (rand_num_gen);
   if(bootstrap) {
     free(rms_channels);

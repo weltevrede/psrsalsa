@@ -104,7 +104,7 @@ int continuous_shift(datafile_definition fin, datafile_definition *fout, int shi
     if(!openPSRData(fout, output_name, oformat, 1, 0, 0, verbose_counters_verbose2))
       return 0;
     int cmdOnly = 0;
-    if(!writeHeaderPSRData(fout, argc, argv, cmdOnly, verbose))
+    if(!writeHeaderPSRData(fout, argc, argv, cmdOnly, NULL, verbose))
       return 0;
   }
   Ipulse = (float *)malloc(fout->NrPols*fout->NrBins*sizeof(float));
@@ -555,6 +555,20 @@ int set_weighted_channel_freq(datafile_definition *psrdata, long subint, long ch
   }
   psrdata->freqlabel_list[subint*psrdata->NrFreqChan+channel] = freq;
   return 1;
+}
+char * get_history_notes_last(datafile_definition *psrdata)
+{
+  datafile_history_entry_definition *source_hist;
+  char *ret;
+  ret = NULL;
+  source_hist = &(psrdata->history);
+  while(source_hist->nextEntry != NULL) {
+    source_hist = source_hist->nextEntry;
+  }
+  if(source_hist != NULL) {
+    ret = source_hist->notes;
+  }
+  return ret;
 }
 int data_parang(datafile_definition data, long subintnr, double *parang, verbose_definition verbose)
 {

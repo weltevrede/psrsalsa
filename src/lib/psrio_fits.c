@@ -26,7 +26,11 @@ static int psrfits_absweights = 0;
 void print_fitsio_version_used(FILE *stream)
 {
   float version;
+  #ifdef CFITSIO_MAJOR
+  fprintf(stream, "%f (library) %d.%d (header)", fits_get_version(&version), CFITSIO_MAJOR, CFITSIO_MINOR);
+  #else
   fprintf(stream, "%f (library) %f (header)", fits_get_version(&version), CFITSIO_VERSION);
+  #endif
 }
 void psrfits_set_noweights(int val)
 {
@@ -79,7 +83,7 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
   int status = 0;
   long i, n;
   int *data, dummy_int;
-  float scale, offset, weight;
+  float scale, offset, weight, offpulserms;
   if(datafile.gentype == GENTYPE_RECEIVERMODEL || datafile.gentype == GENTYPE_RECEIVERMODEL2) {
     if(fits_movnam_hdu(datafile.fits_fptr, BINARY_TBL, "FEEDPAR", 0, &status)) {
       fflush(stdout);
@@ -210,6 +214,15 @@ int writeFITSpulse(datafile_definition datafile, long pulsenr, int polarization,
       printerror(verbose.debug, "ERROR writeFITSpulse: Error writing weights (subint=%d, freq=%d).", 1+pulsenr, 1+freq);
       fits_report_error(stderr, status);
       return 0;
+    }
+    if(datafile.offpulse_rms != NULL) {
+      offpulserms = datafile.offpulse_rms[pulsenr*(datafile.NrFreqChan*datafile.NrPols)+freq*(datafile.NrPols)+polarization];
+      if(fits_write_col(datafile.fits_fptr, TFLOAT, 20, 1+pulsenr, 1+polarization*datafile.NrFreqChan+freq, 1, &offpulserms, &status) != 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR writeFITSpulse: Error writing RMS.");
+ fits_report_error(stderr, status);
+ return 0;
+      }
     }
   }
   return 1;
@@ -402,11 +415,45 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
     printerror(verbose.debug, "ERROR readFITSpulse: No data in fits file?");
     return 0;
   }
+  int doprint;
+  doprint = 0;
   ret = 0;
   if(datafile->NrBits == 16) {
     istart = polarization*datafile->NrBins*datafile->NrFreqChan+freq*datafile->NrBins+binnr;
     if(!fits_read_col(datafile->fits_fptr, TINT, colnum, 1+pulsenr, 1+istart, nrSamples, NULL, data, &anynul, &status)) {
       ret = 1;
+    }
+    if(verbose.debug) {
+      static int printfirstsamplesstatus = 2;
+      if(printfirstsamplesstatus && nrSamples > 5 ) {
+ if(printfirstsamplesstatus == 2) {
+   for(i = 0; i < verbose.indent; i++)
+     printf(" ");
+   printf("DEBUG readFITSpulse: First samples (pol=%d, freq=%d, bin=%d) have data values ", polarization, freq, binnr);
+   printfirstsamplesstatus = 1;
+   doprint = 1;
+ }else if(printfirstsamplesstatus == 1) {
+   for(i = 0; i < 5; i++) {
+     if(data[i] != 0) {
+       doprint = 1;
+       printfirstsamplesstatus = 0;
+     }
+   }
+   if(doprint) {
+     for(i = 0; i < verbose.indent; i++)
+       printf(" ");
+     printf("DEBUG readFITSpulse: First nonzero samples (pol=%d, freq=%d, bin=%d) have data values ", polarization, freq, binnr);
+   }
+ }
+ if(doprint) {
+   for(i = 0; i < 5; i++) {
+     if(i != 0)
+       printf(",");
+     printf("%d", data[i]);
+   }
+   printf("\n");
+ }
+      }
     }
   }else if(datafile->NrBits == 2 || datafile->NrBits == 4 || datafile->NrBits == 8) {
     ret = 1;
@@ -419,9 +466,25 @@ int readFITSpulse(datafile_definition *datafile, long pulsenr, int polarization,
     long index = pulsenr*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq;
     scale = datafile->scales[index];
     offset = datafile->offsets[index];
+    if(verbose.debug && doprint) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      printf("DEBUG readFITSpulse: scales = %e offset = %e\n", scale, offset);
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      printf("DEBUG readFITSpulse: sample values = ");
+    }
     for(i = 0; i < nrSamples; i++) {
       if(datafile->NrBits == 16) {
  pulse[i] = scale*(data[i]) + offset;
+ if(verbose.debug && doprint && i < 5) {
+   if(i != 0)
+     printf(",");
+   printf("%e", pulse[i]);
+   if(i == 4) {
+     printf("\n");
+   }
+ }
       }else if(datafile->NrBits == 2 || datafile->NrBits == 4 || datafile->NrBits == 8) {
  istart = (binnr+i)*datafile->NrPols*datafile->NrFreqChan+polarization*datafile->NrFreqChan+freq;
  bstart = istart*datafile->NrBits;
@@ -558,7 +621,7 @@ int readPSRFITSscales(datafile_definition *datafile, verbose_definition verbose)
 {
   char card[FLEN_CARD], comment[FLEN_COMMENT], value[FLEN_VALUE];
   int status = 0;
-  int i, ncols, anynul, ret, fullscales, colnum_s, colnum_o, colnum_w;
+  int i, ncols, anynul, ret, fullscales, colnum_s, colnum_o, colnum_w, colnum_rms;
   long nrows, n, p, datalength;
   char txt[100];
   ret = 1;
@@ -586,6 +649,25 @@ int readPSRFITSscales(datafile_definition *datafile, verbose_definition verbose)
     fflush(stdout);
     printerror(verbose.debug, "ERROR readPSRFITSscales: No weights in fits file?");
     return 0;
+  }
+  if(fits_get_colnum (datafile->fits_fptr, CASEINSEN, "PS_RMS", &colnum_rms, &status)) {
+    if(datafile->offpulse_rms != NULL) {
+      free(datafile->offpulse_rms);
+      datafile->offpulse_rms = NULL;
+    }
+    colnum_rms = -1;
+    status = 0;
+  }else {
+    if(datafile->offpulse_rms != NULL) {
+      free(datafile->offpulse_rms);
+      datafile->offpulse_rms = NULL;
+    }
+    datafile->offpulse_rms = (float *)malloc(datafile->NrSubints*datafile->NrPols*datafile->NrFreqChan*sizeof(float));
+    if(datafile->offpulse_rms == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRFITSscales: Memory allocation failed");
+      return 0;
+    }
   }
   sprintf(txt, "TFORM%d", colnum_s);
   if (fits_read_card(datafile->fits_fptr,txt, card, &status)) {
@@ -628,7 +710,17 @@ int readPSRFITSscales(datafile_definition *datafile, verbose_definition verbose)
  if(!fits_read_col(datafile->fits_fptr, TFLOAT, colnum_w, 1+n, 1+fullscales*p*datafile->NrFreqChan, datafile->NrFreqChan, NULL, &datafile->weights[n*datafile->NrFreqChan], &anynul, &status)) {
  }
       }
-      if (status) {
+      if(status) {
+ fflush(stdout);
+ fits_report_error(stderr, status);
+ ret = 0;
+ break;
+      }
+    }
+    if(colnum_rms >= 0) {
+      if(!fits_read_col(datafile->fits_fptr, TFLOAT, colnum_rms, 1+n, 1, datafile->NrFreqChan*datafile->NrPols, NULL, &datafile->offpulse_rms[n*datafile->NrPols*datafile->NrFreqChan], &anynul, &status)) {
+      }
+      if(status) {
  fflush(stdout);
  fits_report_error(stderr, status);
  ret = 0;
@@ -1003,10 +1095,10 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
     return 0;
   }
-  char *ttypes_history2[] = {"DATE_PRO", "USER", "HOSTNAME", "PROC_CMD"};
-  char *tform_history2[] = {"24A", "24A", "32A", "1024A"};
+  char *ttypes_history2[] = {"DATE_PRO", "USER", "HOSTNAME", "PROC_CMD", "NOTE"};
+  char *tform_history2[] = {"24A", "24A", "32A", "1024A", "1024A"};
   char *tunit_history2[] = {"", "", "", ""};
-  if(fits_create_tbl(datafile->fits_fptr, BINARY_TBL, 0, 4, ttypes_history2, tform_history2, tunit_history2, "HISTORY_NOT_PSRFITS", &status) != 0) {
+  if(fits_create_tbl(datafile->fits_fptr, BINARY_TBL, 0, 5, ttypes_history2, tform_history2, tunit_history2, "HISTORY_NOT_PSRFITS", &status) != 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot create table.");
     return 0;
@@ -1032,10 +1124,14 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
       long nrbytes = ceil((datafile->NrFreqChan*datafile->NrPols*datafile->NrBins*datafile->NrBits)/8.0);
       sprintf(dummy_txt3, "%ldb", nrbytes);
     }
-    char *ttypes_subint[] = {"INDEXVAL", "TSUBINT", "OFFS_SUB", "LST_SUB", "RA_SUB", "DEC_SUB", "GLON_SUB", "GLAT_SUB", "FD_ANG", "POS_ANG", "PAR_ANG", "TEL_AZ", "TEL_ZEN", "DAT_FREQ", "DAT_WTS", "DAT_OFFS", "DAT_SCL", "DATA", "PERIOD"};
-    char *tform_subint[] = {"1D", "1D", "1D", "1D", "1D", "1D", "1D", "1D", "1E", "1E", "1E", "1E", "1E", dummy_txt, dummy_txt, dummy_txt2, dummy_txt2, dummy_txt3, "1D"};
-    char *tunit_subint[] = {"", "s", "s", "s", "deg", "deg", "deg", "deg", "deg", "deg", "deg", "deg", "deg", "MHz", "", "", "", "Jy", "s"};
-    if(fits_create_tbl(datafile->fits_fptr, BINARY_TBL, datafile->NrSubints, 19, ttypes_subint, tform_subint, tunit_subint, "SUBINT", &status) != 0) {
+    char *ttypes_subint[] = {"INDEXVAL", "TSUBINT", "OFFS_SUB", "LST_SUB", "RA_SUB", "DEC_SUB", "GLON_SUB", "GLAT_SUB", "FD_ANG", "POS_ANG", "PAR_ANG", "TEL_AZ", "TEL_ZEN", "DAT_FREQ", "DAT_WTS", "DAT_OFFS", "DAT_SCL", "DATA", "PERIOD", "PS_RMS"};
+    char *tform_subint[] = {"1D", "1D", "1D", "1D", "1D", "1D", "1D", "1D", "1E", "1E", "1E", "1E", "1E", dummy_txt, dummy_txt, dummy_txt2, dummy_txt2, dummy_txt3, "1D", dummy_txt2};
+    char *tunit_subint[] = {"", "s", "s", "s", "deg", "deg", "deg", "deg", "deg", "deg", "deg", "deg", "deg", "MHz", "", "", "", "Jy", "s", ""};
+    int nrcolumns = 19;
+    if(datafile->offpulse_rms != NULL) {
+      nrcolumns++;
+    }
+    if(fits_create_tbl(datafile->fits_fptr, BINARY_TBL, datafile->NrSubints, nrcolumns, ttypes_subint, tform_subint, tunit_subint, "SUBINT", &status) != 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot create table.");
       return 0;
@@ -3340,7 +3436,7 @@ int readPSRCHIVE_ASCIIfilepulse(datafile_definition datafile, long pulsenr, int 
 int writeHistoryFITS(datafile_definition datafile, verbose_definition verbose)
 {
   int status = 0;
-  int colnum_date, colnum_cmd, colnum_user, colnum_hostname;
+  int colnum_date, colnum_cmd, colnum_user, colnum_hostname, colnum_notes;
   datafile_history_entry_definition *curhistoryEntry;
   long nrows;
   int nstart, n;
@@ -3370,6 +3466,11 @@ int writeHistoryFITS(datafile_definition datafile, verbose_definition verbose)
   if(fits_get_colnum (datafile.fits_fptr, CASEINSEN, "HOSTNAME", &colnum_hostname, &status)) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writeHistoryFITS: No HOSTNAME column is history table?");
+    return 0;
+  }
+  if(fits_get_colnum (datafile.fits_fptr, CASEINSEN, "NOTE", &colnum_notes, &status)) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writeHistoryFITS: No NOTE column is history table?");
     return 0;
   }
   curhistoryEntry = &(datafile.history);
@@ -3420,6 +3521,19 @@ int writeHistoryFITS(datafile_definition datafile, verbose_definition verbose)
    fits_report_error(stderr, status);
    return 0;
  }
+ if(curhistoryEntry->notes == NULL) {
+   txt2[0] = 0;
+ }else {
+   txt2[1024] = 0;
+   strncpy(txt2, curhistoryEntry->notes, 1024);
+ }
+ str_ptr = txt2;
+ if(fits_write_col(datafile.fits_fptr, TSTRING, colnum_notes, nrows, 1, 1, &str_ptr, &status) != 0) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR writeHistoryFITS: Error writing data to history table.");
+   fits_report_error(stderr, status);
+   return 0;
+ }
       }
       txt2[1024] = 0;
       strncpy(txt2, cmd_ptr, 1024);
@@ -3441,7 +3555,7 @@ int writeHistoryFITS(datafile_definition datafile, verbose_definition verbose)
 int readHistoryFITS_psrsalsa(datafile_definition *datafile, int surpressHDUerror, verbose_definition verbose)
 {
   int status = 0;
-  int colnum_date, colnum_cmd, colnum_user, colnum_hostname, anynul;
+  int colnum_date, colnum_cmd, colnum_user, colnum_hostname, colnum_notes, anynul;
   long nrows;
   char txt2[2000];
   int rownr;
@@ -3479,6 +3593,10 @@ int readHistoryFITS_psrsalsa(datafile_definition *datafile, int surpressHDUerror
     printerror(verbose.debug, "ERROR readHistoryFITS: No HOSTNAME column is history table?");
     return 3;
   }
+  if(fits_get_colnum(datafile->fits_fptr, CASEINSEN, "NOTE", &colnum_notes, &status)) {
+    colnum_notes = -1;
+    status = 0;
+  }
   fits_get_num_rows(datafile->fits_fptr, &nrows, &status);
   if(nrows <= 0) {
     fflush(stdout);
@@ -3487,7 +3605,7 @@ int readHistoryFITS_psrsalsa(datafile_definition *datafile, int surpressHDUerror
   }
   curHistoryEntry = &(datafile->history);
   for(rownr = 0; rownr < nrows; rownr++) {
-    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->nextEntry != NULL) {
+    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->notes != NULL || curHistoryEntry->nextEntry != NULL) {
       curHistoryEntry->nextEntry = malloc(sizeof(datafile_history_entry_definition));
       if(curHistoryEntry->nextEntry == NULL) {
  fflush(stdout);
@@ -3499,6 +3617,7 @@ int readHistoryFITS_psrsalsa(datafile_definition *datafile, int surpressHDUerror
       curHistoryEntry->cmd = NULL;
       curHistoryEntry->user = NULL;
       curHistoryEntry->hostname = NULL;
+      curHistoryEntry->notes = NULL;
       curHistoryEntry->nextEntry = NULL;
     }
     char_ptrptr[0] = txt2;
@@ -3541,6 +3660,21 @@ int readHistoryFITS_psrsalsa(datafile_definition *datafile, int surpressHDUerror
       return 6;
     }
     strcpy(curHistoryEntry->hostname, txt2);
+    if(colnum_notes >= 0) {
+      if(fits_read_col(datafile->fits_fptr, TSTRING, colnum_notes, rownr+1, 1, 1, NULL, char_ptrptr, &anynul, &status) != 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readHistoryFITS: Error reading notes from history table.");
+ fits_report_error(stderr, status);
+ return 5;
+      }
+      curHistoryEntry->notes = malloc(strlen(txt2)+1);
+      if(curHistoryEntry->notes == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readHistoryFITS: Memory allocation error");
+ return 6;
+      }
+      strcpy(curHistoryEntry->notes, txt2);
+    }
     if(fits_read_col(datafile->fits_fptr, TSTRING, colnum_cmd, rownr+1, 1, 1, NULL, char_ptrptr, &anynul, &status) != 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR readHistoryFITS: Error reading data from history table.");
@@ -3600,7 +3734,7 @@ int readHistoryFITS_psrfits(datafile_definition *datafile, int surpressHDUerror,
   }
   curHistoryEntry = &(datafile->history);
   for(rownr = 0; rownr < nrows; rownr++) {
-    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->nextEntry != NULL) {
+    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->notes != NULL || curHistoryEntry->nextEntry != NULL) {
       curHistoryEntry->nextEntry = malloc(sizeof(datafile_history_entry_definition));
       if(curHistoryEntry->nextEntry == NULL) {
  fflush(stdout);
@@ -3612,6 +3746,7 @@ int readHistoryFITS_psrfits(datafile_definition *datafile, int surpressHDUerror,
       curHistoryEntry->cmd = NULL;
       curHistoryEntry->user = NULL;
       curHistoryEntry->hostname = NULL;
+      curHistoryEntry->notes = NULL;
       curHistoryEntry->nextEntry = NULL;
     }
     char_ptrptr[0] = txt2;

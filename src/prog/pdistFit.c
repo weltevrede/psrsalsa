@@ -766,7 +766,7 @@ int main(int argc, char **argv)
     polspecified = 0;
     fitter_info.measurement_file = "measurement_tmp.dist";
     remove_tmp_dist = 1;
-    closePSRData(&datain, 0, application.verbose_state);
+    closePSRData(&datain, 0, 0, application.verbose_state);
   }
   if(fitter_info.colspecified == 0) {
     fitter_info.colspecified = 1;

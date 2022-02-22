@@ -49,7 +49,7 @@ int writePPOLHeader(datafile_definition datafile, int argc, char **argv, verbose
 int readHistoryFITS(datafile_definition *datafile, verbose_definition verbose);
 int writeHistoryFITS(datafile_definition datafile, verbose_definition verbose);
 int readHistoryPSRData(datafile_definition *datafile, verbose_definition verbose);
-int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, int cmdOnly, verbose_definition verbose);
+int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, int cmdOnly, char *notes, verbose_definition verbose);
 int writeHistoryPuma(datafile_definition datafile, verbose_definition verbose);
 int readHistoryPuma(datafile_definition *datafile, verbose_definition verbose);
 int readSigprocfile(datafile_definition datafile, float *data, verbose_definition verbose);
@@ -57,7 +57,7 @@ int readSigprocASCIIHeader(datafile_definition *datafile, verbose_definition ver
 int writeSigprocASCIIHeader(datafile_definition datafile, verbose_definition verbose);
 int writeSigprocASCIIfile(datafile_definition datafile, float *data, verbose_definition verbose);
 int readSigprocASCIIfile(datafile_definition datafile, float *data, verbose_definition verbose);
-void closeHistoryPSRData(datafile_definition *datafile);
+void closeHistoryPSRData(datafile_definition *datafile, int remove_last_entry_only);
 int isValidPSRDATA_format(int format)
 {
   if(format == PUMA_format)
@@ -239,6 +239,7 @@ void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
   datafile->history.cmd = NULL;
   datafile->history.user = NULL;
   datafile->history.hostname = NULL;
+  datafile->history.notes = NULL;
   datafile->history.nextEntry = NULL;
 }
 int copy_params_PSRData(datafile_definition datafile_source, datafile_definition *datafile_dest, verbose_definition verbose)
@@ -382,7 +383,7 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
   datafile_dest->isDebase = datafile_source.isDebase;
   datafile_dest->cableSwap = datafile_source.cableSwap;
   datafile_dest->cableSwapcor = datafile_source.cableSwapcor;
-  closeHistoryPSRData(datafile_dest);
+  closeHistoryPSRData(datafile_dest, 0);
   datafile_history_entry_definition *dest_hist, *source_hist;
   dest_hist = &(datafile_dest->history);
   source_hist = &(datafile_source.history);
@@ -392,6 +393,7 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
     dest_hist->cmd = NULL;
     dest_hist->user = NULL;
     dest_hist->hostname = NULL;
+    dest_hist->notes = NULL;
     dest_hist->nextEntry = NULL;
     if(source_hist->timestamp != NULL) {
       dest_hist->timestamp = malloc(strlen(source_hist->timestamp)+1);
@@ -429,6 +431,15 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
       }
       strcpy(dest_hist->hostname, source_hist->hostname);
     }
+    if(source_hist->notes != NULL) {
+      dest_hist->notes = malloc(strlen(source_hist->notes)+1);
+      if(dest_hist->notes == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR copy_paramsPSRData: Memory allocation error.");
+ return 0;
+      }
+      strcpy(dest_hist->notes, source_hist->notes);
+    }
     if(source_hist->nextEntry != NULL) {
       dest_hist->nextEntry = malloc(sizeof(datafile_history_entry_definition));
       if(dest_hist->nextEntry == NULL) {
@@ -447,8 +458,9 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
 int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbose)
 {
   int ret, dummyi;
+  long dummyl;
   char identifier[] = "PSRSALSAdump";
-  int version = 2;
+  int version = 4;
   ret = fwrite(identifier, 12, 1, datafile->fptr_hdr);
   if(ret != 1) {
     fflush(stdout);
@@ -827,6 +839,25 @@ int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbos
       return 0;
     }
   }
+  if(datafile->offpulse_rms == NULL) {
+    dummyl = 0;
+  }else {
+    dummyl = datafile->NrSubints * datafile->NrFreqChan * datafile->NrPols;
+  }
+  ret = fwrite(&dummyl, sizeof(long), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  if(dummyl != 0) {
+    ret = fwrite(datafile->offpulse_rms, sizeof(float), dummyl, datafile->fptr_hdr);
+    if(ret != dummyl) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s (return value is %ld)", datafile->filename, ret);
+      return 0;
+    }
+  }
   datafile->datastart = ftell(datafile->fptr_hdr);
   return 1;
 }
@@ -839,7 +870,7 @@ int writeHistoryPSRSALSA(datafile_definition *datafile, verbose_definition verbo
   curHistoryEntry = &(datafile->history);
   nrHistoryLines = 0;
   do {
-    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->nextEntry != NULL) {
+    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->notes != NULL || curHistoryEntry->nextEntry != NULL) {
       nrHistoryLines++;
       curHistoryEntry = curHistoryEntry->nextEntry;
     }
@@ -861,7 +892,7 @@ int writeHistoryPSRSALSA(datafile_definition *datafile, verbose_definition verbo
   }
   curHistoryEntry = &(datafile->history);
   do {
-    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->nextEntry != NULL) {
+    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->notes != NULL || curHistoryEntry->nextEntry != NULL) {
       if(curHistoryEntry->timestamp == NULL) {
  dummyi = 0;
       }else {
@@ -938,6 +969,25 @@ int writeHistoryPSRSALSA(datafile_definition *datafile, verbose_definition verbo
    return 0;
  }
       }
+      if(curHistoryEntry->notes == NULL) {
+ dummyi = 0;
+      }else {
+ dummyi = strlen(curHistoryEntry->notes);
+      }
+      ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ ret = fwrite(curHistoryEntry->notes, sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+   return 0;
+ }
+      }
       curHistoryEntry = curHistoryEntry->nextEntry;
     }
   }while(curHistoryEntry != NULL);
@@ -947,8 +997,9 @@ int writeHistoryPSRSALSA(datafile_definition *datafile, verbose_definition verbo
 int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, verbose_definition verbose)
 {
   int ret, dummyi;
+  long dummyl;
   char identifier[13], *txt;
-  int version, maxversion_supported = 2;
+  int version, maxversion_supported = 4;
   txt = malloc(10000);
   if(txt == NULL) {
     fflush(stdout);
@@ -975,7 +1026,7 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
   }
   if(version < 1 || version > maxversion_supported) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR readPSRSALSAHeader: File %s is in an unsupported version number (%d). The maximum supported version in your installation is %d. An update might be required to read this file.", datafile->filename, version, maxversion_supported);
+    printerror(verbose.debug, "ERROR readPSRSALSAHeader: File %s is in an unsupported version number (%d). The maximum supported version number for reading in your installation is %d. An update of the software might be required to read this file.", datafile->filename, version, maxversion_supported);
     return 0;
   }
   if(verbose.debug) {
@@ -1445,6 +1496,32 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
       return 0;
     }
   }
+  if(version > 2) {
+    ret = fread(&(dummyl), sizeof(long), 1, datafile->fptr_hdr);
+    if(ret != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    if(datafile->offpulse_rms != NULL) {
+      free(datafile->offpulse_rms);
+      datafile->offpulse_rms = NULL;
+    }
+    if(dummyl > 0) {
+      datafile->offpulse_rms = malloc(dummyl*sizeof(float));
+      if(datafile->offpulse_rms == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error");
+ return 0;
+      }
+      ret = fread(datafile->offpulse_rms, sizeof(float), dummyl, datafile->fptr_hdr);
+      if(ret != dummyl) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+ return 0;
+      }
+    }
+  }
   int readhistory;
   off_t filepos;
   filepos = ftello(datafile->fptr_hdr);
@@ -1569,6 +1646,29 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
  }
  curHistoryEntry->cmd[dummyi] = 0;
       }
+      if(version > 3) {
+ ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+ if(ret != 1) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+   return 0;
+ }
+ if(dummyi > 0) {
+   curHistoryEntry->notes = malloc(dummyi+1);
+   if(curHistoryEntry->notes == NULL) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error while reading in %s", datafile->filename);
+     return 0;
+   }
+   ret = fread(curHistoryEntry->notes, sizeof(char), dummyi, datafile->fptr_hdr);
+   if(ret != dummyi) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+     return 0;
+   }
+   curHistoryEntry->notes[dummyi] = 0;
+ }
+      }
       if(curline < nrHistoryLines - 1) {
  curHistoryEntry->nextEntry = malloc(sizeof(datafile_history_entry_definition));
  if(curHistoryEntry->nextEntry == NULL) {
@@ -1581,6 +1681,7 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
  curHistoryEntry->cmd = NULL;
  curHistoryEntry->user = NULL;
  curHistoryEntry->hostname = NULL;
+ curHistoryEntry->notes = NULL;
  curHistoryEntry->nextEntry = NULL;
       }
     }
@@ -2218,63 +2319,73 @@ int openPSRData(datafile_definition *datafile, char *filename, int format, int e
  if(datafile->data == NULL) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR openPSRData: Cannot allocate memory (data=%ld bytes=%.3fGB).", datasize, datasize/1073741824.0);
-   closePSRData(datafile, 0, verbose2);
+   closePSRData(datafile, 0, 0, verbose2);
    return 0;
  }
       }
       if(readPSRData(datafile, datafile->data, verbose2)) {
- closePSRData(datafile, 2, verbose2);
+ closePSRData(datafile, 1, 1, verbose2);
  datafile->format = MEMORY_format;
  datafile->opened_flag = 1;
       }else {
  fflush(stdout);
  printerror(verbose.debug, "ERROR openPSRData: Cannot read data.");
- closePSRData(datafile, 0, verbose2);
+ closePSRData(datafile, 0, 0, verbose2);
  return 0;
       }
     }else {
       fflush(stdout);
       printerror(verbose.debug, "ERROR openPSRData: Cannot read header.");
-      closePSRData(datafile, 0, verbose2);
+      closePSRData(datafile, 0, 0, verbose2);
       return 0;
     }
   }
   return datafile->opened_flag;
 }
-void closeHistoryPSRData(datafile_definition *datafile)
+void closeHistoryPSRData(datafile_definition *datafile, int remove_last_entry_only)
 {
   datafile_history_entry_definition *history_ptr, *history_ptr_next;
   int firsthistoryline;
   history_ptr = &(datafile->history);
   firsthistoryline = 1;
   do {
-    if(history_ptr->timestamp != NULL) {
-      free(history_ptr->timestamp);
-      history_ptr->timestamp = NULL;
-    }
-    if(history_ptr->cmd != NULL) {
-      free(history_ptr->cmd);
-      history_ptr->cmd = NULL;
-    }
-    if(history_ptr->user != NULL) {
-      free(history_ptr->user);
-      history_ptr->user = NULL;
-    }
-    if(history_ptr->hostname != NULL) {
-      free(history_ptr->hostname);
-      history_ptr->hostname = NULL;
-    }
     history_ptr_next = history_ptr->nextEntry;
-    history_ptr->nextEntry = NULL;
-    if(firsthistoryline == 1) {
-      firsthistoryline = 0;
-    }else {
-      free(history_ptr);
+    if(history_ptr_next != NULL) {
+      if(history_ptr_next->nextEntry == NULL) {
+ history_ptr->nextEntry = NULL;
+      }
     }
+    if(remove_last_entry_only == 0 || history_ptr_next == NULL) {
+      if(history_ptr->timestamp != NULL) {
+ free(history_ptr->timestamp);
+ history_ptr->timestamp = NULL;
+      }
+      if(history_ptr->cmd != NULL) {
+ free(history_ptr->cmd);
+ history_ptr->cmd = NULL;
+      }
+      if(history_ptr->user != NULL) {
+ free(history_ptr->user);
+ history_ptr->user = NULL;
+      }
+      if(history_ptr->hostname != NULL) {
+ free(history_ptr->hostname);
+ history_ptr->hostname = NULL;
+      }
+      if(history_ptr->notes != NULL) {
+ free(history_ptr->notes);
+ history_ptr->notes = NULL;
+      }
+      history_ptr->nextEntry = NULL;
+      if(firsthistoryline == 0) {
+ free(history_ptr);
+      }
+    }
+    firsthistoryline = 0;
     history_ptr = history_ptr_next;
   }while(history_ptr_next != NULL);
 }
-int closePSRData(datafile_definition *datafile, int perserve_info, verbose_definition verbose)
+int closePSRData(datafile_definition *datafile, int perserve_header, int perserve_data, verbose_definition verbose)
 {
   int indent;
   int status = 0;
@@ -2328,7 +2439,7 @@ int closePSRData(datafile_definition *datafile, int perserve_info, verbose_defin
     }
     datafile->opened_flag = 0;
   }
-  if(perserve_info != 2) {
+  if(perserve_data == 0) {
     if(datafile->data != NULL) {
       if(verbose.debug) {
  printf("  - Releasing memory containing data\n");
@@ -2337,7 +2448,7 @@ int closePSRData(datafile_definition *datafile, int perserve_info, verbose_defin
       datafile->data = NULL;
     }
   }
-  if(perserve_info == 0) {
+  if(perserve_header == 0) {
     if(verbose.debug) {
       printf("  - Releasing header related memory\n");
     }
@@ -2376,7 +2487,9 @@ int closePSRData(datafile_definition *datafile, int perserve_info, verbose_defin
       free(datafile->offpulse_rms);
       datafile->offpulse_rms = NULL;
     }
-    closeHistoryPSRData(datafile);
+    closeHistoryPSRData(datafile, 0);
+  }else if(perserve_header == 2) {
+    closeHistoryPSRData(datafile, 1);
   }
   return status;
 }
@@ -3325,7 +3438,7 @@ int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowar
   }
   return 1;
 }
-int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int cmdOnly, verbose_definition verbose)
+int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int cmdOnly, char *notes, verbose_definition verbose)
 {
   int i, ret;
   if(datafile->format == PSRSALSA_BINARY_format) {
@@ -3401,7 +3514,7 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
   }
   if(ret != 0) {
     if(datafile->format == PSRSALSA_BINARY_format || datafile->format == FITS_format || datafile->format == PUMA_format) {
-      writeHistoryPSRData(datafile, argc, argv, cmdOnly, verbose);
+      writeHistoryPSRData(datafile, argc, argv, cmdOnly, notes, verbose);
     }
   }
   if(ret == 0) {
@@ -3452,7 +3565,7 @@ int writePulsePSRData(datafile_definition *datafile, long pulsenr, int polarizat
  if(verbose.debug == 0)
    verbose2.verbose = 0;
  verbose2.nocounters = 1;
- closePSRData(datafile, 0, verbose2);
+ closePSRData(datafile, 0, 0, verbose2);
  return 0;
       }else if(verbose.debug) {
  printf("DEBUG: Allocated %ld bytes of memory for memory buffering.\n", datasize);
@@ -4096,10 +4209,10 @@ void swap_orig_clone(datafile_definition *original, datafile_definition *clone, 
   copyVerboseState(verbose, &verbose2);
   verbose2.verbose = 0;
   verbose2.nocounters = 1;
-  closePSRData(original, 0, verbose);
+  closePSRData(original, 0, 0, verbose);
   memmove(original, clone, sizeof(datafile_definition));
 }
-int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, int cmdOnly, verbose_definition verbose)
+int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, int cmdOnly, char *notes, verbose_definition verbose)
 {
   int ret;
   char txt[10000], txt2[1000], *username_ptr, hostname[1000];
@@ -4109,7 +4222,7 @@ int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, in
     fprintf(stdout, "Writing history\n");
   if(argc > 0) {
     curHistoryEntry = &(datafile->history);
-    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->nextEntry != NULL) {
+    if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->notes != NULL || curHistoryEntry->nextEntry != NULL) {
       while(curHistoryEntry->nextEntry != NULL) {
  curHistoryEntry = curHistoryEntry->nextEntry;
       }
@@ -4124,6 +4237,7 @@ int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, in
       curHistoryEntry->cmd = NULL;
       curHistoryEntry->user = NULL;
       curHistoryEntry->hostname = NULL;
+      curHistoryEntry->notes = NULL;
       curHistoryEntry->nextEntry = NULL;
     }
     constructCommandLineString(txt, 10000, argc, argv, verbose);
@@ -4176,6 +4290,15 @@ int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, in
  return 0;
       }
       strcpy(curHistoryEntry->hostname, hostname);
+      if(notes != NULL) {
+ curHistoryEntry->notes = malloc(strlen(notes)+1);
+ if(curHistoryEntry->notes == NULL) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR writeHistoryPSRData: Memory allocation error");
+   return 0;
+ }
+ strcpy(curHistoryEntry->notes, notes);
+      }
     }
   }
   if(datafile->format == PSRSALSA_BINARY_format) {
@@ -4237,6 +4360,8 @@ int showHistory(datafile_definition datafile, verbose_definition verbose)
   curHistoryEntry = &(datafile.history);
   rownr = 0;
   do {
+    int foundsomething;
+    foundsomething = 0;
     if(curHistoryEntry->timestamp != NULL || curHistoryEntry->cmd != NULL || curHistoryEntry->user != NULL || curHistoryEntry->hostname != NULL || curHistoryEntry->nextEntry != NULL) {
       for(indent = 0; indent < verbose.indent; indent++)
  printf(" ");
@@ -4249,6 +4374,28 @@ int showHistory(datafile_definition datafile, verbose_definition verbose)
  printf("%s ", curHistoryEntry->hostname);
       if(curHistoryEntry->cmd != NULL)
  printf("%s\n", curHistoryEntry->cmd);
+      foundsomething = 1;
+    }
+    if(curHistoryEntry->notes != NULL) {
+      int oktoprint;
+      oktoprint = 0;
+      if(strlen(curHistoryEntry->notes) > 1) {
+ oktoprint = 1;
+      }else if(strlen(curHistoryEntry->notes) == 1) {
+ if(curHistoryEntry->notes[0] != ' ') {
+   oktoprint = 1;
+ }
+      }
+      if(oktoprint) {
+ for(indent = 0; indent < verbose.indent; indent++)
+   printf(" ");
+ printf("Notes line %ld:   ", rownr+1);
+ if(curHistoryEntry->notes != NULL)
+   printf("'%s'\n", curHistoryEntry->notes);
+      }
+      foundsomething = 1;
+    }
+    if(foundsomething) {
       curHistoryEntry = curHistoryEntry->nextEntry;
       rownr++;
     }

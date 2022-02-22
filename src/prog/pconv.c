@@ -102,14 +102,14 @@ int main(int argc, char **argv)
     if(application.iformat <= 0) {
       application.iformat = guessPSRData_format(dummy_ptr, 0, application.verbose_state);
       if(application.iformat == -2 || application.iformat == -3) {
- closePSRData(&fout, 0, application.verbose_state);
+ closePSRData(&fout, 0, 0, application.verbose_state);
  terminateApplication(&application);
  return 0;
       }
     }
     if(isValidPSRDATA_format(application.iformat) == 0) {
       printerror(application.verbose_state.debug, "ERROR pconv: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", dummy_ptr);
-      closePSRData(&fout, 0, application.verbose_state);
+      closePSRData(&fout, 0, 0, application.verbose_state);
       terminateApplication(&application);
       return 0;
     }
@@ -166,7 +166,7 @@ int main(int argc, char **argv)
   fout.NrSubints = n2 - n1;
   if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, application.verbose_state))
     return 0;
-  if(!writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, application.verbose_state))
+  if(!writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, NULL, application.verbose_state))
     return 0;
   if(read_wholefile == 1) {
     if(writePSRData(&fout, fin.data, application.verbose_state) == 0) {
@@ -291,8 +291,8 @@ int main(int argc, char **argv)
       free(pulseData);
     }
   }
-  closePSRData(&fin, 0, application.verbose_state);
-  closePSRData(&fout, 0, application.verbose_state);
+  closePSRData(&fin, 0, 0, application.verbose_state);
+  closePSRData(&fout, 0, 0, application.verbose_state);
   }
   terminateApplication(&application);
   return 0;

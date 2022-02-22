@@ -239,7 +239,7 @@ int main(int argc, char **argv)
       }
     }
     if(memsave) {
-      if(closePSRData(fin[currentfilenumber], 1, application.verbose_state) != 0) {
+      if(closePSRData(fin[currentfilenumber], 1, 0, application.verbose_state) != 0) {
  printerror(application.verbose_state.debug, "ERROR padd: Closing file %s failed\n", inputname);
  return 0;
       }
@@ -412,7 +412,7 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR padd: Cannot open %s", output_fname);
     return 0;
   }
-  if(writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, application.verbose_state) != 1) {
+  if(writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, NULL, application.verbose_state) != 1) {
     printerror(application.verbose_state.debug, "ERROR padd: Cannot write header to %s", output_fname);
     return 0;
   }
@@ -443,7 +443,7 @@ int main(int argc, char **argv)
   while((inputname = getNextFilenameFromList(&application, argv, application.verbose_state)) != NULL) {
     currentfilenumber_index = sort_indx[currentfilenumber];
     if(memsave) {
-      closePSRData(fin[currentfilenumber_index], 0, application.verbose_state);
+      closePSRData(fin[currentfilenumber_index], 0, 0, application.verbose_state);
       if(openPSRData(fin[currentfilenumber_index], inputname, application.iformat, 0, 1, 0, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "ERROR padd: Cannot open %s\n", inputname);
  return 0;
@@ -584,10 +584,10 @@ int main(int argc, char **argv)
     if(application.verbose_state.nocounters == 0) {
       printf("Processing file %d is done (%s).                                \n", currentfilenumber+1, fin[currentfilenumber_index]->filename);
     }
-    closePSRData(fin[currentfilenumber_index], 0, application.verbose_state);
+    closePSRData(fin[currentfilenumber_index], 0, 0, application.verbose_state);
     currentfilenumber++;
   }
-  closePSRData(&fout, 0, application.verbose_state);
+  closePSRData(&fout, 0, 0, application.verbose_state);
   if(noinput == 0)
     ppgend();
   free(Iprofile);

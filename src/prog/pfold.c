@@ -211,7 +211,7 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR pfold: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", filename_ptr);
     return 0;
   }
-  closePSRData(&fin[0], 0, application.verbose_state);
+  closePSRData(&fin[0], 0, 0, application.verbose_state);
   if(!openPSRData(&fin[0], argv[argc-1], application.iformat, 0, 1, 0, application.verbose_state))
     return 0;
   if(PSRDataHeader_parse_commandline(&fin[0], argc, argv, application.verbose_state) == 0)
@@ -404,7 +404,7 @@ int main(int argc, char **argv)
  printerror(application.verbose_state.debug, "ERROR pfold: Unable to open file for writing.\n");
  return 0;
       }
-      if(writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, application.verbose_state) == 0) {
+      if(writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, NULL, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "ERROR pfold: Unable to write header.\n");
  return 0;
       }
@@ -423,7 +423,7 @@ int main(int argc, char **argv)
  return 0;
       }
       free(p3foldmap2);
-      closePSRData(&fout, 1, application.verbose_state);
+      closePSRData(&fout, 2, 0, application.verbose_state);
       fout.gentype = GENTYPE_UNDEFINED;
       fout.yrangeset = 0;
       fout.xrangeset = 0;
@@ -431,9 +431,9 @@ int main(int argc, char **argv)
     }
     free(p3foldmap);
   }
-  closePSRData(&fout, 0, application.verbose_state);
+  closePSRData(&fout, 0, 0, application.verbose_state);
   for(i = 0; i < MaxNrPolarizations; i++)
-    closePSRData(&fin[i], 0, application.verbose_state);
+    closePSRData(&fin[i], 0, 0, application.verbose_state);
   if(p3_fold_flag) {
     free(profileI);
   }

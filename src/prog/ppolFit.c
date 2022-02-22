@@ -2024,7 +2024,7 @@ int main(int argc, char **argv)
     }
   }
   if(loadresults == 0) {
-    closePSRData(&datain, 0, application.verbose_state);
+    closePSRData(&datain, 0, 0, application.verbose_state);
   }
   if(macrofilename)
     fclose(macrofile);

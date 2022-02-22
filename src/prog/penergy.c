@@ -344,7 +344,7 @@ int main(int argc, char **argv)
    opfile.tsubMode = TSUBMODE_FIXEDTSUB;
    opfile.tsampMode = TSAMPMODE_FIXEDTSAMP;
    opfile.fixedtsamp = get_tobs(datain, application.verbose_state)/(double)opfile.NrBins;
-   if(writeHeaderPSRData(&opfile, argc, argv, application.history_cmd_only, application.verbose_state) == 0) {
+   if(writeHeaderPSRData(&opfile, argc, argv, application.history_cmd_only, NULL, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR penergy: Cannot write header to %s", oname);
      return 0;
    }
@@ -461,7 +461,7 @@ int main(int argc, char **argv)
  }
  if(output2file > 1 || (output2file == 1
           )) {
-   closePSRData(&opfile, 0, application.verbose_state);
+   closePSRData(&opfile, 0, 0, application.verbose_state);
  }
  if(individual_bin_mode == 0)
    break;
@@ -516,7 +516,7 @@ int main(int argc, char **argv)
     fclose(ofile);
   }
     }
-    closePSRData(&datain, 0, application.verbose_state);
+    closePSRData(&datain, 0, 0, application.verbose_state);
     free(Ipulse);
     if(burstmode == 0)
       free(output_values);

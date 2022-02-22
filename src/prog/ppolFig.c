@@ -553,12 +553,12 @@ int main(int argc, char **argv)
       ppgqid(&deviceID);
     }
     if(padist_filename_index) {
-      closePSRData(&padist_data, 0, application.verbose_state);
+      closePSRData(&padist_data, 0, 0, application.verbose_state);
     }
     if(elldist_filename_index) {
-      closePSRData(&elldist_data, 0, application.verbose_state);
+      closePSRData(&elldist_data, 0, 0, application.verbose_state);
     }
-    closePSRData(&datain, 0, application.verbose_state);
+    closePSRData(&datain, 0, 0, application.verbose_state);
     firstfiletoopen = 0;
   }
   ppgend();

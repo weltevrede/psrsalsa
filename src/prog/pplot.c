@@ -703,7 +703,7 @@ int main(int argc, char **argv)
    free(zappedVectors);
    free(zappedSubints);
    free(stack_state);
-   closePSRData(&fin, 0, application.verbose_state);
+   closePSRData(&fin, 0, 0, application.verbose_state);
    terminateApplication(&application);
    return 0;
  }
@@ -717,11 +717,11 @@ int main(int argc, char **argv)
    free(zappedVectors);
    free(zappedSubints);
    free(stack_state);
-   closePSRData(&fin, 0, application.verbose_state);
+   closePSRData(&fin, 0, 0, application.verbose_state);
    terminateApplication(&application);
    return 0;
  }
- closePSRData(&fin, 0, application.verbose_state);
+ closePSRData(&fin, 0, 0, application.verbose_state);
  if(!openPSRData(&fin, inputfilename, iformat, 0, 1, 0, application.verbose_state)) {
    printerror(application.verbose_state.debug, "ERROR pplot: Error opening file.\n");
    return 0;
@@ -2216,7 +2216,7 @@ int main(int argc, char **argv)
       free(maxy);
       maxy_allocated = 0;
     }
-    closePSRData(&fin, 0, application.verbose_state);
+    closePSRData(&fin, 0, 0, application.verbose_state);
     printf("Finished plotting of: %s\n", inputfilename);
   }
   ppgend();

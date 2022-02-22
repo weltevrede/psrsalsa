@@ -16,6 +16,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <time.h>
 #include <sys/time.h>
 #include <math.h>
+#include <string.h>
 #include <gsl/gsl_sort.h>
 #include <gsl/gsl_cdf.h>
 #include "psrsalsa.h"

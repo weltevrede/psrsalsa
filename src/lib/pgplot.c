@@ -25,6 +25,15 @@ static double internal_pgplot_ymin = 0;
 static double internal_pgplot_ymax = 1;
 static int internal_pgplot_nrx = 1;
 static int internal_pgplot_nry = 1;
+void ppgplot_set_internal_mapping_coordinated(double xmin, double xmax, double ymin, double ymax, int nrx, int nry)
+{
+  internal_pgplot_xmin = xmin;
+  internal_pgplot_xmax = xmax;
+  internal_pgplot_ymin = ymin;
+  internal_pgplot_ymax = ymax;
+  internal_pgplot_nrx = nrx;
+  internal_pgplot_nry = nry;
+}
 void print_pgplot_version_used(FILE *stream)
 {
   char version[25];
@@ -1590,12 +1599,7 @@ int pgplotMap(pgplot_options_definition *pgplot, float *cmap, int nrx, int nry, 
   }
   memcpy(pgplot_backup, pgplot, sizeof(pgplot_options_definition));
   clear_pgplot_frame(&pgplot_frame_internal);
-  internal_pgplot_xmin = xmin;
-  internal_pgplot_xmax = xmax;
-  internal_pgplot_ymin = ymin;
-  internal_pgplot_ymax = ymax;
-  internal_pgplot_nrx = nrx;
-  internal_pgplot_nry = nry;
+  ppgplot_set_internal_mapping_coordinated(xmin, xmax, ymin, ymax, nrx, nry);
   lasty = 0;
   if(verbose.debug) {
     printf("pgplotMap -- dimensions: %dX%d points  xrange=%e %e yrange=%e %e\n", nrx, nry, xmin, xmax, ymin, ymax);
