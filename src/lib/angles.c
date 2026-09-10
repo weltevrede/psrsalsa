@@ -269,6 +269,33 @@ void projectionHammerAitoff_xy(float longitude, float latitude, float dlongitude
   *x *= 0.5*sqrt(2);
   *y *= 0.5*sqrt(2);
 }
+void projectionMollweide_xy(float longitude, float latitude, float dlongitude, float dlatitude, float *x, float *y)
+{
+  double x2, y2, z2, theta, phi, r;
+  dlongitude *= 180.0/M_PI;
+  dlatitude *= 180.0/M_PI;
+  spherical2Cartesian(1, latitude+0.5*M_PI, longitude, &x2, &y2, &z2);
+  rotateZ_d(1, dlongitude, &x2, &y2, &z2);
+  rotateY_d(1, -dlatitude, &x2, &y2, &z2);
+  cartesian2spherical(&r, &theta, &phi, x2, y2, z2);
+  latitude = theta - 0.5*M_PI;
+  longitude = phi;
+  double sinlatitude;
+  sinlatitude = sin(latitude);
+  theta = latitude;
+  if(theta != 0.5*M_PI && theta != -0.5*M_PI && theta != 0.0) {
+    double costheta, dtheta;
+    do {
+      costheta = cos(theta);
+      dtheta = - (2.0*theta+sin(2.0*theta)-M_PI*sinlatitude)/(4.0*costheta*costheta);
+      theta += dtheta;
+    }while(fabs(dtheta/theta) > 1e-6);
+  }
+  *x = 2.0*sqrt(2.0)*longitude*cos(theta)/M_PI;
+  *y = sqrt(2.0)*sin(theta);
+  *x *= 0.5*sqrt(2);
+  *y *= 0.5*sqrt(2);
+}
 int projection_sphere_xy(float longitude, float latitude, float dlongitude, float dlatitude, float *x, float *y, float *weight)
 {
   float xE, yE, zE;

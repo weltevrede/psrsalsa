@@ -112,7 +112,7 @@ void write_epn_longheader(datafile_definition datafile, int version, verbose_def
   fprintf(datafile.fptr, "%s", txt);
   converthms_string(txt, datafile.ra*12.0/M_PI, 3, 4);
   fprintf(datafile.fptr, "%s", txt);
-  if(datafile.ra >= 0)
+  if(datafile.dec >= 0)
     fprintf(datafile.fptr, "+");
   converthms_string(txt, datafile.dec*180.0/M_PI, 3, 4);
   fprintf(datafile.fptr, "%s", txt);
@@ -278,10 +278,10 @@ int readEPNHeader(datafile_definition *datafile, verbose_definition verbose)
     if(verbose.debug) {
       printf("DEBUG readEPNHeader: EPN version = %lf (%d)\n", dbl_version, datafile->version);
     }
-  if((datafile->version < 60) || (datafile->version > 63)) {
-    printerror(verbose.debug, "ERROR readEPNHeader: EPN versions 6.0 - 6.3 are supported. This is version %lf.", dbl_version);
-    return 0;
-  }
+    if((datafile->version < 60) || (datafile->version > 63)) {
+      printerror(verbose.debug, "ERROR readEPNHeader: EPN versions 6.0 - 6.3 are supported. This is version %lf.", dbl_version);
+      return 0;
+    }
     int counter;
     if(datafile->version == 63) {
       ret = fread(txt, 1, 6, datafile->fptr);

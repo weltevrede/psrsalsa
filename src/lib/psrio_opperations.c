@@ -15,41 +15,58 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 #include <stdio.h>
 #include <math.h>
+#include <string.h>
+#include <gsl/gsl_sort.h>
 #include "psrsalsa.h"
 int rebinPulse(float *Ipulse, long NrBins, float *Ipulse2, long NrBins2, int noDependencyWarning, verbose_definition verbose)
 {
   long j, i1, i2;
   float x, x2;
   if(noDependencyWarning == 0) {
-    if(NrBins % NrBins2 != 0) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING rebinPulse: Rebinning from %ld to %ld bins implies that separate bins are not entirely independent.", NrBins, NrBins2);
+    if(NrBins2 <= NrBins) {
+      if(NrBins % NrBins2 != 0) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING rebinPulse: Rebinning from %ld to %ld bins implies that separate bins are not entirely independent.", NrBins, NrBins2);
+      }
     }
   }
   for(j = 0; j < NrBins2; j++)
     Ipulse2[j] = 0;
-  for(j = 0; j < NrBins; j++) {
-    x = (j)/(float)NrBins;
-    x *= NrBins2;
-    x2 = (j+1)/(float)NrBins;
-    x2 *= NrBins2;
-    i1 = x;
-    i2 = x2;
-    if(i1 == i2) {
-      Ipulse2[i1] += Ipulse[j]*(x2-x);
-    }else if(i2-i1 == 1) {
-      Ipulse2[i1] += Ipulse[j]*(i2-x);
-      if(i2 < NrBins2)
- Ipulse2[i2] += Ipulse[j]*(x2-i2);
-    }else if(i2-i1 == 2) {
-      Ipulse2[i1] += Ipulse[j]*(i1+1-x);
-      Ipulse2[i1+1] += Ipulse[j];
-      if(i2 < NrBins2)
- Ipulse2[i2] += Ipulse[j]*(x2-i2);
-    }else {
-      fflush(stdout);
-      printerror(verbose.debug, "ERROR rebinPulse: Error in rebinning function.");
-      return 0;
+  if(NrBins2 <= NrBins) {
+    for(j = 0; j < NrBins; j++) {
+      x = (j)/(float)NrBins;
+      x *= NrBins2;
+      x2 = (j+1)/(float)NrBins;
+      x2 *= NrBins2;
+      i1 = x;
+      i2 = x2;
+      if(i1 == i2) {
+ Ipulse2[i1] += Ipulse[j]*(x2-x);
+      }else if(i2-i1 == 1) {
+ Ipulse2[i1] += Ipulse[j]*(i2-x);
+ if(i2 < NrBins2)
+   Ipulse2[i2] += Ipulse[j]*(x2-i2);
+      }else if(i2-i1 == 2) {
+ Ipulse2[i1] += Ipulse[j]*(i1+1-x);
+ Ipulse2[i1+1] += Ipulse[j];
+ if(i2 < NrBins2)
+   Ipulse2[i2] += Ipulse[j]*(x2-i2);
+      }else {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR rebinPulse: Error in rebinning function.");
+ return 0;
+      }
+    }
+  }else {
+    for(j = 0; j < NrBins2; j++) {
+      x = (j)/(float)NrBins2;
+      x *= NrBins;
+      i1 = x;
+      if(i1+1 >= NrBins) {
+ Ipulse2[j] = Ipulse[i1] + (Ipulse[i1+1-NrBins]-Ipulse[i1])*(x-i1);
+      }else {
+ Ipulse2[j] = Ipulse[i1] + (Ipulse[i1+1]-Ipulse[i1])*(x-i1);
+      }
     }
   }
   return 1;
@@ -101,7 +118,7 @@ int continuous_shift(datafile_definition fin, datafile_definition *fout, int shi
       return 0;
     }
   }else {
-    if(!openPSRData(fout, output_name, oformat, 1, 0, 0, verbose_counters_verbose2))
+    if(!openPSRData(fout, output_name, oformat, 1, 0, 0, -1, verbose_counters_verbose2))
       return 0;
     int cmdOnly = 0;
     if(!writeHeaderPSRData(fout, argc, argv, cmdOnly, NULL, verbose))
@@ -333,6 +350,13 @@ int get_period(datafile_definition datafile, long subint, double *period, verbos
   *period = datafile.fixedPeriod;
   return 0;
 }
+void set_period(datafile_definition *datafile, double period, verbose_definition verbose)
+{
+  datafile->isFolded = 1;
+  datafile->foldMode = FOLDMODE_FIXEDPERIOD;
+  datafile->fixedPeriod = period;
+  return;
+}
 double get_tsamp(datafile_definition datafile, long subint, verbose_definition verbose)
 {
   if(datafile.tsampMode == TSAMPMODE_LONGITUDELIST) {
@@ -344,6 +368,20 @@ double get_tsamp(datafile_definition datafile, long subint, verbose_definition v
     exit(0);
   }
   return datafile.fixedtsamp;
+}
+void set_tsamp(datafile_definition *datafile, double tsamp, verbose_definition verbose)
+{
+  if(datafile->tsampMode != TSAMPMODE_FIXEDTSAMP && datafile->tsampMode != TSAMPMODE_LONGITUDELIST && datafile->tsampMode != TSAMPMODE_UNKNOWN) {
+    printerror(verbose.debug, "ERROR set_tsamp: Unknown sampling mode");
+    exit(0);
+  }
+  if(datafile->tsampMode == TSAMPMODE_LONGITUDELIST) {
+    free(datafile->tsamp_list);
+    datafile->tsamp_list = NULL;
+  }
+  datafile->tsampMode = TSAMPMODE_FIXEDTSAMP;
+  datafile->fixedtsamp = tsamp;
+  return;
 }
 double get_pulse_longitude(datafile_definition datafile, long subint, long binnr, verbose_definition verbose)
 {
@@ -449,6 +487,9 @@ double get_tobs(datafile_definition datafile, verbose_definition verbose)
 {
   long i;
   double tobs;
+  if(datafile.tsubMode == TSUBMODE_UNKNOWN) {
+    return 0;
+  }
   if(datafile.gentype == GENTYPE_LRFS || datafile.gentype == GENTYPE_2DFS || datafile.gentype == GENTYPE_S2DFSP3 || datafile.gentype == GENTYPE_S2DFSP2 || datafile.gentype == GENTYPE_P3FOLD || datafile.gentype == GENTYPE_LRCC || datafile.gentype == GENTYPE_RMMAP || datafile.gentype == GENTYPE_PADIST) {
     return get_tsub(datafile, 0, verbose);
   }else if(datafile.gentype == GENTYPE_RECEIVERMODEL || datafile.gentype == GENTYPE_RECEIVERMODEL2) {
@@ -625,6 +666,537 @@ int check_baseline_subtracted(datafile_definition data, verbose_definition verbo
  return 0;
       }
     }
+  }
+  return 1;
+}
+void padd_ShiftProfile(int shift, int NrBins, float *Iprofile, float *outputProfile)
+{
+  int b, b2;
+  for(b = 0; b < NrBins; b++) {
+    b2 = b+shift;
+    if(b2 < 0)
+      b2 += NrBins;
+    if(b2 >= NrBins)
+      b2 -= NrBins;
+    outputProfile[b2] = Iprofile[b];
+  }
+}
+#define padd_MaxNrOnpulseRegions 10
+int padd_NrOnpulseRegions, padd_OnPulseRegion[padd_MaxNrOnpulseRegions][2];
+int padd_CheckOnPulse(int bin, int NrRegions, int Regions[padd_MaxNrOnpulseRegions][2])
+{
+  int i;
+  for(i = 0; i < NrRegions; i++) {
+    if(bin >= Regions[i][0] && bin <= Regions[i][1])
+      return i+1;
+  }
+  return 0;
+}
+void padd_PlotProfile(int NrBins, float *Ipulse, char *xlabel, char *ylabel, char *title, int Highlight, int color, int clearPage)
+{
+  long j;
+  float ymin, ymax;
+  ymin = ymax = Ipulse[0];
+  for(j = 1; j < NrBins; j++) {
+    if(Ipulse[j] > ymax)
+      ymax = Ipulse[j];
+    if(Ipulse[j] < ymin)
+      ymin = Ipulse[j];
+  }
+  if(clearPage) {
+    ppgpage();
+    ppgsci(1);
+    ppgsvp(0.1, 0.9, 0.1, 0.9);
+    ppgswin(0,NrBins-1,-0.1,1.1);
+    ppgbox("bcnsti",0.0,0,"bcnti",0.0,0);
+    ppglab(xlabel, ylabel, title);
+  }
+  ppgsci(color);
+  ppgmove(0, Ipulse[0]/ymax);
+  for(j = 1; j < NrBins; j++) {
+    if(Highlight != 0)
+      ppgsci(color+padd_CheckOnPulse(j,padd_NrOnpulseRegions,padd_OnPulseRegion));
+    else
+      ppgsci(color);
+    ppgdraw(j, Ipulse[j]/ymax);
+  }
+  ppgsci(1);
+}
+int padd_check_parameters(long poladd, long freqadd, long sumNsub, int circularShift, int noinput, int shift, int memsave,
+     verbose_definition verbose)
+{
+  if(sumNsub <= 0) {
+    printerror(verbose.debug, "ERROR padd: Expected a positive number to be provided with -nsub.");
+    return 0;
+  }
+  if(freqadd && poladd) {
+    printerror(verbose.debug, "ERROR padd: Cannot use the -freqadd and -poladd flag simultaneously.");
+    return 0;
+  }
+  if(sumNsub != 1 && poladd) {
+    printerror(verbose.debug, "ERROR padd: Cannot use the -nsub and -poladd flag simultaneously.");
+    return 0;
+  }
+  if(sumNsub != 1 && freqadd) {
+    printerror(verbose.debug, "ERROR padd: Cannot use the -nsub and -freqadd flag simultaneously.");
+    return 0;
+  }
+  if(circularShift != 1 && poladd) {
+    printerror(verbose.debug, "ERROR padd: You must use the -c option together with -poladd.");
+    return 0;
+  }
+  if(circularShift != 1 && freqadd) {
+    printerror(verbose.debug, "ERROR padd: You must use the -c option together with -freqadd.");
+    return 0;
+  }
+  if((noinput != 1 || shift != 0) && poladd) {
+    printerror(verbose.debug, "ERROR padd: You must use the -n 0 option together with -poladd.");
+    return 0;
+  }
+  if((noinput != 1 || shift != 0) && freqadd) {
+    printerror(verbose.debug, "ERROR padd: You must use the -n 0 option together with -poladd.");
+    return 0;
+  }
+  return 1;
+}
+int padd_do_stuff(datafile_definition **fin, long nrinputfiles, datafile_definition *fout, int oformat, char *output_fname,
+    int poladd, int freqadd, int noinput, char *PlotDevice, float *shiftedProfile, float *Iprofile_firstfile, int onlyI, int circularShift, int shift, long sumNsub,
+    int memsave, int argc, char **argv, psrsalsaApplication *application, int history_cmd_only, int noclosePSRData, int extra_quiet, verbose_definition verbose)
+{
+  datafile_definition clone;
+  float x, y, *float_ptr, *float_ptr2;
+  float *Iprofile, *subint;
+  int subintWritten, bin1, bin2, currentfilenumber, dummy_int;
+  long i, j, pol, fchan, nsub, curNrInsubint, subintslost, binnr, currentOutputSubint;
+  char singlechar, *inputname;
+  x = y = singlechar = 0;
+  padd_NrOnpulseRegions = 0;
+  unsigned long *sort_indx;
+  sort_indx = (unsigned long *)malloc(nrinputfiles*sizeof(unsigned long));
+  if(sort_indx == NULL) {
+    printerror(verbose.debug, "ERROR padd: Memory allocation error\n");
+    return 0;
+  }
+    for(currentfilenumber = 0; currentfilenumber < nrinputfiles; currentfilenumber++) {
+      sort_indx[currentfilenumber] = currentfilenumber;
+    }
+  cleanPSRData(fout, verbose);
+  copy_params_PSRData(*(fin[0]), fout, verbose);
+  if(onlyI) {
+    fout->NrPols = 1;
+  }
+  fout->format = oformat;
+  fout->NrSubints = 0;
+  subintslost = 0;
+  if(poladd) {
+    fout->NrPols = nrinputfiles;
+    fout->NrSubints = fin[0]->NrSubints;
+  }else if(freqadd) {
+    fout->NrSubints = fin[0]->NrSubints;
+    fout->NrFreqChan = 0;
+    for(currentfilenumber = 0; currentfilenumber < nrinputfiles; currentfilenumber++) {
+      fout->NrFreqChan += fin[currentfilenumber]->NrFreqChan;
+    }
+    fout->freqMode = FREQMODE_FREQTABLE;
+    if(fout->freqlabel_list != NULL) {
+      free(fout->freqlabel_list);
+    }
+    fout->freqlabel_list = (double *)malloc(fout->NrFreqChan*fout->NrSubints*sizeof(double));
+    if(fout->freqlabel_list == NULL) {
+      printerror(verbose.debug, "ERROR padd: Memory allocation error");
+      return 0;
+    }
+    long currentOutputChan = 0;
+    for(i = 0; i < nrinputfiles; i++) {
+      currentfilenumber = sort_indx[i];
+      for(fchan = 0; fchan < fin[currentfilenumber]->NrFreqChan; fchan++) {
+ for(nsub = 0; nsub < fin[currentfilenumber]->NrSubints; nsub++) {
+   double freq;
+   freq = get_weighted_channel_freq(*(fin[currentfilenumber]), nsub, fchan, verbose);
+   if(set_weighted_channel_freq(fout, nsub, currentOutputChan, freq, verbose) == 0) {
+     printerror(verbose.debug, "ERROR padd: Constructing frequency table failed");
+     return 0;
+   }
+ }
+ currentOutputChan++;
+      }
+    }
+  }else {
+    for(i = 0; i < nrinputfiles; i++) {
+      fout->NrSubints += fin[i]->NrSubints;
+      if(circularShift == 0) {
+ fout->NrSubints -= 1;
+ subintslost += 1;
+      }
+    }
+  }
+  if(poladd == 0 && freqadd == 0) {
+    int do_freq_table;
+    do_freq_table = 0;
+    for(i = 0; i < nrinputfiles; i++) {
+      if(fin[i]->freqMode == FREQMODE_FREQTABLE) {
+ do_freq_table = 1;
+      }
+    }
+    if(do_freq_table) {
+      fout->freqMode = FREQMODE_FREQTABLE;
+      if(fout->freqlabel_list != NULL) {
+ free(fout->freqlabel_list);
+      }
+      fout->freqlabel_list = (double *)malloc(fout->NrFreqChan*fout->NrSubints*sizeof(double));
+      if(fout->freqlabel_list == NULL) {
+ printerror(verbose.debug, "ERROR padd: Memory allocation error");
+ return 0;
+      }
+      long currentSubint = 0;
+      for(i = 0; i < nrinputfiles; i++) {
+ currentfilenumber = sort_indx[i];
+ for(nsub = 0; nsub < fin[currentfilenumber]->NrSubints; nsub++) {
+   for(fchan = 0; fchan < fin[currentfilenumber]->NrFreqChan; fchan++) {
+     double freq;
+     freq = get_weighted_channel_freq(*(fin[currentfilenumber]), nsub, fchan, verbose);
+     if(set_weighted_channel_freq(fout, currentSubint, fchan, freq, verbose) == 0) {
+       printerror(verbose.debug, "ERROR padd: Constructing frequency table failed");
+       return 0;
+     }
+   }
+   currentSubint++;
+ }
+      }
+    }
+  }
+  if(extra_quiet == 0 || verbose.verbose != 0 || verbose.debug != 0) {
+    if(freqadd || poladd) {
+      printf("\nOutput data will be %ld subints, %ld phase bins %ld frequency channels and %ld polarizations.\n", fout->NrSubints, fout->NrBins, fout->NrFreqChan, fout->NrPols);
+    }else {
+      printf("\nInput data contains %ld subints, %ld phase bins %ld frequency channels and %ld polarizations.\n", fout->NrSubints+subintslost, fout->NrBins, fout->NrFreqChan, fout->NrPols);
+      printf("%ld subints are lost because of the alignment of input data", subintslost);
+      if(subintslost > 0)
+ printf(" (consider using -c option)");
+    }
+  }
+  fout->tsubMode = TSUBMODE_TSUBLIST;
+  if(fout->tsub_list != NULL) {
+    free(fout->tsub_list);
+  }
+  fout->tsub_list = (double *)malloc(fout->NrSubints*sizeof(double));
+  if(fout->tsub_list == NULL) {
+    printerror(verbose.debug, "ERROR padd: Memory allocation error");
+    return 0;
+  }
+  currentOutputSubint = 0;
+  fout->tsub_list[0] = 0;
+  subintWritten = 0;
+  curNrInsubint = 0;
+  if(poladd || freqadd) {
+    for(nsub = 0; nsub < fin[0]->NrSubints; nsub++) {
+      fout->tsub_list[nsub] = get_tsub(*(fin[0]), nsub, verbose);
+    }
+  }else {
+    for(i = 0; i < nrinputfiles; i++) {
+      currentfilenumber = sort_indx[i];
+      for(nsub = 0; nsub < fin[currentfilenumber]->NrSubints; nsub++) {
+ if(currentOutputSubint < fout->NrSubints)
+   fout->tsub_list[currentOutputSubint] += get_tsub(*(fin[currentfilenumber]), nsub, verbose);
+ if(sumNsub == 1) {
+   subintWritten = 1;
+ }else if(curNrInsubint == sumNsub - 1) {
+   subintWritten = 1;
+ }
+ curNrInsubint++;
+ if(subintWritten) {
+   subintWritten = 0;
+   curNrInsubint = 0;
+   currentOutputSubint++;
+   if(currentOutputSubint < fout->NrSubints)
+     fout->tsub_list[currentOutputSubint] = 0;
+ }
+      }
+    }
+  }
+  if(freqadd == 0 && poladd == 0) {
+    dummy_int = fout->NrSubints % sumNsub;
+    fout->NrSubints = fout->NrSubints/sumNsub;
+    if(extra_quiet == 0 || verbose.verbose != 0 || verbose.debug != 0) {
+      printf("\nOutput data will contain %ld subints", fout->NrSubints);
+      if(sumNsub > 1)
+ printf(" after summing every %ld input subints", sumNsub);
+      if(dummy_int)
+ printf(" (%d input subints lost because of incomplete last subint)", dummy_int);
+      printf("\n\n");
+    }
+  }
+  if(fout->gentype == GENTYPE_PULSESTACK && sumNsub != 1) {
+    if(fout->NrSubints != 1) {
+      fout->gentype = GENTYPE_SUBINTEGRATIONS;
+    }else {
+      fout->gentype = GENTYPE_PROFILE;
+    }
+  }
+  if(output_fname != NULL && oformat != MEMORY_format) {
+    if(openPSRData(fout, output_fname, fout->format, 1, 0, 0, -1, verbose) == 0) {
+      printerror(verbose.debug, "ERROR padd: Cannot open %s", output_fname);
+      return 0;
+    }
+    if(writeHeaderPSRData(fout, argc, argv, history_cmd_only, NULL, verbose) != 1) {
+      printerror(verbose.debug, "ERROR padd: Cannot write header to %s", output_fname);
+      return 0;
+    }
+  }else {
+    fout->data = malloc((fout->NrSubints * fout->NrBins * fout->NrPols * fout->NrFreqChan)*sizeof(float));
+    if(fout->data == NULL) {
+      printerror(verbose.debug, "ERROR padd: Memory allocation error");
+      return 0;
+    }
+  }
+  Iprofile = (float *)malloc(fout->NrPols*fout->NrBins*sizeof(float));
+  if(Iprofile == NULL) {
+    printerror(verbose.debug, "ERROR padd: Cannot allocate memory.");
+    return 0;
+  }
+  if(sumNsub > 1) {
+    subint = (float *)malloc(fout->NrPols*fout->NrBins*fout->NrFreqChan*sizeof(float));
+    if(subint == NULL) {
+      printerror(verbose.debug, "ERROR padd: Cannot allocate memory.");
+      return 0;
+    }
+  }
+  if(noinput == 0) {
+    ppgopen(PlotDevice);
+    ppgask(0);
+    ppgslw(1);
+  }
+  currentfilenumber = 0;
+  currentOutputSubint = 0;
+  curNrInsubint = 0;
+  subintWritten = 0;
+  if(memsave) {
+    rewindFilenameList(application);
+  }
+  long currentfilenumber_index;
+  long fchan_offset = 0;
+  for(currentfilenumber = 0; currentfilenumber < nrinputfiles; currentfilenumber++) {
+    currentfilenumber_index = sort_indx[currentfilenumber];
+    if(memsave) {
+      inputname = getNextFilenameFromList(application, argv, verbose);
+      closePSRData(fin[currentfilenumber_index], 0, 0, verbose);
+      if(openPSRData(fin[currentfilenumber_index], inputname, application->iformat, 0, 1, 0, -1, verbose) == 0) {
+ printerror(verbose.debug, "ERROR padd: Cannot open %s\n", inputname);
+ return 0;
+      }
+      if(currentfilenumber == 0) {
+ for(i = 1; i < argc; i++) {
+   if(strcmp(argv[i], "-header") == 0) {
+     fflush(stdout);
+     printwarning(verbose.debug, "WARNING: If using the -header option, be aware it applied BEFORE the preprocessing.");
+   }
+ }
+      }
+      if(preprocessApplication(application, fin[currentfilenumber_index]) == 0) {
+ printerror(verbose.debug, "ERROR padd: preprocess option failed on file %s\n", inputname);
+ return 0;
+      }
+    }
+    if(shift >= fout->NrBins)
+      shift -= fout->NrBins;
+    if(shift < 0)
+      shift += fout->NrBins;
+    if(noinput == 0 && currentfilenumber != 0) {
+      if(read_profilePSRData(*fin[currentfilenumber_index], Iprofile, NULL, 0, verbose) != 1) {
+ printerror(verbose.debug, "ERROR padd: Reading pulse profile failed.");
+ return 0;
+      }
+      do {
+ padd_ShiftProfile(shift, fout->NrBins, Iprofile, shiftedProfile);
+ padd_PlotProfile(fout->NrBins, Iprofile_firstfile, "Bin number", "Intensity", "Click to shift profile, press s to stop", 0, 1, 1);
+ padd_PlotProfile(fout->NrBins, shiftedProfile, "", "", "", 0, 2, 0);
+ j = 0;
+ do {
+   if(j == 0)
+     ppgband(0, 0, 0.0, 0.0, &x, &y, &singlechar);
+   else
+     ppgband(4, 0, bin1, 0.0, &x, &y, &singlechar);
+   if(singlechar == 65) {
+     if(j == 0)
+       bin1 = x;
+     else
+       bin2 = x;
+     j++;
+   }else if(singlechar == 115 || singlechar ==83 ) {
+     j = 10;
+   }
+ }while(j < 2);
+ if(j < 10) {
+   shift += bin2 - bin1;
+   if(shift >= fout->NrBins)
+     shift -= fout->NrBins;
+   if(shift < 0)
+     shift += fout->NrBins;
+ }
+      }while(j < 10);
+    }
+    if(shift != 0) {
+      if(continuous_shift(*fin[currentfilenumber_index], &clone, shift, circularShift, "padd", MEMORY_format, 0, NULL, verbose, verbose.debug) != 1) {
+ printerror(verbose.debug, "ERROR padd: circular shift failed.");
+      }
+      swap_orig_clone(fin[currentfilenumber_index], &clone, verbose);
+    }
+    long nrPulsesInCurFile;
+    nrPulsesInCurFile = fin[currentfilenumber_index]->NrSubints;
+    if(shift == 0 && circularShift == 0)
+      nrPulsesInCurFile -= 1;
+    for(nsub = 0; nsub < nrPulsesInCurFile; nsub++) {
+      int nrpolsinloop;
+      nrpolsinloop = fout->NrPols;
+      if(poladd) {
+ nrpolsinloop = 1;
+      }
+      for(pol = 0; pol < nrpolsinloop; pol++) {
+ for(fchan = 0; fchan < fin[currentfilenumber_index]->NrFreqChan; fchan++) {
+   if(readPulsePSRData(fin[currentfilenumber_index], nsub, pol, fchan, 0, fin[currentfilenumber_index]->NrBins, Iprofile, verbose) != 1) {
+     printerror(verbose.debug, "ERROR padd: Read error");
+     return 0;
+   }
+   if(sumNsub == 1) {
+     if(poladd == 0 && freqadd == 0) {
+  if(writePulsePSRData(fout, currentOutputSubint, pol, fchan, 0, fout->NrBins, Iprofile, verbose) != 1) {
+    printerror(verbose.debug, "ERROR padd: Write error");
+    return 0;
+  }
+     }else {
+       if(poladd) {
+  if(writePulsePSRData(fout, nsub, currentfilenumber, fchan, 0, fout->NrBins, Iprofile, verbose) != 1) {
+    printerror(verbose.debug, "ERROR padd: Write error");
+    return 0;
+  }
+       }else if(freqadd) {
+  if(writePulsePSRData(fout, nsub, pol, fchan+fchan_offset, 0, fout->NrBins, Iprofile, verbose) != 1) {
+    printerror(verbose.debug, "ERROR padd: Write error");
+    return 0;
+  }
+       }
+     }
+     subintWritten = 1;
+   }else {
+     float_ptr = &subint[fout->NrBins*(pol+fout->NrPols*fchan)];
+     float_ptr2 = Iprofile;
+     if(curNrInsubint == 0) {
+       for(binnr = 0; binnr < fout->NrBins; binnr++) {
+  *float_ptr = *float_ptr2;
+  float_ptr++;
+  float_ptr2++;
+       }
+     }else {
+       for(binnr = 0; binnr < fout->NrBins; binnr++) {
+  *float_ptr += *float_ptr2;
+  float_ptr++;
+  float_ptr2++;
+       }
+     }
+     if(curNrInsubint == sumNsub - 1) {
+       if(writePulsePSRData(fout, currentOutputSubint, pol, fchan, 0, fout->NrBins, float_ptr-fout->NrBins, verbose) != 1) {
+  printerror(verbose.debug, "ERROR padd: Write error");
+  return 0;
+       }
+       subintWritten = 1;
+     }
+   }
+ }
+      }
+      curNrInsubint++;
+      if(subintWritten) {
+ subintWritten = 0;
+ curNrInsubint = 0;
+ currentOutputSubint++;
+      }
+      if(verbose.nocounters == 0) {
+ printf("Processing input file %d: %.1f%%     \r", currentfilenumber+1, (100.0*(nsub+1))/(float)(fin[currentfilenumber_index]->NrSubints));
+ fflush(stdout);
+      }
+    }
+    if(freqadd) {
+      fchan_offset += fin[currentfilenumber_index]->NrFreqChan;
+    }
+    if(verbose.nocounters == 0) {
+      printf("Processing file %d is done (%s).                                \n", currentfilenumber+1, fin[currentfilenumber_index]->filename);
+    }
+    if(noclosePSRData == 0) {
+      closePSRData(fin[currentfilenumber_index], 0, 0, verbose);
+    }
+  }
+  free(Iprofile);
+  if(sumNsub > 1)
+    free(subint);
+  free(sort_indx);
+  return 1;
+}
+int apply_doalign(datafile_definition *psrdata, int doalign, vonMises_collection_definition *vonMises_model, datafile_definition *datafile_model, float *fftshift, int tscr_complete, verbose_definition verbose)
+{
+  verbose_definition verbose1, verbose2;
+  copyVerboseState(verbose, &verbose1);
+  copyVerboseState(verbose, &verbose2);
+  verbose1.indent = verbose.indent + 2;
+  verbose2.indent = verbose.indent + 4;
+  int i;
+  if(verbose1.verbose) {
+    for(i = 0; i < verbose1.indent; i++)
+      printf(" ");
+    if(doalign == 1) {
+      printf("Aligning data using template\n");
+    }else {
+      printf("Aligning data using template by allowing subints to rotate separately\n");
+    }
+  }
+  if(vonMises_model == NULL && datafile_model == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "apply_doalign: Can only align data when a template is defined (von Mises model, or profile from pulsar data file).");
+    return 0;
+  }
+  datafile_definition clone;
+  if(doalign == 1) {
+    if(!preprocess_addsuccessivepulses(*psrdata, &clone, psrdata->NrSubints, tscr_complete, verbose2)) {
+      return 0;
+    }
+  }else {
+    if(!make_clone(*psrdata, &clone, verbose2)) {
+      return 0;
+    }
+  }
+  if(!preprocess_dedisperse(&clone, 0, 0, 0, verbose2)) {
+    return 0;
+  }
+  if(psrdata->NrPols == 4) {
+    if(!preprocess_deFaraday(&clone, 0, 0, 0, NULL, verbose2))
+      return 0;
+  }
+  datafile_definition clone2;
+  if(!preprocess_addsuccessiveFreqChans(clone, &clone2, clone.NrFreqChan, 1, NULL, verbose2)) {
+    return 0;
+  }
+  *fftshift = 0.0;
+  if(doalign == 1) {
+    if(vonMises_model != NULL) {
+      *fftshift = correlateVonMisesFunction(vonMises_model, clone2.NrBins, clone2.data, verbose2);
+    }else {
+      if(clone2.NrBins != datafile_model->NrBins) {
+ fflush(stdout);
+ printerror(verbose.debug, "preprocessApplication: The template and the data file have a different amount of bins (%ld != %ld).", clone2.NrBins, datafile_model->NrBins);
+ return 0;
+      }
+      int lag;
+      float correl_max;
+      if(find_peak_correlation(clone2.data, datafile_model->data, clone2.NrBins, 0, 0, 1, 1, &lag, &correl_max, verbose2) == 0) {
+ return 0;
+      }
+      *fftshift = lag/(double)clone2.NrBins;
+    }
+  }
+  closePSRData(&clone2, 0, 0, verbose2);
+  closePSRData(&clone, 0, 0, verbose2);
+  if(verbose1.verbose) {
+    for(i = 0; i < verbose1.indent; i++)
+      printf(" ");
+    printf("  done       \n");
   }
   return 1;
 }

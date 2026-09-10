@@ -34,10 +34,11 @@ void print_shapepar_help()
   printf("w90_maxamp         Width at 90%% of the maximum for that vonMises component with the maximum amplitude\n");
   printf("ampratio_at_phase  \"phase1 phase2\" Calculate the ratio of the amplitude measured at pulse phase1 (number between 0 and 1) and phase2 (corresponding to the denominator).\n");
   printf("compampratio       \"c1 c2\" The amplitude of vonMises component c1 (counting from 0) relative to that of component c2.\n");
+  printf("compampmean c1     The amplitude of vonMises component c1 (counting from 0) relative to the mean of the total profile.\n");
   printf("peakamp            Amplitude of the main peak\n");
   printf("peakampratio       Ratio of amplitudes between the main peak and a smaller peak. The offset interval from the main peak where a sub-peak is searched for needs to be provided, e.g. \"peakampratio 0.1 0.2\" will look for a sub-peak between 0.1 and 0.2 phase after the main peak.\n");
   printf("peakampratio_reci  Reciprocal (1 over) of peakampratio.\n");
-  printf("peakampratio_restr As peakampratio, but for example \"-peakampratiorestr 0.1 0.2 0.6 0.7\" will look for a maximum in the phase range 0.1 - 0.2, and a maximum in the phase range 0.6 - 0.7. It reports the amplitude ratio of the first peak divided by that of the second peak. It is assumed there is only one maximum in the specified regions.\n");
+  printf("peakampratio_restr As peakampratio, but for example \"peakampratio_restr 0.1 0.2 0.6 0.7\" will look for a maximum in the phase range 0.1 - 0.2, and a maximum in the phase range 0.6 - 0.7. It reports the amplitude ratio of the first peak divided by that of the second peak. It is assumed there is only one maximum in the specified regions.\n");
   printf("peakphase          Phase of the main peak\n");
   printf("peakphase_restr    As peakphase, but only reports the amplitude of the first peak occuring in a restricted phase range. So \"peakphaserestr 0.1 0.2\" will search for a peak between 0.1 and 0.2 phase. The assumption is that there is only one maximum in the specified phase range.\n");
   printf("peaksep            As peakampratio, but calculate the seperation in phase between the peaks.\n");
@@ -49,7 +50,8 @@ int main(int argc, char **argv)
   vonMises_collection_definition components;
   double shape_parameter_precision, shapepar_aux[4];
   int i, j, index, show, output_ascii, output_resids, output_replace, doprescale, writemodel, fitbaseline, avoid_neg_components, limitonpulse;
-  int refine, refine_fixamp, refine_fixwidth, refine_fixphase, refine_fixrelamp, refine_fixrelphase;
+  int refine, refine_fixamp, refine_fixwidth, refine_fixphase, refine_fixrelamp, refine_fixrelphase, refine_no_pre_align;
+  int **refine_fixrelamp_list, *refine_fixrelamp_list_nrcomps, refine_fixrelamp_listlength;
   int shape_parameter, shape_parameter_nofit;
   long shape_parameter_error_nr_itt;
   float *profile, baseline, ymin, ymax, shape_parameter_error_maxdev;
@@ -76,6 +78,7 @@ int main(int argc, char **argv)
   application.switch_scale = 1;
   application.switch_device = 1;
   application.switch_history_cmd_only = 1;
+  application.switch_filelist = 1;
   strcpy(application.pgplotdevice, "/xs");
   strcpy(application.outputname, "model.txt");
   shape_parameter_precision = 1e-6;
@@ -89,11 +92,19 @@ int main(int argc, char **argv)
   refine_fixphase = 0;
   refine_fixrelphase = 0;
   refine_fixrelamp = 0;
+  refine_fixrelamp_list = NULL;
+  refine_fixrelamp_list_nrcomps = NULL;
+  refine_fixrelamp_listlength = 0;
   writemodel = 0;
   fitbaseline = 1;
   avoid_neg_components = 0;
   limitonpulse = 0;
   shape_parameter_error_maxdev = -1;
+  refine_no_pre_align = 0;
+  doprescale = 0;
+  shape_parameter = 0;
+  shape_parameter_error_nr_itt = 0;
+  shape_parameter_nofit = 0;
   if(argc < 2) {
     printApplicationHelp(&application);
     printf("  -nofitbaseline       Do not fit for an overall baseline.\n");
@@ -101,13 +112,19 @@ int main(int argc, char **argv)
     printf("\n");
     printf("  -refine_fixamp       With -refine, do not allow components to change amplitude\n");
     printf("  -refine_fixphase     With -refine, do not allow components to move in phase\n");
+    printf("  -refine_fixwidth     With -refine, do not allow components to change width (concentration)\n");
     printf("  -refine_fixrelamp    With -refine, do not allow components to change amplitude\n");
     printf("                       relative to each other\n");
     printf("  -refine_fixrelphase  With -refine, do not allow components to move relative\n");
     printf("                       to each other\n");
-    printf("  -refine_fixwidth     With -refine, do not allow components to move in width\n");
+    printf("  -refine_fixrelamp_list  As -refine_fixrelamp, but now provide a list of\n");
+    printf("                       component numbers. So \"0 1\" would keep the relative\n");
+    printf("                       amplitudes of the first two components fixed. You can\n");
+    printf("                       use this option multiple times.\n");
     printf("  -refine_prescale     Before refining the model, scale the model first to fit\n");
     printf("                       the data (baseline should be subtracted from the data).\n");
+    printf("  -refine_no_pre_align Disable the rough aligment of the initial model with the\n");
+    printf("                       data via cross correlation before fitting the model.\n");
     printf("  -shapepar X          Derive shape parameter X. Run without X to get a list.\n");
     printf("                       The shape parameter is derived from a fit to data. You\n");
     printf("                       want to use this together with -refine");
@@ -233,6 +250,8 @@ int main(int argc, char **argv)
    shape_parameter = SHAPEPAR_AMPRATIO_ATPHASE;
  }else if(strcasecmp(shapepar_string, "compampratio") == 0) {
    shape_parameter = SHAPEPAR_COMPAMPRATIO;
+ }else if(strcasecmp(shapepar_string, "compampmean") == 0) {
+   shape_parameter = SHAPEPAR_COMPAMPMEAN;
  }else {
    printerror(application.verbose_state.debug, "ERROR fitvonMises: '%s' not recognized as a shape parameter.", shapepar_string);
    print_shapepar_help();
@@ -247,6 +266,12 @@ int main(int argc, char **argv)
  }else if(shape_parameter == SHAPEPAR_PEAKSEPPHASE || shape_parameter == SHAPEPAR_PEAKAMPRATIO || shape_parameter == SHAPEPAR_PEAKAMPRATIO_RECI || shape_parameter == SHAPEPAR_PEAKPHASE_RESTRICTED || shape_parameter == SHAPEPAR_AMPRATIO_ATPHASE || shape_parameter == SHAPEPAR_COMPAMPRATIO) {
    if(ret != 3) {
      printerror(application.verbose_state.debug, "ERROR fitvonMises: Cannot parse '%s' option. Expected two additional values to be specified for this shape parameter.", argv[i]);
+     print_shapepar_help();
+     return 0;
+   }
+ }else if(shape_parameter == SHAPEPAR_COMPAMPMEAN) {
+   if(ret != 2) {
+     printerror(application.verbose_state.debug, "ERROR fitvonMises: Cannot parse '%s' option. Expected one additional values to be specified for this shape parameter.", argv[i]);
      print_shapepar_help();
      return 0;
    }
@@ -268,9 +293,54 @@ int main(int argc, char **argv)
  refine_fixrelphase = 1;
       }else if(strcmp(argv[i], "-refine_fixrelamp") == 0) {
  refine_fixrelamp = 1;
+      }else if(strcmp(argv[i], "-refine_fixrelamp_list") == 0) {
+ int ret;
+ int compnrs[21];
+ ret = parse_command_string(application.verbose_state, argc, argv, i+1, 0, 2, "%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d", &(compnrs[0]), &(compnrs[1]), &(compnrs[2]), &(compnrs[3]), &(compnrs[4]), &(compnrs[5]), &(compnrs[6]), &(compnrs[7]), &(compnrs[8]), &(compnrs[9]), &(compnrs[10]), &(compnrs[11]), &(compnrs[12]), &(compnrs[13]), &(compnrs[14]), &(compnrs[15]), &(compnrs[16]), &(compnrs[17]), &(compnrs[18]), &(compnrs[19]), &(compnrs[20]), NULL);
+ if(ret == 0) {
+   printerror(application.verbose_state.debug, "ERROR fitvonMises: Cannot parse '%s' option.", argv[i]);
+   terminateApplication(&application);
+   return 0;
+ }
+ if(ret < 2) {
+   printerror(application.verbose_state.debug, "ERROR fitvonMises: Cannot parse '%s' option: Expected at least 2 components to be defined.", argv[i]);
+   terminateApplication(&application);
+   return 0;
+ }
+ if(refine_fixrelamp_list == NULL) {
+   refine_fixrelamp_list = malloc(100*sizeof(int *));
+   if(refine_fixrelamp_list == NULL) {
+     printerror(application.verbose_state.debug, "ERROR fitvonMises: Memory allocation error.");
+     terminateApplication(&application);
+     return 0;
+   }
+ }
+ if(refine_fixrelamp_list_nrcomps == NULL) {
+   refine_fixrelamp_list_nrcomps = malloc(100*sizeof(int));
+   if(refine_fixrelamp_list_nrcomps == NULL) {
+     printerror(application.verbose_state.debug, "ERROR fitvonMises: Memory allocation error.");
+     terminateApplication(&application);
+     return 0;
+   }
+ }
+ if(refine_fixrelamp_listlength == 100) {
+   printerror(application.verbose_state.debug, "ERROR fitvonMises: Maximum number of times the '%s' option can be used is exceeded.", argv[i]);
+   terminateApplication(&application);
+   return 0;
+ }
+ refine_fixrelamp_list[refine_fixrelamp_listlength] = malloc(ret*sizeof(int));
+ int counter;
+ for(counter = 0; counter < ret; counter++) {
+   (refine_fixrelamp_list[refine_fixrelamp_listlength])[counter] = compnrs[counter];
+ }
+ refine_fixrelamp_list_nrcomps[refine_fixrelamp_listlength] = ret;
+ refine_fixrelamp_listlength++;
+ i++;
       }else if(strcmp(argv[i], "-refine_prescale") == 0 || strcmp(argv[i], "-show_prescale") == 0
         ) {
  doprescale = 1;
+      }else if(strcmp(argv[i], "-refine_no_pre_align") == 0) {
+ refine_no_pre_align = 1;
       }else {
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.debug, "ERROR fitvonMises: Unknown option '%s', run command without command-line options to get help.", argv[i]);
@@ -294,6 +364,14 @@ int main(int argc, char **argv)
   }
   if(refine_fixamp && refine_fixrelamp) {
     printerror(application.verbose_state.debug, "ERROR fitvonMises: You cannot use -refine_fixrelamp and -refine_fixamp simultaneously.");
+    return 0;
+  }
+  if(refine_fixamp && refine_fixrelamp_listlength > 0) {
+    printerror(application.verbose_state.debug, "ERROR fitvonMises: You cannot use -refine_fixrelamp_list and -refine_fixamp simultaneously.");
+    return 0;
+  }
+  if(refine_fixrelamp && refine_fixrelamp_listlength > 0) {
+    printerror(application.verbose_state.debug, "ERROR fitvonMises: You cannot use -refine_fixrelamp_list and -refine_fixrelamp simultaneously.");
     return 0;
   }
   if(output_ascii && output_resids) {
@@ -337,13 +415,13 @@ int main(int argc, char **argv)
     baseline = 0;
     if(output_ascii == 0 && shape_parameter_nofit == 0
        ) {
-      if(!openPSRData(&fin, filename_ptr, application.iformat, 0, 1, 0, application.verbose_state)) {
+      if(!openPSRData(&fin, filename_ptr, application.iformat, 0, 1, 0, application.obsnr, application.verbose_state)) {
  printerror(application.verbose_state.debug, "ERROR fitvonMises (%s): Reading pulsar data failed. Note that this data is not expected to be an analytic template.", filename_ptr);
  return 0;
       }
       profile = calloc(fin.NrBins, sizeof(float));
     }else {
-      if(readVonMisesModel(filename_ptr, &components, application.verbose_state) == 0) {
+      if(readVonMisesModel(filename_ptr, &components, application.verbose_state) != 0) {
  return 0;
       }
       profile = calloc(output_ascii, sizeof(float));
@@ -364,7 +442,11 @@ int main(int argc, char **argv)
  printerror(application.verbose_state.debug, "ERROR fitvonMises (%s): Changing filename failed", filename_ptr);
  return 0;
       }
-      if(openPSRData(&fout, outputname, fout.format, 1, 0, 0, application.verbose_state) == 0) {
+      if(strcmp(outputname, filename_ptr) == 0) {
+ printerror(application.verbose_state.debug, "ERROR fitvonMises: The input and output filenames are identical (%s). Use a different -ext or -output option.", outputname);
+ return 0;
+      }
+      if(openPSRData(&fout, outputname, fout.format, 1, 0, 0, -1, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "ERROR fitvonMises: Error opening file %s.", outputname);
  return 0;
       }
@@ -396,7 +478,7 @@ int main(int argc, char **argv)
       if(preprocessApplication(&application, &fin) == 0)
  return 0;
       if(show) {
- if(readVonMisesModel(argv[show], &components, application.verbose_state) == 0) {
+ if(readVonMisesModel(argv[show], &components, application.verbose_state) != 0) {
    return 0;
  }
  if(doprescale) {
@@ -404,13 +486,13 @@ int main(int argc, char **argv)
  }
       }else {
  if(refine) {
-   if(readVonMisesModel(argv[refine], &components, application.verbose_state) == 0) {
+   if(readVonMisesModel(argv[refine], &components, application.verbose_state) != 0) {
      return 0;
    }
    if(doprescale) {
       prescale(&components, fin, application.verbose_state);
    }
-   if(fitvonmises_refine_model(fin, &components, fitbaseline, avoid_neg_components, &baseline, refine_fixamp, refine_fixwidth, refine_fixphase, refine_fixrelamp, refine_fixrelphase, application.verbose_state) == 0) {
+   if(fitvonmises_refine_model(fin, &components, fitbaseline, avoid_neg_components, &baseline, refine_fixamp, refine_fixwidth, refine_fixphase, refine_fixrelamp, refine_fixrelamp_listlength, refine_fixrelamp_list_nrcomps, refine_fixrelamp_list, refine_fixrelphase, refine_no_pre_align, application.verbose_state) != 0) {
      printerror(application.verbose_state.debug, "ERROR fitvonmises (%s): fitvonmises_refine_model failed", filename_ptr);
      return 0;
    }
@@ -473,7 +555,7 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR fitvonMises (%s): Changing filename failed", filename_ptr);
    return 0;
  }
- if(openPSRData(&fout, outputname, application.oformat, 1, 0, 0, application.verbose_state) == 0) {
+ if(openPSRData(&fout, outputname, application.oformat, 1, 0, 0, -1, application.verbose_state) == 0) {
    printerror(application.verbose_state.debug, "ERROR fitvonMises: Error opening file %s.", outputname);
    return 0;
  }
@@ -515,21 +597,33 @@ int main(int argc, char **argv)
        printerror(application.verbose_state.debug, "ERROR fitvonmises (%s): Adding noise to observation failed", filename_ptr);
        return 0;
      }
-     if(fitvonmises_refine_model(clone, &components_itt, 1, 0, &baseline, 0, 0, 0, 0, 0, verbosedebug) == 0) {
-       printerror(application.verbose_state.debug, "ERROR fitvonmises (%s): fitvonmises_refine_model failed", filename_ptr);
-       return 0;
+     int retcode;
+     int ignore_itteration = 0;
+     retcode = fitvonmises_refine_model(clone, &components_itt, 1, 0, &baseline, 0, 0, 0, 0, 0, NULL, NULL, 0, refine_no_pre_align, verbosedebug);
+     if(retcode != 0) {
+       if(retcode == 1) {
+  printwarning(application.verbose_state.debug, "WARNING fitvonmises (%s): fitvonmises_refine_model failed with an maximum number of fit itterations exceeded. So not all of the requested %ld bootstrap itterations will be used.", filename_ptr, shape_parameter_error_nr_itt);
+  ignore_itteration = 1;
+       }else {
+  printerror(application.verbose_state.debug, "ERROR fitvonmises (%s): fitvonmises_refine_model failed", filename_ptr);
+  return 0;
+       }
      }
      double measurement2;
-     calcVonMisesProfile_shape_parameter(&components_itt, 0.0, shape_parameter_precision, shape_parameter, shapepar_aux, &measurement2, application.verbose_state);
-     if(application.verbose_state.verbose) {
-       print_shape_par(stdout, 1, shape_parameter, measurement2, -1);
+     if(ignore_itteration == 0) {
+       calcVonMisesProfile_shape_parameter(&components_itt, 0.0, shape_parameter_precision, shape_parameter, shapepar_aux, &measurement2, application.verbose_state);
+       if(application.verbose_state.verbose) {
+  print_shape_par(stdout, 1, shape_parameter, measurement2, -1);
+       }
      }
      closePSRData(&clone, 0, 0, application.verbose_state);
-     if(isnan(measurement2) == 0) {
-       if(shape_parameter_error_maxdev <= 0 || fabs(measurement2-measurement) < shape_parameter_error_maxdev) {
-  av += measurement2;
-  sq += measurement2*measurement2;
-  nrsuccessfulitt++;
+     if(ignore_itteration == 0) {
+       if(isnan(measurement2) == 0) {
+  if(shape_parameter_error_maxdev <= 0 || fabs(measurement2-measurement) < shape_parameter_error_maxdev) {
+    av += measurement2;
+    sq += measurement2*measurement2;
+    nrsuccessfulitt++;
+  }
        }
      }
    }
@@ -555,6 +649,15 @@ int main(int argc, char **argv)
       }
     }
     free(profile);
+  }
+  if(refine_fixrelamp_list != NULL) {
+    for(i = 0; i < refine_fixrelamp_listlength; i++) {
+      free(refine_fixrelamp_list[i]);
+    }
+    free(refine_fixrelamp_list);
+  }
+  if(refine_fixrelamp_list_nrcomps != NULL) {
+    free(refine_fixrelamp_list_nrcomps);
   }
   terminateApplication(&application);
   return 0;

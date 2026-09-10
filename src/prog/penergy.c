@@ -220,7 +220,7 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR penergy: Input file cannot be opened. Please check if file %s exists and otherwise specify the correct input format with the -iformat option if the format is supported, but not automatically recognized.\n\n", filename_ptr);
       return 0;
     }
-    if(openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.verbose_state) == 0) {
+    if(openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.obsnr, application.verbose_state) == 0) {
       printerror(application.verbose_state.debug, "ERROR penergy: Error opening data");
       return 0;
     }
@@ -235,14 +235,14 @@ int main(int argc, char **argv)
     if(preprocessApplication(&application, &datain) == 0) {
       return 0;
     }
-    regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
+    regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout, 0);
     if(freq1 < 0 || freq2 < 0) {
       freq1 = 0;
       freq2 = datain.NrFreqChan-1;
     }
     if(application.onpulse.nrRegions == 0
        ) {
-      if(preprocess_make_profile(datain, &pulse_profile, 1, application.verbose_state) == 0) {
+      if(preprocess_make_profile(datain, &pulse_profile, 1, 0, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "ERROR penergy: Cannot construct pulse profile");
  return 0;
       }
@@ -259,7 +259,7 @@ int main(int argc, char **argv)
  printwarning(application.verbose_state.debug, "\nThe non-selected regions are only used for the off-pulse statistics, unless -burst_onpulse or -burst_onpulse1 is used.\n\n");
       }
       selectRegions(pulse_profile.data, datain.NrBins, &pgplot_options, 0, 0, 0, &(application.onpulse), application.verbose_state);
-      regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
+      regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout, 0);
     }
     if(application.onpulse.nrRegions == 0) {
       printerror(application.verbose_state.debug, "ERROR penergy: At least one on-pulse region needs to be defined. Use the -onpulse option or select at least one region in pgplot window.");
@@ -332,7 +332,7 @@ int main(int argc, char **argv)
    printf("Output to %s file %s\n", returnFileFormat_str(application.oformat), oname);
    cleanPSRData(&opfile, application.verbose_state);
    copy_params_PSRData(datain, &opfile, application.verbose_state);
-   if(openPSRData(&opfile, oname, application.oformat, 1, 0, 0, application.verbose_state) == 0) {
+   if(openPSRData(&opfile, oname, application.oformat, 1, 0, 0, -1, application.verbose_state) == 0) {
      printerror(application.verbose_state.debug, "ERROR penergy: Cannot open %s", oname);
      return 0;
    }
@@ -444,7 +444,7 @@ int main(int argc, char **argv)
        printerror(application.verbose_state.debug, "ERROR penergy: Memory allocation error.");
        return 0;
      }
-     constructCommandLineString(txt, 10000, argc, argv, application.verbose_state);
+     constructCommandLineString(txt, 10000, argc, argv, application.history_cmd_only, application.verbose_state);
      fprintf(ofile, "#%s\n", txt);
      free(txt);
      fprintf(ofile,"#Used on-pulse region: bin %d,%d\n", application.onpulse.left_bin[0], application.onpulse.right_bin[0]);

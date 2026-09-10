@@ -718,7 +718,7 @@ int main(int argc, char **argv)
  verbose.verbose = 0;
     }
     datafile_definition datain;
-    i = openPSRData(&datain, fitter_info.measurement_file, application.iformat, 0, 1, 1, verbose);
+    i = openPSRData(&datain, fitter_info.measurement_file, application.iformat, 0, 1, 1, application.obsnr, verbose);
     if(i == 0) {
       printerror(application.verbose_state.debug, "ERROR pdistFit: Error opening data");
       return 0;

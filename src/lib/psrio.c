@@ -45,7 +45,7 @@ int readEPNsubHeader(datafile_definition *datafile, float *scale, float *offset,
 int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose);
 int readPulseSigprocData(datafile_definition datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose);
 int readPPOLHeader(datafile_definition *datafile, int extended, verbose_definition verbose);
-int writePPOLHeader(datafile_definition datafile, int argc, char **argv, verbose_definition verbose);
+int writePPOLHeader(datafile_definition datafile, int argc, char **argv, int strippath_executable, verbose_definition verbose);
 int readHistoryFITS(datafile_definition *datafile, verbose_definition verbose);
 int writeHistoryFITS(datafile_definition datafile, verbose_definition verbose);
 int readHistoryPSRData(datafile_definition *datafile, verbose_definition verbose);
@@ -241,6 +241,8 @@ void cleanPSRData(datafile_definition *datafile, verbose_definition verbose)
   datafile->history.hostname = NULL;
   datafile->history.notes = NULL;
   datafile->history.nextEntry = NULL;
+  datafile->nr_ephemeris_lines = 0;
+  datafile->ephemeris = NULL;
 }
 int copy_params_PSRData(datafile_definition datafile_source, datafile_definition *datafile_dest, verbose_definition verbose)
 {
@@ -453,6 +455,27 @@ int copy_params_PSRData(datafile_definition datafile_source, datafile_definition
       ok = 0;
     }
   }while(ok);
+  datafile_dest->nr_ephemeris_lines = datafile_source.nr_ephemeris_lines;
+  datafile_dest->ephemeris = NULL;
+  if(datafile_source.nr_ephemeris_lines > 0) {
+    datafile_dest->ephemeris = malloc(datafile_dest->nr_ephemeris_lines * sizeof(char *));
+    if(datafile_dest->ephemeris == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR copy_paramsPSRData: Memory allocation error.");
+      return 0;
+    }
+    long i, len;
+    for(i = 0; i < datafile_source.nr_ephemeris_lines; i++) {
+      len = strlen(datafile_source.ephemeris[i]);
+      datafile_dest->ephemeris[i] = malloc(len + 1);
+      if(datafile_dest->ephemeris[i] == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR copy_paramsPSRData: Memory allocation error.");
+ return 0;
+      }
+      strcpy(datafile_dest->ephemeris[i], datafile_source.ephemeris[i]);
+    }
+  }
   return 1;
 }
 int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbose)
@@ -460,7 +483,7 @@ int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbos
   int ret, dummyi;
   long dummyl;
   char identifier[] = "PSRSALSAdump";
-  int version = 4;
+  int version = 5;
   ret = fwrite(identifier, 12, 1, datafile->fptr_hdr);
   if(ret != 1) {
     fflush(stdout);
@@ -730,7 +753,7 @@ int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbos
   }
   if(datafile->tsampMode == TSAMPMODE_LONGITUDELIST) {
     ret = fwrite(datafile->tsamp_list, sizeof(double), datafile->NrBins, datafile->fptr_hdr);
-    if(ret != 1) {
+    if(ret != datafile->NrBins) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
       return 0;
@@ -856,6 +879,33 @@ int writePSRSALSAHeader(datafile_definition *datafile, verbose_definition verbos
       fflush(stdout);
       printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s (return value is %ld)", datafile->filename, ret);
       return 0;
+    }
+  }
+  dummyi = datafile->nr_ephemeris_lines;
+  ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+  if(ret != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+    return 0;
+  }
+  long index;
+  if(datafile->nr_ephemeris_lines > 0) {
+    for(index = 0; index < datafile->nr_ephemeris_lines; index++) {
+      dummyi = strlen(datafile->ephemeris[index]);
+      ret = fwrite(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+      if(ret != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+ return 0;
+      }
+      if(dummyi > 0) {
+ ret = fwrite(datafile->ephemeris[index], sizeof(char), dummyi, datafile->fptr_hdr);
+ if(ret != dummyi) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
+   return 0;
+ }
+      }
     }
   }
   datafile->datastart = ftell(datafile->fptr_hdr);
@@ -999,7 +1049,7 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
   int ret, dummyi;
   long dummyl;
   char identifier[13], *txt;
-  int version, maxversion_supported = 4;
+  int version, maxversion_supported = 5;
   txt = malloc(10000);
   if(txt == NULL) {
     fflush(stdout);
@@ -1368,7 +1418,7 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
       return 0;
     }
     ret = fread(datafile->tsamp_list, sizeof(double), datafile->NrBins, datafile->fptr_hdr);
-    if(ret != 1) {
+    if(ret != datafile->NrBins) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR writePSRSALSAHeader: Write error to %s", datafile->filename);
       return 0;
@@ -1519,6 +1569,54 @@ int readPSRSALSAHeader(datafile_definition *datafile, int nohistory_expected, ve
  fflush(stdout);
  printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
  return 0;
+      }
+    }
+  }
+  if(version > 4) {
+    ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+    datafile->nr_ephemeris_lines = dummyi;
+    if(ret != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+      return 0;
+    }
+    datafile->ephemeris = NULL;
+    if(datafile->nr_ephemeris_lines > 0) {
+      datafile->ephemeris = malloc(datafile->nr_ephemeris_lines*sizeof(char *));
+      if(datafile->ephemeris == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error");
+ return 0;
+      }
+      long index;
+      for(index = 0; index < datafile->nr_ephemeris_lines; index++) {
+ ret = fread(&dummyi, sizeof(int), 1, datafile->fptr_hdr);
+ if(ret != 1) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+   return 0;
+ }
+ if(dummyi > 9999) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR readPSRSALSAHeader: Maximum string length exceeded for %s", datafile->filename);
+   return 0;
+ }
+ datafile->ephemeris[index] = NULL;
+ if(dummyi > 0) {
+   datafile->ephemeris[index] = malloc((dummyi+1)*sizeof(char));
+   if(datafile->ephemeris[index] == NULL) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR readPSRSALSAHeader: Memory allocation error");
+     return 0;
+   }
+   ret = fread(datafile->ephemeris[index], sizeof(char), dummyi, datafile->fptr_hdr);
+   if(ret != dummyi) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR readPSRSALSAHeader: Read error from %s", datafile->filename);
+     return 0;
+   }
+   (datafile->ephemeris[index])[dummyi] = 0;
+ }
       }
     }
   }
@@ -2162,7 +2260,7 @@ int guessPSRData_format(char *filename, int noerror, verbose_definition verbose)
   }
   return 0;
 }
-int openPSRData(datafile_definition *datafile, char *filename, int format, int enable_write, int read_in_memory, int nowarnings, verbose_definition verbose)
+int openPSRData(datafile_definition *datafile, char *filename, int format, int enable_write, int read_in_memory, int nowarnings, int obsnr, verbose_definition verbose)
 {
   int status = 0, iomode, i;
   char open_mode[100], filename2[1000];
@@ -2268,6 +2366,23 @@ int openPSRData(datafile_definition *datafile, char *filename, int format, int e
       datafile->opened_flag = 1;
     }
   }else if(format == FITS_format) {
+    for(i = strlen(filename)-1; i >= 0; i--) {
+      if(filename[i] == '+') {
+ if(i != strlen(filename)-1) {
+   int problem, j;
+   problem = 1;
+   for(j = i+1; j < strlen(filename); j++) {
+     if(filename[j] < '0' || filename[j] > '9') {
+       problem = 0;
+     }
+   }
+   if(problem) {
+     printwarning(verbose.debug, "WARNING openPSRData: Filename '%s' ends with a + followed by a number, which has a special meaning for fits files. You may want to avoid using this in file names to avoid undesired consequences.", filename);
+   }
+ }
+ break;
+      }
+    }
     if(enable_write) {
       iomode = READWRITE;
       sprintf(filename2, "!%s", filename);
@@ -2312,7 +2427,7 @@ int openPSRData(datafile_definition *datafile, char *filename, int format, int e
     break;
   }
   if(read_in_memory && datafile->opened_flag) {
-    if(readHeaderPSRData(datafile, 0, nowarnings, verbose2)) {
+    if(readHeaderPSRData(datafile, 0, nowarnings, -1, verbose2)) {
       if(datafile->NrPols != 0) {
  long datasize = datafile->NrSubints*datafile->NrBins*datafile->NrPols*datafile->NrFreqChan*sizeof(float);
  datafile->data = (float *)malloc(datasize);
@@ -2323,7 +2438,7 @@ int openPSRData(datafile_definition *datafile, char *filename, int format, int e
    return 0;
  }
       }
-      if(readPSRData(datafile, datafile->data, verbose2)) {
+      if(readPSRData(datafile, datafile->data, obsnr, verbose2)) {
  closePSRData(datafile, 1, 1, verbose2);
  datafile->format = MEMORY_format;
  datafile->opened_flag = 1;
@@ -2488,6 +2603,13 @@ int closePSRData(datafile_definition *datafile, int perserve_header, int perserv
       datafile->offpulse_rms = NULL;
     }
     closeHistoryPSRData(datafile, 0);
+    if(datafile->nr_ephemeris_lines > 0) {
+      int i;
+      for(i = 0; i < datafile->nr_ephemeris_lines; i++) {
+ free(datafile->ephemeris[i]);
+      }
+      free(datafile->ephemeris);
+    }
   }else if(perserve_header == 2) {
     closeHistoryPSRData(datafile, 1);
   }
@@ -2519,6 +2641,7 @@ static char * internal_gentype_string_rmmap = "RM map";
 static char * internal_gentype_string_penergy = "penergy output";
 static char * internal_gentype_string_hrfs_unfolded = "HRFS (unfolded)";
 static char * internal_gentype_string_hrfs = "HRFS";
+static char * internal_gentype_string_pulseseq_equisampled = "Equisampled stack";
 static char * internal_gentype_string_bug = "BUG, undefined????";
 char *returnGenType_str(int gentype)
 {
@@ -2549,6 +2672,7 @@ char *returnGenType_str(int gentype)
   case GENTYPE_PENERGY: return internal_gentype_string_penergy; break;
   case GENTYPE_HRFS_UNFOLDED: return internal_gentype_string_hrfs_unfolded; break;
   case GENTYPE_HRFS: return internal_gentype_string_hrfs; break;
+  case GENTYPE_PULSESEQ_EQUISAMP: return internal_gentype_string_pulseseq_equisampled; break;
   default: return internal_gentype_string_bug; break;
   }
 }
@@ -2680,6 +2804,8 @@ void printHeaderPSRData(datafile_definition datafile, int update, verbose_defini
   }
   if(datafile.tsampMode == TSAMPMODE_LONGITUDELIST) {
     printf(" SampTime=longitude array");
+  }else if(datafile.tsampMode == TSAMPMODE_UNKNOWN) {
+    printf(" SampTime=???");
   }else {
     if(verbose.debug == 0)
       printf(" SampTime=%f sec", get_tsamp(datafile, 0, verbose));
@@ -2746,6 +2872,8 @@ void printHeaderPSRData(datafile_definition datafile, int update, verbose_defini
     printf("(I,L,V,Pa+error,tot pol,ell+error)\n");
   }else if(datafile.poltype == POLTYPE_PAdPA) {
     printf("(Pa and error)\n");
+  }else if(datafile.poltype == POLTYPE_INVARIANT) {
+    printf("(invariant interval)\n");
   }else {
     printf("BUG!!!!\n");
   }
@@ -3169,7 +3297,7 @@ void determineWeightsStat(datafile_definition *datafile)
   }
   datafile->weight_stats_set = 1;
 }
-int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowarnings, verbose_definition verbose)
+int readHeaderPSRData(datafile_definition *datafile, int readnoscales, int nowarnings, int obsnr, verbose_definition verbose)
 {
   int i, nowarnings2, ret = 0;
   verbose_definition verbose2;
@@ -3506,7 +3634,7 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
  printf(" ");
     }
     if(verbose.verbose) printf("Write ppol file header.\n");
-    ret = writePPOLHeader(*datafile, argc, argv, verbose);
+    ret = writePPOLHeader(*datafile, argc, argv, cmdOnly, verbose);
   }else {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writeHeaderPSRData: Writing of this type of header is not implemented");
@@ -3521,6 +3649,15 @@ int writeHeaderPSRData(datafile_definition *datafile, int argc, char **argv, int
     printerror(verbose.debug, "ERROR writeHeaderPSRData: Writing header failed.");
   }
   return ret;
+}
+int get_pointer_PulsePSRData(datafile_definition *datafile, long pulsenr, int polarization, int freq, int binnr, float **pulse_ptr, verbose_definition verbose)
+{
+  if(datafile->format != MEMORY_format) {
+    printerror(verbose.debug, "ERROR get_pointer_PulsePSRData: Data does not appear to exist in memory yet.");
+    return 0;
+  }
+  *pulse_ptr = &(datafile->data[datafile->NrBins*(polarization+datafile->NrPols*(freq+pulsenr*datafile->NrFreqChan))+binnr]);
+  return 1;
 }
 int readPulsePSRData(datafile_definition *datafile, long pulsenr, int polarization, int freq, int binnr, long nrSamples, float *pulse, verbose_definition verbose)
 {
@@ -3589,7 +3726,7 @@ int writePulsePSRData(datafile_definition *datafile, long pulsenr, int polarizat
   }
   return 1;
 }
-int readPSRData(datafile_definition *datafile, float *data, verbose_definition verbose)
+int readPSRData(datafile_definition *datafile, float *data, int obsnr, verbose_definition verbose)
 {
   if(datafile->format == PSRSALSA_BINARY_format)
     return readPSRSALSAfile(*datafile, data, verbose);
@@ -3611,9 +3748,10 @@ int readPSRData(datafile_definition *datafile, float *data, verbose_definition v
     return readSigprocASCIIfile(*datafile, data, verbose);
   else if(datafile->format == SIGPROC_format)
     return readSigprocfile(*datafile, data, verbose);
-  else
+  else {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readPSRData: Reading whole dataset is not supported for this type of data.");
+  }
   return 0;
 }
 int writePSRData(datafile_definition *datafile, float *data, verbose_definition verbose)
@@ -3986,6 +4124,13 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
    if(found == 0) {
      printwarning(verbose.debug, "WARNING PSRDataHeader_parse_commandline: When changing the name of the telescope, you might want to consider to change the location as well.");
    }
+ }else if(strcasecmp(identifier,"instrument") == 0 || strcasecmp(identifier,"backend") == 0) {
+   if(set_instrument_PSRData(psrdata, value, verbose) == 0) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: Setting instrument name failed.");
+     return 0;
+   }
+   if(verbose.verbose) printf("  hdr.instrument = %s\n", psrdata->instrument);
  }else if(strcasecmp(identifier,"nrpulses") == 0 || strcasecmp(identifier,"npulses") == 0 || strcasecmp(identifier,"pulses") == 0 || strcasecmp(identifier,"nrsub") == 0 || strcasecmp(identifier,"nsub") == 0 || strcasecmp(identifier, "nsubint") == 0 || strcasecmp(identifier, "subints") == 0) {
    psrdata->NrSubints = atol(value);
    if(verbose.verbose) printf("  hdr.NrSubints = %ld\n", psrdata->NrSubints);
@@ -4089,6 +4234,25 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
        return 0;
      }
    }
+ }else if(strcasecmp(identifier,"xrange") == 0) {
+   int ret;
+   double value1, value2;
+   ret = sscanf(value, "%lf,%lf", &value1, &value2);
+   if(ret == 2) {
+     psrdata->xrangeset = 1;
+     psrdata->xrange[0] = value1;
+     psrdata->xrange[1] = value2;
+     if(verbose.verbose) printf("  hdr.xrange1 = %lf\n", psrdata->xrange[0]);
+     if(verbose.verbose) printf("  hdr.xrange2 = %lf\n", psrdata->xrange[1]);
+   }else {
+     if(strcasecmp(value, "x") == 0 || strcasecmp(value, "undefined") == 0 || strcasecmp(value, "empty") == 0 || strcasecmp(value, "nothing") == 0) {
+       psrdata->xrangeset = 0;
+       if(verbose.verbose) printf("  hdr.xrange = undefined\n");
+     }else {
+       printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline: In option %s of -header, '%s' expected to be of the form VALUE1,VALUE2 (without spaces) or the word UNDEFINED.", identifier, value);
+       return 0;
+     }
+   }
  }else {
    fflush(stdout);
    printerror(verbose.debug, "ERROR PSRDataHeader_parse_commandline:  '%s' not recognized as a header parameter.", identifier);
@@ -4111,6 +4275,7 @@ int PSRDataHeader_parse_commandline(datafile_definition *psrdata, int argc, char
 void printHeaderCommandlineOptions(FILE *printdevice)
 {
   fprintf(printdevice, "Valid options for the -header option are:\n");
+  fprintf(printdevice, "  backend      Change the name of the instrument.\n");
   fprintf(printdevice, "  bw           band width.\n");
   fprintf(printdevice, "  chbw         Channel band width.\n");
   fprintf(printdevice, "  dec          Declination (single number, in degrees).\n");
@@ -4140,7 +4305,8 @@ void printHeaderCommandlineOptions(FILE *printdevice)
   fprintf(printdevice, "  observatory  Change the telescope (name only, not location).\n");
   fprintf(printdevice, "  p0           Period.\n");
   fprintf(printdevice, "  poltype      Polarization type (%d = undefined, %d=Stokes, %d=Coherency,\n", POLTYPE_UNKNOWN, POLTYPE_STOKES, POLTYPE_COHERENCY);
-  fprintf(printdevice, "               %d=I,L,V,Pa+error, %d=Pa+error, %d=I,L,V,Pa+error,tot pol,ell+error).\n", POLTYPE_ILVPAdPA, POLTYPE_PAdPA, POLTYPE_ILVPAdPATEldEl);
+  fprintf(printdevice, "               %d=I,L,V,Pa+error, %d=Pa+error, %d=I,L,V,Pa+error,tot pol,ell+error.\n", POLTYPE_ILVPAdPA, POLTYPE_PAdPA, POLTYPE_ILVPAdPATEldEl);
+  fprintf(printdevice, "               %d=invariant interval).\n", POLTYPE_INVARIANT);
   fprintf(printdevice, "  ra           Right ascension (single number, in degrees).\n");
   fprintf(printdevice, "  reffreq      Reference frequency (for dedispersion/de Faraday rotation).\n");
   fprintf(printdevice, "               -1=Infinite freq -2=Unknown\n");
@@ -4150,9 +4316,10 @@ void printHeaderCommandlineOptions(FILE *printdevice)
   fprintf(printdevice, "               in seconds.\n");
   fprintf(printdevice, "               If followed by space separated numbers: set individual subint\n");
   fprintf(printdevice, "               durations\n");
-  fprintf(printdevice, "  yrange       Set the yrange to the range provided. Specify this as\n");
-  fprintf(printdevice, "               -header \"yrange VALUE1,VALUE2\". To unset the use of\n");
-  fprintf(printdevice, "               this parameter use -header \"yrange undefined\".\n");
+  fprintf(printdevice, "  xrange       Set the xrange to the range provided. Specify this as\n");
+  fprintf(printdevice, "               -header \"xrange VALUE1,VALUE2\". To unset the use of\n");
+  fprintf(printdevice, "               this parameter use -header \"xrange undefined\".\n");
+  fprintf(printdevice, "  yrange       As xrange, but for yrange.\n");
 }
 void printHeaderGentypeOptions(FILE *printdevice)
 {
@@ -4240,7 +4407,7 @@ int writeHistoryPSRData(datafile_definition *datafile, int argc, char **argv, in
       curHistoryEntry->notes = NULL;
       curHistoryEntry->nextEntry = NULL;
     }
-    constructCommandLineString(txt, 10000, argc, argv, verbose);
+    constructCommandLineString(txt, 10000, argc, argv, cmdOnly, verbose);
     curHistoryEntry->cmd = malloc(strlen(txt)+1);
     if(curHistoryEntry->cmd == NULL) {
       fflush(stdout);

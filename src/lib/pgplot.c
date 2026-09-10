@@ -318,6 +318,7 @@ void draw_papoints(datafile_definition data, float sigma_limit, float loffset, f
   long j;
   int ok;
   float I;
+  ppgbbuf();
   for(j = 0; j < (data.NrBins); j++) {
     ok = 1;
     if(data.offpulse_rms != NULL) {
@@ -346,6 +347,7 @@ void draw_papoints(datafile_definition data, float sigma_limit, float loffset, f
       ppgerr1(6, xpos, I, data.data[j+4*data.NrBins], 1.0);
     }
   }
+  ppgebuf();
 }
 int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int showEll, pgplot_options_definition *pgplot, char *xlabel, char *ylabel, char *ylabel_pa, char *ylabel_ell, char *ylabel_spstatfrac, float longitude_left, float longitude_right, int xunit_type, float loffset, float Imin, float Imax, float pa_bottom, float pa_top, float PAoffset, float sigma_limit, float datalinewidth, float ysize2, int dashed, int noynumbers, char *textoption, char *textoption_pa, float ytick_pa, int nysub_pa, char *textoption_ell, float ytick_ell, int nysub_ell, char *textoption_padist, char *textoption_elldist, char *textoption_spstat, char *herrorbaroption, char *herrorbaroptionpa, char *herrorbaroptionpa2, char *herrorbaroptionell, char *herrorbaroptionpadist, char *herrorbaroptionelldist, char *verrorbaroption, char *verrorbaroptionpa, char *verrorbaroptionpa2, char *verrorbaroptionell, int argc, char **argv, int outline_txt, int outline_lw, int outline_color, int overlayPA, float overlayalpha, float overlaybeta, float overlaypa0, float overlayl0, int overlayPAfine, int nrJumps, float *jump_longitudes, float *jump_offsets, datafile_definition *padist, float padist_pamin, float padist_pamax, float padist_saturize, int padist_overlayavpa, int padist_paswing, datafile_definition *elldist, float elldist_saturize, int nowedge, datafile_definition *spstatfrac, verbose_definition verbose)
 {
@@ -583,6 +585,7 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
   pgplot_drawbox(&(pgplot->box));
   pgplot->box.drawtitle = 0;
   ppgslw(datalinewidth);
+  ppgbbuf();
   if(dashed) {
     ppgsls(4);
   }else
@@ -605,6 +608,8 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
       }
     }
   }
+  ppgebuf();
+  ppgbbuf();
   if(dashed)
     ppgsls(2);
   else
@@ -627,7 +632,9 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
       }
     }
   }
+  ppgebuf();
   if(showtotpol) {
+    ppgbbuf();
     if(dashed) {
       ppgsls(1);
     }
@@ -653,7 +660,9 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
  }
       }
     }
+    ppgebuf();
   }
+  ppgbbuf();
   ppgsci(1);
   ppgsls(1);
   domove = 1;
@@ -674,6 +683,7 @@ int pgplotPAplot(datafile_definition data, int showtotpol, int nopaswing, int sh
       }
     }
   }
+  ppgebuf();
   ppgsls(1);
   if(pgplot_process_errorbars_options(herrorbaroption, NULL, verrorbaroption, NULL, argc, argv, xunit_type, &frame, verbose) == 0) {
     printerror(verbose.debug, "ERROR pgplotPAplot: Error processing the %s and %s options", herrorbaroption, verrorbaroption);
@@ -2180,6 +2190,59 @@ int checkRegions(int bin, pulselongitude_regions_definition *regions, int whichr
   }
   return 0;
 }
+void printRegions(pulselongitude_regions_definition *regions, verbose_definition verbose)
+{
+  int n, i;
+  if(regions == NULL) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("Regions are not defined\n");
+    return;
+  }
+  for(i = 0; i < verbose.indent; i++)
+    printf(" ");
+  printf("There are %d regions\n", regions->nrRegions);
+  for(n = 0; n < regions->nrRegions; n++) {
+    if(regions->bins_defined[n]) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      printf("  Region %d: left bin=%d, right bin=%d\n", n+1, regions->left_bin[n], regions->right_bin[n]);
+    }
+    if(regions->frac_defined[n]) {
+      for(i = 0; i < verbose.indent; i++)
+ printf(" ");
+      printf("  Region %d: left frac=%f, right frac=%f\n", n+1, regions->left_frac[n], regions->right_frac[n]);
+    }
+  }
+}
+int count_nrbins_in_Regions(pulselongitude_regions_definition *regions, int debug)
+{
+  int i, j, k, total, ok;
+  if(regions == NULL)
+    return 0;
+  total = 0;
+  for(i = 0; i < regions->nrRegions; i++) {
+    if(regions->bins_defined[i] == 0) {
+      fflush(stdout);
+      printwarning(debug, "WARNING: count_nrbins_in_Regions called without region defined in bins");
+      return 0;
+    }
+    if(i == 0) {
+      total += regions->right_bin[i] - regions->left_bin[i] + 1;
+    }else {
+      for(j = regions->left_bin[i]; j <= regions->right_bin[i]; j++) {
+ ok = 1;
+ for(k = 0; k < i; k++) {
+   if(j >= regions->left_bin[k] && j <= regions->right_bin[k])
+     ok = 0;
+ }
+ if(ok)
+   total ++;
+      }
+    }
+  }
+  return total;
+}
 int initPulselongitudeRegion(pulselongitude_regions_definition *region, verbose_definition verbose)
 {
   region->bins_defined = malloc(MAX_pulselongitude_regions*sizeof(int));
@@ -2188,7 +2251,8 @@ int initPulselongitudeRegion(pulselongitude_regions_definition *region, verbose_
   region->frac_defined = malloc(MAX_pulselongitude_regions*sizeof(int));
   region->left_frac = malloc(MAX_pulselongitude_regions*sizeof(float));
   region->right_frac = malloc(MAX_pulselongitude_regions*sizeof(float));
-  if(region->bins_defined == NULL || region->left_bin == NULL || region->right_bin == NULL || region->frac_defined == NULL || region->left_frac == NULL || region->right_frac == NULL) {
+  if(region->bins_defined == NULL || region->left_bin == NULL || region->right_bin == NULL || region->frac_defined == NULL || region->left_frac == NULL || region->right_frac == NULL
+     ) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR initPulselongitudeRegion: Memory allocation error");
     return 0;
@@ -2271,14 +2335,24 @@ int region_make_even(int regionnr, pulselongitude_regions_definition *region, in
   }
   return 1;
 }
-void regionShowNextTimeUse(pulselongitude_regions_definition region, char *option, char *optionFrac, FILE *where)
+void regionShowNextTimeUse(pulselongitude_regions_definition region, char *option, char *optionFrac, FILE *where, int called_from_python)
 {
   int i, ok;
   if(region.nrRegions > 0) {
-    fprintf(where, "If you repeat this command, you could specify on the command line: ");
-    for(i = 0; i < region.nrRegions; i++) {
-      if(region.bins_defined[i])
- fprintf(where, "%s '%d %d' ", option, region.left_bin[i], region.right_bin[i]);
+    if(called_from_python == 0) {
+      fprintf(where, "If you repeat this command, you could specify on the command line: ");
+      for(i = 0; i < region.nrRegions; i++) {
+ if(region.bins_defined[i]) {
+   fprintf(where, "%s '%d %d' ", option, region.left_bin[i], region.right_bin[i]);
+ }
+      }
+    }else {
+      fprintf(where, "In this function call, you could add the following bin ranges to variable %s:\n", option);
+      for(i = 0; i < region.nrRegions; i++) {
+ if(region.bins_defined[i]) {
+   fprintf(where, "  genops.regions_add_binrange(your_variable, %d, %d)\n", region.left_bin[i], region.right_bin[i]);
+ }
+      }
     }
     if(optionFrac != NULL) {
       ok = 0;
@@ -2287,12 +2361,22 @@ void regionShowNextTimeUse(pulselongitude_regions_definition region, char *optio
    ok = 1;
       }
       if(ok) {
- fprintf(where, "\n  alternatively you can use the command line:    ");
- for(i = 0; i < region.nrRegions; i++) {
-   if(region.frac_defined[i])
-     fprintf(where, "%s '%f %f' ", optionFrac, region.left_frac[i], region.right_frac[i]);
-   else if(region.bins_defined[i])
-     fprintf(where, "%s '%d %d' ", option, region.left_bin[i], region.right_bin[i]);
+ if(called_from_python == 0) {
+   fprintf(where, "\n  alternatively you can use the command line:    ");
+   for(i = 0; i < region.nrRegions; i++) {
+     if(region.frac_defined[i])
+       fprintf(where, "%s '%f %f' ", optionFrac, region.left_frac[i], region.right_frac[i]);
+     else if(region.bins_defined[i])
+       fprintf(where, "%s '%d %d' ", option, region.left_bin[i], region.right_bin[i]);
+   }
+ }else {
+   fprintf(where, "The corresponding fractions of the pulse period are:    ");
+   for(i = 0; i < region.nrRegions; i++) {
+     if(region.frac_defined[i])
+       fprintf(where, "'%f %f' ", region.left_frac[i], region.right_frac[i]);
+     else if(region.bins_defined[i])
+       fprintf(where, "'? ?' ");
+   }
  }
       }
     }
@@ -2413,7 +2497,7 @@ void drawSphericalGrid(float dlat, float dlong, float rot_long, float rot_lat, i
       first = 1;
       for(t = 0; t <= 2.0*M_PI+2.0*dt; t += dt) {
  ok = 1;
- if(projection == 1) {
+ if(projection == 1 || projection == 4) {
    x = 2*cos(t);
    y = sin(t);
    if(side == 1)
@@ -2444,8 +2528,12 @@ void drawSphericalGrid(float dlat, float dlong, float rot_long, float rot_lat, i
  lon = t;
  if(lon > M_PI)
    lon = M_PI;
- if(projection == 1) {
-   projectionHammerAitoff_xy(lon, sign*lat, rot_long, rot_lat, &x, &y);
+ if(projection == 1 || projection == 4) {
+   if(projection == 1) {
+     projectionHammerAitoff_xy(lon, sign*lat, rot_long, rot_lat, &x, &y);
+   }else {
+     projectionMollweide_xy(lon, sign*lat, rot_long, rot_lat, &x, &y);
+   }
    if(x < 0)
      side = 0;
    if(x > 0)
@@ -2491,8 +2579,12 @@ void drawSphericalGrid(float dlat, float dlong, float rot_long, float rot_lat, i
  lat = t;
  if(lat > 0.5*M_PI)
    lat = 0.5*M_PI;
- if(projection == 1) {
-   projectionHammerAitoff_xy(sign*lon, lat, rot_long, rot_lat, &x, &y);
+ if(projection == 1 || projection == 4) {
+   if(projection == 1) {
+     projectionHammerAitoff_xy(sign*lon, lat, rot_long, rot_lat, &x, &y);
+   }else {
+     projectionMollweide_xy(sign*lon, lat, rot_long, rot_lat, &x, &y);
+   }
    if(x < 0)
      side = 0;
    if(x > 0)

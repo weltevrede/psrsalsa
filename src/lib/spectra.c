@@ -16,7 +16,6 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include <string.h>
 #include "psrsalsa.h"
-#define USEFFTW3 1
 #ifdef USEFFTW3
   #include <complex.h>
   #include <fftw3.h>
@@ -24,10 +23,10 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
   #include "nr.h"
   #include "nrutil.h"
 #endif
-int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *twodfs, pulselongitude_regions_definition *onpulse, int region, int allow_cat_offpulse, int noise_subtract_mode, float *var_rms, verbose_definition verbose)
+int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *twodfs, pulselongitude_regions_definition *onpulse, int region, int allow_cat_offpulse, int noise_subtract_mode, float *var_rms, int spectrumtype, int subtractDC, verbose_definition verbose)
 {
   unsigned long nr_fftblocks;
-  float junk_float, pwr;
+  float pwr;
   long junk_int, i, nf, nb, nb2, np, nrx2, bin_offpulse_left, avrg_squares_offpulse_nrsamples;
   int ok;
   double avrg_offpulse_2dfs, avrg_squares_offpulse_2dfs;
@@ -43,12 +42,31 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
   #endif
   ok = 0;
   pwr = 0;
+#ifdef USEFFTW3
+  if(fft_size % 2 != 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR calc2DFS: fft length is not even.");
+    return 0;
+  }
+#else
+  float junk_float;
   junk_float = log(fft_size)/log(2);
   junk_int = junk_float;
   junk_float = pow(2, junk_int);
   if(fabs(junk_float-fft_size) > 0.1) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR calc2DFS: fft length is not a power of two!");
+    return 0;
+  }
+#endif
+  if(onpulse == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR calc2DFS: Onpulse region is undefined.");
+    return 0;
+  }
+  if(onpulse->nrRegions == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR calc2DFS: Onpulse region is undefined.");
     return 0;
   }
   if(onpulse->nrRegions < region) {
@@ -59,6 +77,16 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
   if(onpulse->bins_defined[region] == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR calc2DFS: Region is not defined in bins");
+    return 0;
+  }
+  if(onpulse->left_bin[region] < 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR calc2DFS: Start bin of region is defined as %d, but it is not allowed to be negative.", onpulse->left_bin[region]);
+    return 0;
+  }
+  if(onpulse->right_bin[region] >= nrx) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR calc2DFS: End bin of region is defined as %d, but it is not allowed to be >= %ld.", onpulse->right_bin[region], nrx);
     return 0;
   }
   nrx2 = onpulse->right_bin[region]-onpulse->left_bin[region]+1;
@@ -89,16 +117,6 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
   }
   if(verbose.verbose) {
     printf("Calculating 2DFS (%ld blocks)\n", nr_fftblocks);
-  }
-  if(onpulse == NULL) {
-    fflush(stdout);
-    printerror(verbose.debug, "ERROR calc2DFS: Onpulse region is undefined.");
-    return 0;
-  }
-  if(onpulse->nrRegions == 0) {
-    fflush(stdout);
-    printerror(verbose.debug, "ERROR calc2DFS: Onpulse region is undefined.");
-    return 0;
   }
   #ifdef USEFFTW3
     inputdata = (float *)malloc(nrx2*fft_size*sizeof(float));
@@ -163,6 +181,15 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
       }
     }
   }
+  if(spectrumtype != 0 && noise_subtract_mode != 0) {
+    noise_subtract_mode = 0;
+    printwarning(verbose.debug, "  WARNING calc2DFS: When the real or imaginary part of the spectrum is requested, the offpulse spectrum will not be subtracted from the onpulse 2dfs.");
+  }
+  if(spectrumtype != 0 && nr_fftblocks > 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR calc2DFS: When the real or imaginary part of the spectrum is requested, the fft length must be such that a single spectrum is generated. No averaging of multiple spectra will be done.");
+    return 0;
+  }
   for(i = 0; i < nrx2*(1+fft_size/2); i++)
     twodfs[i] = 0;
   for(nf = 0; nf < nr_fftblocks; nf++) {
@@ -182,9 +209,20 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
       if(nb2 >= nrx2)
  nb2 -= nrx2;
       for(np = 0; np < fft_size/2+1; np++) {
- if(np != 0) {
-   pwr = cabs(fftdata[nb*(fft_size/2+1)+np]);
-   twodfs[np*nrx2+nb2] += pwr*pwr;
+ if(np != 0 || subtractDC == 0) {
+   if(spectrumtype == 0) {
+     pwr = cabs(fftdata[nb*(fft_size/2+1)+np]);
+     twodfs[np*nrx2+nb2] += pwr*pwr;
+   }else if(spectrumtype == 1) {
+     pwr = creal(fftdata[nb*(fft_size/2+1)+np]);
+     twodfs[np*nrx2+nb2] += pwr;
+   }else if(spectrumtype == 2) {
+     pwr = cimag(fftdata[nb*(fft_size/2+1)+np]);
+     twodfs[np*nrx2+nb2] += pwr;
+   }else {
+     pwr = carg(fftdata[nb*(fft_size/2+1)+np]);
+     twodfs[np*nrx2+nb2] += pwr;
+   }
  }
       }
     }
@@ -195,10 +233,27 @@ int calc2DFS(float *data, long nry, long nrx, unsigned long fft_size, float *two
       if(nb2 >= nrx2)
  nb2 -= nrx2;
       for(np = 0; np < fft_size/2; np++) {
- if(np != 0)
-   twodfs[np*nrx2+nb2] += inputdata[1][nb+1][2*np+1]*inputdata[1][nb+1][2*np+1]+inputdata[1][nb+1][2*np+2]*inputdata[1][nb+1][2*np+2];
+ if(np != 0 || subtractDC == 0) {
+   if(spectrumtype == 0) {
+     twodfs[np*nrx2+nb2] += inputdata[1][nb+1][2*np+1]*inputdata[1][nb+1][2*np+1]+inputdata[1][nb+1][2*np+2]*inputdata[1][nb+1][2*np+2];
+   }else if(spectrumtype == 1) {
+     twodfs[np*nrx2+nb2] += inputdata[1][nb+1][2*np+1];
+   }else if(spectrumtype == 2) {
+     twodfs[np*nrx2+nb2] += inputdata[1][nb+1][2*np+2];
+   }else {
+     twodfs[np*nrx2+nb2] += atan2(inputdata[1][nb+1][2*np+2], inputdata[1][nb+1][2*np+1]);
+   }
+ }
       }
-      twodfs[(fft_size/2)*nrx2+nb2] += speq[1][2*nb+1]*speq[1][2*nb+1]+speq[1][2*nb+2]*speq[1][2*nb+2];
+      if(spectrumtype == 0) {
+ twodfs[(fft_size/2)*nrx2+nb2] += speq[1][2*nb+1]*speq[1][2*nb+1]+speq[1][2*nb+2]*speq[1][2*nb+2];
+      }else if(spectrumtype == 1) {
+ twodfs[(fft_size/2)*nrx2+nb2] += speq[1][2*nb+1];
+      }else if(spectrumtype == 2) {
+ twodfs[(fft_size/2)*nrx2+nb2] += speq[1][2*nb+2];
+      }else {
+ twodfs[(fft_size/2)*nrx2+nb2] += atan2(speq[1][2*nb+2], speq[1][2*nb+1]);
+      }
     }
 #endif
     if(noise_subtract_mode != 0 && (bin_offpulse_left >= 0 || (allow_cat_offpulse && total_nr_offpulse_bins >= nrx2))) {
@@ -418,8 +473,9 @@ int calcLRFS(float *data, long nry, long nrx, unsigned long fft_size, float *lrf
       return 0;
     }
   }
-  for(i = 0; i < nrx*(1+fft_size/2); i++)
+  for(i = 0; i < nrx*(1+fft_size/2); i++) {
     lrfs[i] = 0;
+  }
   nrphasetracks = 0;
   for(fftblock = 0; fftblock < nr_fftblocks; fftblock++) {
     for(i = 0; i < nrx*(fft_size/2+1); i++)

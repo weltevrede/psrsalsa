@@ -28,39 +28,81 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <stdarg.h>
 #include <errno.h>
 #include <math.h>
-int pgetch(void)
+int pgetch_core(int flush_only)
 {
   struct termios oldattr, newattr;
   int ch;
   tcgetattr(STDIN_FILENO, &oldattr);
   newattr = oldattr;
-  newattr.c_lflag &= ~( ICANON | ECHO | ISIG);
+  if(flush_only == 0) {
+    newattr.c_lflag &= ~( ICANON | ECHO | ISIG);
+  }else {
+    newattr.c_lflag &= ~( ICANON);
+  }
   tcsetattr(STDIN_FILENO, TCSANOW, &newattr);
-  int gotkey = 0;
-  int n;
-  while(gotkey == 0) {
-    if(ioctl(fileno(stdin), FIONREAD, &n) == 0 && n > 0) {
-      ch = getchar();
-      gotkey = 1;
+  if(flush_only == 0) {
+    int gotkey = 0;
+    int n;
+    while(gotkey == 0) {
+      if(ioctl(fileno(stdin), FIONREAD, &n) == 0 && n > 0) {
+ ch = getchar();
+ gotkey = 1;
+      }
+      if(gotkey == 0) {
+ usleep(10000);
+      }
     }
-    if(gotkey == 0) {
-      usleep(10000);
+    if(ch == 3) {
+      fflush(stdout);
+      fprintf(stderr, "pgetch: caught control-c\n");
+      fprintf(stderr, "Terminating program\n");
+      tcsetattr(STDIN_FILENO, TCSANOW, &oldattr);
+      exit(0);
+    }
+    if(ch == 26) {
+      fflush(stdout);
+      fprintf(stderr, "pgetch: caught control-z\n");
+      fprintf(stderr, "Sending suspend signal. Program is not terminated.\n");
+      tcsetattr(STDIN_FILENO, TCSANOW, &oldattr);
+      raise(SIGTSTP);
+    }
+  }else {
+    int gotkey = 1;
+    int n;
+    ch = 0;
+    while(gotkey) {
+      int ret;
+      ret = ioctl(fileno(stdin), FIONREAD, &n);
+      if(ret == 0 && n > 0) {
+ int i;
+ for(i = 0; i < n; i++) {
+   ch = getchar();
+ }
+ ch = 1;
+      }else {
+ gotkey = 0;
+      }
     }
   }
   tcsetattr(STDIN_FILENO, TCSANOW, &oldattr);
-  if(ch == 3) {
-    fflush(stdout);
-    fprintf(stderr, "pgetch: caught control-c\n");
-    fprintf(stderr, "Terminating program\n");
-    exit(0);
-  }
-  if(ch == 26) {
-    fflush(stdout);
-    fprintf(stderr, "pgetch: caught control-z\n");
-    fprintf(stderr, "Sending suspend signal. Program is not terminated.\n");
-    raise(SIGTSTP);
-  }
   return ch;
+}
+int pgetch(void)
+{
+  return pgetch_core(0);
+}
+int pflush_stdio(void)
+{
+  int foundinput, foundinput_ignored_something;
+  foundinput = 1;
+  foundinput_ignored_something = 0;
+  while(foundinput == 1) {
+    foundinput = pgetch_core(1);
+    if(foundinput) {
+      foundinput_ignored_something = 1;
+    }
+  }
+  return foundinput_ignored_something;
 }
 int pgetch_macro(psrsalsaApplication *application, verbose_definition verbose)
 {
@@ -155,20 +197,30 @@ int getUsername(char **username, verbose_definition verbose)
   }
   return 1;
 }
-void constructCommandLineString(char *txt, int length, int argc, char **argv, verbose_definition verbose)
+void constructCommandLineString(char *txt, int length, int argc, char **argv, int strippath, verbose_definition verbose)
 {
   int i;
+  char *argv_stripped;
   txt[0] = 0;
   for(i = 0; i < argc; i++) {
-    if(strlen(txt) + strlen(argv[i]) + 4 > length-1) {
+    argv_stripped = argv[i];
+    if(strippath && i == 0) {
+      int j;
+      for(j = 0; j < strlen(argv[i])-1; j++) {
+ if((argv[i])[j] == '/' || (argv[i])[j] == '\\') {
+   argv_stripped = argv[i] + j + 1;
+ }
+      }
+    }
+    if((int)strlen(txt) + (int)strlen(argv_stripped) + 4 > length-1) {
       printwarning(verbose.debug, "WARNING constructCommandLineString: Truncating command line which is too long.");
       break;
     }
-    if(strchr(argv[i], ' ') == NULL) {
-      strcat(txt, argv[i]);
+    if(strchr(argv_stripped, ' ') == NULL) {
+      strcat(txt, argv_stripped);
     }else {
       strcat(txt, "\"");
-      strcat(txt, argv[i]);
+      strcat(txt, argv_stripped);
       strcat(txt, "\"");
     }
     if(i != argc-1)
@@ -212,7 +264,7 @@ char * pickWordFromString(char *string, int n, int *nrwords, int replacetabs, ch
   }
   strcpy(string_mod, string);
   if(replacetabs) {
-    for(nrchars = 0; nrchars < strlen(string_mod); nrchars++) {
+    for(nrchars = 0; nrchars < (int)strlen(string_mod); nrchars++) {
       if(string_mod[nrchars] == '\t')
  string_mod[nrchars] = ' ';
     }
@@ -267,7 +319,7 @@ int change_filename_extension(char *inputname, char *outputname, char *extension
     printerror(verbose.debug, "change_filename_extension: no extension in '%s'?", inputname);
     return 0;
   }
-  if(strlen(extension) + i+1 >= outputnamelength) {
+  if((int)strlen(extension) + i+1 >= outputnamelength) {
     fflush(stdout);
     printerror(verbose.debug, "change_filename_extension: outputnamelength too long");
     return 0;
@@ -1007,4 +1059,46 @@ void fprintf_color(FILE *destination, int color, const char *format, ...)
   if(isatty(fileno(destination))) {
     fprintf(destination, "\x1B[0m");
   }
+  va_end(args);
+}
+void sprintf_alloc(char **destination, const char *format, ...)
+{
+  va_list args, args_copy;
+  va_start(args, format);
+  va_copy(args_copy, args);
+  size_t required_size = vsnprintf(NULL, 0, format, args_copy) + 1;
+  va_end(args_copy);
+  *destination = malloc(required_size);
+  if(*destination == NULL) {
+    fprintf(stderr, "ERROR sprintf_alloc: Memory allocation error.\n");
+    exit(0);
+  }
+  vsnprintf(*destination, required_size, format, args);
+  va_end(args);
+}
+void sprintf_alloc_strcat(char **destination, const char *format, ...)
+{
+  va_list args, args_copy;
+  va_start(args, format);
+  va_copy(args_copy, args);
+  size_t orig_size = strlen(*destination);
+  size_t required_size = vsnprintf(NULL, 0, format, args_copy) + orig_size + 1;
+  va_end(args_copy);
+  char *tmpstr;
+  tmpstr = malloc(orig_size+1);
+  if(tmpstr == NULL) {
+    fprintf(stderr, "ERROR sprintf_alloc_strcat: Memory allocation error.\n");
+    exit(0);
+  }
+  strcpy(tmpstr, *destination);
+  free(*destination);
+  *destination = malloc(required_size);
+  if(*destination == NULL) {
+    fprintf(stderr, "ERROR sprintf_alloc_strcat: Memory allocation error.\n");
+    exit(0);
+  }
+  strcpy(*destination, tmpstr);
+  free(tmpstr);
+  vsnprintf((*destination)+orig_size, required_size-orig_size, format, args);
+  va_end(args);
 }

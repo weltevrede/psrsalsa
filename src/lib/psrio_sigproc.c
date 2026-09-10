@@ -394,20 +394,15 @@ int readSigprocHeader(datafile_definition *datafile, verbose_definition verbose)
     datafile->NrSubints = roundl(tmp);
   }
   datafile->tsub_list[0] = datafile->NrBins * datafile->fixedtsamp;
-  printwarning(verbose.debug, "WARNING readSigprocHeader: Assuming there is only one polarization channel in the data");
-  datafile->NrPols = 1;
+  datafile->NrPols = nifs;
   return 1;
 }
 int readSigprocfile(datafile_definition datafile, float *data, verbose_definition verbose)
 {
-  long n, f, i, p;
+  long n, f, i, ipol;
   float *sample_f;
   unsigned char *sample_b;
   int ret;
-  if(datafile.NrPols > 1) {
-    printerror(verbose.debug, "readSigprocfile: Data should have just one polarization");
-    return 0;
-  }
   if(datafile.NrBits != 32 && datafile.NrBits != 8) {
     printerror(verbose.debug, "ERROR readSigprocfile: Can only handle 32-bit or 8-bit data. Got %d bit data.", datafile.NrBits);
     return 0;
@@ -427,21 +422,22 @@ int readSigprocfile(datafile_definition datafile, float *data, verbose_definitio
   }
   for(n = 0; n < datafile.NrSubints; n++) {
     for(i = 0; i < datafile.NrBins; i++) {
-      if(datafile.NrBits == 32) {
- ret = fread(sample_f, sizeof(float), datafile.NrFreqChan, datafile.fptr);
-      }else if(datafile.NrBits == 8) {
- ret = fread(sample_b, 1, datafile.NrFreqChan, datafile.fptr);
-      }
-      if(ret != datafile.NrFreqChan) {
- printerror(verbose.debug, "ERROR readSigprocfile: Cannot read data (sample %ld of subint %ld).", i, n);
- return 0;
-      }
-      p = 0;
-      for(f = 0; f < datafile.NrFreqChan; f++) {
+      for(ipol = 0; ipol < datafile.NrPols; ipol++) {
  if(datafile.NrBits == 32) {
-   data[datafile.NrBins*(p+datafile.NrPols*(f+n*datafile.NrFreqChan))+i] = sample_f[f];
+   ret = fread(sample_f, sizeof(float), datafile.NrFreqChan, datafile.fptr);
  }else if(datafile.NrBits == 8) {
-   data[datafile.NrBins*(p+datafile.NrPols*(f+n*datafile.NrFreqChan))+i] = sample_b[f];
+   ret = fread(sample_b, 1, datafile.NrFreqChan, datafile.fptr);
+ }
+ if(ret != datafile.NrFreqChan) {
+   printerror(verbose.debug, "ERROR readSigprocfile: Cannot read data (sample %ld (pol=%ld) of subint %ld).", i, ipol, n);
+   return 0;
+ }
+ for(f = 0; f < datafile.NrFreqChan; f++) {
+   if(datafile.NrBits == 32) {
+     data[datafile.NrBins*(ipol+datafile.NrPols*(f+n*datafile.NrFreqChan))+i] = sample_f[f];
+   }else if(datafile.NrBits == 8) {
+     data[datafile.NrBins*(ipol+datafile.NrPols*(f+n*datafile.NrFreqChan))+i] = sample_b[f];
+   }
  }
       }
     }

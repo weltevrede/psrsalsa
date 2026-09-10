@@ -23,9 +23,9 @@ int main(int argc, char **argv)
 {
   int index, originalNrPols, originalNrPolsP3;
   long i, p;
-  int p3_fold_flag, p3_fold_refine, p3_fold_cpb, p3_fold_nbin, p3_fold_onpulse_flag;
-  int write_flag, zoom_flag, zoom_flag1, selectMoreOnpulseRegions;
-  float p3_fold, p3_fold_smoothWidth, p3fold_dphase, p3fold_nosmooth, slope;
+  int p3_fold_flag, p3_fold_refine, p3_fold_nbin, p3_fold_onpulse_flag;
+  int write_flag, zoom_flag, zoom_flag1, selectMoreOnpulseRegions, oldcorrelation;
+  float p3_fold, p3_fold_smoothWidth, p3fold_dphase, p3fold_nosmooth, p3_fold_cpb, slope;
   float xmin, xmax, xmin_zoom, xmax_zoom, *profileI, *p3foldmap, *p3foldmap2;
   char onpulseselectdevice[1000], p3fold_device[1000], outputname[1000];
   psrsalsaApplication application;
@@ -60,10 +60,11 @@ int main(int argc, char **argv)
   p3fold_dphase = 0;
   p3fold_nosmooth = 0;
   p3_fold_flag = 0;
-  p3_fold_cpb = 1;
+  p3_fold_cpb = 1.0;
   p3_fold_refine = 1;
   p3_fold_smoothWidth = -1;
   p3_fold_onpulse_flag = 1;
+  oldcorrelation = 0;
   sprintf(onpulseselectdevice, "?");
   sprintf(p3fold_device, "?");
   pgplot_clear_options(&pgplot_options);
@@ -95,7 +96,7 @@ int main(int argc, char **argv)
     printf("                      correlation used to compensate for P3 variations. More\n");
     printf("                      means more signal to correlate (more precise alignment of\n");
     printf("                      the blocks, less means less smearing in each block because\n");
-    printf("                      of P3 variation within the block. Default is %d.\n", p3_fold_cpb);
+    printf("                      of P3 variation within the block. Default is %.1f.\n", p3_fold_cpb);
     printf("  -p3fold_smooth      Replace the tophat weight used to assign power to the P3\n");
     printf("                      bins with a Gausian weight with this width in pulse\n");
     printf("                      periods. This could make oversampling look nicer and\n");
@@ -152,7 +153,7 @@ int main(int argc, char **argv)
  }
  i++;
       }else if(strcmp(argv[i], "-p3fold_cpb") == 0) {
- if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &p3_fold_cpb, NULL) == 0) {
+ if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &p3_fold_cpb, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pfold: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
@@ -163,6 +164,8 @@ int main(int argc, char **argv)
    return 0;
  }
  i++;
+      }else if(strcmp(argv[i], "-alternative_correlation") == 0) {
+ oldcorrelation = 1;
       }else if(strcmp(argv[i], "-p3fold_norefine") == 0) {
  p3_fold_refine = 0;
       }else if(strcmp(argv[i], "-p3fold_noonpulse") == 0) {
@@ -212,7 +215,7 @@ int main(int argc, char **argv)
     return 0;
   }
   closePSRData(&fin[0], 0, 0, application.verbose_state);
-  if(!openPSRData(&fin[0], argv[argc-1], application.iformat, 0, 1, 0, application.verbose_state))
+  if(!openPSRData(&fin[0], argv[argc-1], application.iformat, 0, 1, 0, application.obsnr, application.verbose_state))
     return 0;
   if(PSRDataHeader_parse_commandline(&fin[0], argc, argv, application.verbose_state) == 0)
     return 0;
@@ -300,7 +303,7 @@ int main(int argc, char **argv)
       }
     }
     region_int_to_frac(&(application.onpulse), 1.0/(float)fin[0].NrBins, 0);
-    regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
+    regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout, 0);
     xmin_zoom = xmin;
     xmax_zoom = xmax;
     if(zoom_flag) {
@@ -356,12 +359,12 @@ int main(int argc, char **argv)
     for(i = 0; i < originalNrPolsP3; i++) {
       if(p3_fold_onpulse_flag) {
  if(foldP3(fin[i].data, fin[i].NrSubints, fin[i].NrBins, &p3foldmap[i*fin[0].NrBins * p3_fold_nbin], p3_fold_nbin, p3_fold, p3_fold_refine, p3_fold_cpb, p3fold_nosmooth, p3_fold_smoothWidth, slope*360.0/(float)fin[i].NrBins, p3fold_dphase, &application.onpulse
-, application.verbose_state) == 0) {
+, oldcorrelation, application.verbose_state) == 0) {
    return 0;
  }
       }else {
  if(foldP3(fin[i].data, fin[i].NrSubints, fin[i].NrBins, &p3foldmap[i*fin[0].NrBins * p3_fold_nbin], p3_fold_nbin, p3_fold, p3_fold_refine, p3_fold_cpb, p3fold_nosmooth, p3_fold_smoothWidth, slope*360.0/(float)fin[i].NrBins, p3fold_dphase, NULL
-, application.verbose_state) == 0) {
+    , oldcorrelation, application.verbose_state) == 0) {
    return 0;
  }
       }
@@ -400,7 +403,7 @@ int main(int argc, char **argv)
       if(change_filename_extension(argv[argc-1], outputname, "p3fold", 1000, application.verbose_state) == 0) {
  return 0;
       }
-      if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, application.verbose_state)) {
+      if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, -1, application.verbose_state)) {
  printerror(application.verbose_state.debug, "ERROR pfold: Unable to open file for writing.\n");
  return 0;
       }

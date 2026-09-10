@@ -19,6 +19,46 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <gsl/gsl_sf.h>
 #include "psrsalsa.h"
 #define AmoebaAlgorithm 0
+int vonMises_collection_change_component(vonMises_collection_definition *components, int compnr, double centre, double concentration, double height, verbose_definition verbose)
+{
+  if(compnr < 0 || compnr >= components->nrcomponents) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR vonMises_collection_change_component: Cannot add change component, as the component number is invalid (%d).", compnr);
+    return 1;
+  }
+  components->centre[compnr] = centre;
+  components->concentration[compnr] = concentration;
+  components->height[compnr] = height;
+  return 0;
+}
+int vonMises_collection_add_component(vonMises_collection_definition *components, double centre, double concentration, double height, verbose_definition verbose)
+{
+  if(components->nrcomponents < maxNrVonMisesComponents) {
+    (components->nrcomponents)++;
+    if(vonMises_collection_change_component(components, components->nrcomponents - 1, centre, concentration, height, verbose) != 0) {
+      return 2;
+    }
+    return 0;
+  }else {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR vonMises_collection_add_component: Cannot add another component, as the maximum number of components is exceeded (%d).", maxNrVonMisesComponents);
+    return 1;
+  }
+}
+void vonMises_collection_print_components(vonMises_collection_definition components, verbose_definition verbose)
+{
+  int i, j;
+  if(components.nrcomponents == 0) {
+    for(j = 0; j < verbose.indent; j++)
+      printf(" ");
+    printf("von Mises component collection is empty\n");
+  }
+  for(i = 0; i < components.nrcomponents; i++) {
+    for(j = 0; j < verbose.indent; j++)
+      printf(" ");
+    printf("component %d: phase=%e concentration=%e amplitude=%e\n", i, components.centre[i], components.concentration[i], components.height[i]);
+  }
+}
 int readVonMisesModel(char *filename, vonMises_collection_definition *components, verbose_definition verbose)
 {
   int i;
@@ -28,24 +68,33 @@ int readVonMisesModel(char *filename, vonMises_collection_definition *components
   if(fin == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readVonMisesModel: Cannot open %s", filename);
-    return 0;
+    return 1;
   }
-  for(components->nrcomponents = 0; components->nrcomponents < maxNrVonMisesComponents; (components->nrcomponents)++) {
-    i = fscanf(fin, "%lf %lf %lf", &(components->centre[components->nrcomponents]), &(components->concentration[components->nrcomponents]), &(components->height[components->nrcomponents]));
-    if(i != 3) {
-      break;
-    }else if(verbose.verbose) {
-      printf("  component %d: phase=%e concentration=%e amplitude=%e\n", components->nrcomponents, components->centre[components->nrcomponents], components->concentration[components->nrcomponents], components->height[components->nrcomponents]);
+  vonMises_collection_initialise(components);
+  do {
+    double x, c, h;
+    i = fscanf(fin, "%lf %lf %lf", &x, &c, &h);
+    if(i == 3) {
+      if(vonMises_collection_add_component(components, x, c, h, verbose) != 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR readVonMisesModel: Cannot add component to model");
+ return 3;
+      }
     }
+  }while(i == 3);
+  if(verbose.verbose) {
+    verbose.indent += 2;
+    vonMises_collection_print_components(*components, verbose);
+    verbose.indent -= 2;
   }
   if(verbose.verbose) printf("Closing %s\n", filename);
   fclose(fin);
   if(components->nrcomponents == 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR readVonMisesModel: No components found in %s", filename);
-    return 0;
+    return 2;
   }
-  return 1;
+  return 0;
 }
 void vonMises_simplify_parameters(vonMises_collection_definition *components)
 {
@@ -293,6 +342,9 @@ float *internal_fitvonmises_profile;
 float *internal_fitvonmises_fitprofile;
 int internal_fitvonmises_relative_phases = 0;
 int internal_fitvonmises_relative_amps = 0;
+int **internal_fitvonmises_relative_amps_list = NULL;
+int *internal_fitvonmises_relative_amps_list_nrcomps = NULL;
+int internal_fitvonmises_relative_amps_listlength = 0;
 int internal_fitvonmises_debug = 0;
 int internal_fitvonmises_showed_overflow_warning = 0;
 int internal_fitvonmises_avoid_neg_components = 0;
@@ -341,19 +393,38 @@ float internal_fitvonmises_funk(float *params)
     if(internal_fitvonmises_relative_amps && n > 0) {
       components->height[n] *= params[2+internal_fitvonmises_fitbaseline];
     }
-    if(internal_fitvonmises_plotallsteps) {
-      ppgsci(4);
-      y = calcVonMisesFunction2(components->centre[n], components->concentration[n], components->height[n], 0, 0);
-      if(internal_fitvonmises_fitbaseline)
- y += params[0];
-      ppgmove(0, y);
-      for(i = 1; i < internal_fitvonmises_nrbins; i++) {
- y = calcVonMisesFunction2(components->centre[n], components->concentration[n], components->height[n], i/(double)internal_fitvonmises_nrbins, 0);
- if(internal_fitvonmises_fitbaseline)
-   y += params[0];
- ppgdraw(i*360.0/(double)internal_fitvonmises_nrbins, y);
+  }
+  if(internal_fitvonmises_relative_amps_listlength > 0) {
+    int index1, index2;
+    for(index1 = 0; index1 < internal_fitvonmises_relative_amps_listlength; index1++) {
+      int comp1, comp2;
+      comp1 = (internal_fitvonmises_relative_amps_list[index1])[0];
+      for(index2 = 1; index2 < internal_fitvonmises_relative_amps_list_nrcomps[index1]; index2++) {
+ comp2 = (internal_fitvonmises_relative_amps_list[index1])[index2];
+ components->height[comp2] *= params[3*comp1+2+internal_fitvonmises_fitbaseline];
       }
     }
+  }
+  int devid;
+  ppgqid(&devid);
+  if(devid != 0) {
+    ppgbbuf();
+    for(n = 0; n < internal_fitvonmises_nrcomponents; n++) {
+      if(internal_fitvonmises_plotallsteps) {
+ ppgsci(4);
+ y = calcVonMisesFunction2(components->centre[n], components->concentration[n], components->height[n], 0, 0);
+ if(internal_fitvonmises_fitbaseline)
+   y += params[0];
+ ppgmove(0, y);
+ for(i = 1; i < internal_fitvonmises_nrbins; i++) {
+   y = calcVonMisesFunction2(components->centre[n], components->concentration[n], components->height[n], i/(double)internal_fitvonmises_nrbins, 0);
+   if(internal_fitvonmises_fitbaseline)
+     y += params[0];
+   ppgdraw(i*360.0/(double)internal_fitvonmises_nrbins, y);
+ }
+      }
+    }
+    ppgebuf();
   }
   calcVonMisesProfile(components, internal_fitvonmises_nrbins, internal_fitvonmises_fitprofile, 0, 0);
   chi2 =0;
@@ -424,7 +495,30 @@ float internal_fitvonmises_funk(float *params)
   }
   return sqrt(chi2);
 }
-int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_definition *components, int fitbaseline, int avoid_neg_components, float *baseline, int fixamp, int fixwidth, int fixphase, int fixrelamp, int fixrelphase, verbose_definition verbose)
+void vonMises_collection_initialise(vonMises_collection_definition *components)
+{
+  components->nrcomponents = 0;
+}
+int vonMises_collection_clone(vonMises_collection_definition components, vonMises_collection_definition *components_clone, verbose_definition verbose)
+{
+  int index;
+  vonMises_collection_initialise(components_clone);
+  if(components.nrcomponents >= 0 && components.nrcomponents <= maxNrVonMisesComponents) {
+    for(index = 0; index < components.nrcomponents; index++) {
+      if(vonMises_collection_add_component(components_clone, components.centre[index], components.concentration[index], components.height[index], verbose) != 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR vonMises_collection_clone: Cannot add another component.");
+ return 1;
+      }
+    }
+  }else {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR vonMises_collection_clone: The number of input components does not make sense (%d).", components.nrcomponents);
+    return 1;
+  }
+  return 0;
+}
+int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_definition *components, int fitbaseline, int avoid_neg_components, float *baseline, int fixamp, int fixwidth, int fixphase, int fixrelamp, int refine_fixrelamp_listlength, int *refine_fixrelamp_list_nrcomps, int **refine_fixrelamp_list, int fixrelphase, int no_pre_align, verbose_definition verbose)
 {
   float *xstart, *dx, *xfit;
   float chi2, av;
@@ -434,6 +528,9 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
   internal_fitvonmises_avoid_neg_components = avoid_neg_components;
   internal_fitvonmises_relative_phases = fixrelphase;
   internal_fitvonmises_relative_amps = fixrelamp;
+  internal_fitvonmises_relative_amps_listlength = refine_fixrelamp_listlength;
+  internal_fitvonmises_relative_amps_list_nrcomps = refine_fixrelamp_list_nrcomps;
+  internal_fitvonmises_relative_amps_list = refine_fixrelamp_list;
   superverbose = 0;
   if(verbose.verbose) {
     printf("fitvonmises_refine_model: Start refining model with %d components.\n", components->nrcomponents);
@@ -441,17 +538,17 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
   if(fixamp && fixwidth && fixphase) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR fitvonmises_refine_model: Cannot simultaneously fix the phases, concentrations and amplitudes of the components.");
-    return 0;
+    return 2;
   }
   if(psrdata.NrFreqChan != 1 || psrdata.NrSubints != 1) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR fitvonmises_refine_model: This is not a pulse profile.");
-    return 0;
+    return 2;
   }
   if(psrdata.format != MEMORY_format) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR fitvonmises_refine_model: only works if data is loaded into memory.");
-    return 0;
+    return 2;
   }
   internal_fitvonmises_nrbins = psrdata.NrBins;
   internal_fitvonmises_fitprofile = malloc(psrdata.NrBins*sizeof(float));
@@ -459,7 +556,7 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
   if(internal_fitvonmises_fitprofile == NULL) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR fitvonMises_refine_model: Memory allocation error.");
-    return 0;
+    return 2;
   }
   xstart = malloc((3*maxNrVonMisesComponents+1)*sizeof(float));
   dx = malloc((3*maxNrVonMisesComponents+1)*sizeof(float));
@@ -467,17 +564,27 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
   fixed = malloc((3*maxNrVonMisesComponents+1)*sizeof(int));
   if(xstart == NULL || dx == NULL || xfit == NULL || fixed == NULL) {
     printerror(verbose.debug, "ERROR fitvonmises_refine_model: Cannot allocate memory");
-    return 0;
+    return 2;
   }
   if(fitbaseline)
     internal_fitvonmises_fitbaseline = 1;
   else
     internal_fitvonmises_fitbaseline = 0;
   av = 0;
+  int allzeros;
+  allzeros = 1;
   for(i = 0; i < internal_fitvonmises_nrbins; i++) {
     av += internal_fitvonmises_profile[i];
+    if(internal_fitvonmises_profile[i] != 0.0) {
+      allzeros = 0;
+    }
   }
   av /= (float)internal_fitvonmises_nrbins;
+  if(allzeros) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR fitvonMises_refine_model: Data seems to be just zero's, so no fitting can be done.");
+    return 2;
+  }
   if(fixamp == 0) {
     float min, max, value, scale;
     min = max = psrdata.data[0];
@@ -500,7 +607,7 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
       components->height[i] *= scale;
     }
   }
-  if(fixphase == 0) {
+  if(fixphase == 0 && no_pre_align == 0) {
     float value;
     value = correlateVonMisesFunction(components, psrdata.NrBins, psrdata.data, verbose);
     if(verbose.debug)
@@ -514,17 +621,56 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
     dx[0] = av*0.1;
     fixed[0] = 0;
   }
+  if(refine_fixrelamp_listlength > 1) {
+    int index1, index2;
+    for(index1 = 0; index1 < refine_fixrelamp_listlength; index1++) {
+      for(index2 = index1; index2 < refine_fixrelamp_listlength; index2++) {
+ int comp1, comp2;
+ for(comp1 = 0; comp1 < refine_fixrelamp_list_nrcomps[index1]; comp1++) {
+   for(comp2 = 0; comp2 < refine_fixrelamp_list_nrcomps[index2]; comp2++) {
+     if(index1 != index2 || comp1 != comp2) {
+       if((refine_fixrelamp_list[index1])[comp1] == (refine_fixrelamp_list[index2])[comp2]) {
+  printerror(verbose.debug, "ERROR fitvonMises_refine_model: The lists of components having a constant relative amplitude has at least one duplicate entry.");
+  free(xstart);
+  free(dx);
+  free(xfit);
+  free(fixed);
+  return 2;
+       }
+     }
+   }
+ }
+      }
+    }
+  }
   internal_fitvonmises_nrcomponents = components->nrcomponents;
   int nrfitparameters;
   nrfitparameters = 0;
   for(i = 0; i < components->nrcomponents; i++) {
     xstart[3*i+internal_fitvonmises_fitbaseline] = components->centre[i];
-    if(fixrelphase && i > 0)
-      xstart[3*i+internal_fitvonmises_fitbaseline] -= components->centre[0];
     xstart[3*i+1+internal_fitvonmises_fitbaseline] = components->concentration[i];
     xstart[3*i+2+internal_fitvonmises_fitbaseline] = components->height[i];
-    if(fixrelamp && i > 0)
+  }
+  for(i = 0; i < components->nrcomponents; i++) {
+    if(fixrelphase && i > 0) {
+      xstart[3*i+internal_fitvonmises_fitbaseline] -= components->centre[0];
+    }
+    if(fixrelamp && i > 0) {
       xstart[3*i+2+internal_fitvonmises_fitbaseline] /= components->height[0];
+    }
+  }
+  if(refine_fixrelamp_listlength > 0) {
+    int index1, index2;
+    for(index1 = 0; index1 < refine_fixrelamp_listlength; index1++) {
+      int comp1, comp2;
+      comp1 = (refine_fixrelamp_list[index1])[0];
+      for(index2 = 1; index2 < refine_fixrelamp_list_nrcomps[index1]; index2++) {
+ comp2 = (refine_fixrelamp_list[index1])[index2];
+ xstart[3*comp2+2+internal_fitvonmises_fitbaseline] /= components->height[comp1];
+      }
+    }
+  }
+  for(i = 0; i < components->nrcomponents; i++) {
     if(verbose.debug) {
       printf("Refine component %d with phi=%f, con=%f, amp=%f\n", i+1, components->centre[i], components->concentration[i], components->height[i]);
     }
@@ -551,6 +697,18 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
       fixed[3*i+2+internal_fitvonmises_fitbaseline] = 0;
       dx[3*i+2+internal_fitvonmises_fitbaseline] = 0.1*xstart[3*i+2+internal_fitvonmises_fitbaseline];
       nrfitparameters++;
+    }
+  }
+  if(refine_fixrelamp_listlength > 0) {
+    int index1, index2;
+    for(index1 = 0; index1 < refine_fixrelamp_listlength; index1++) {
+      int comp2;
+      for(index2 = 1; index2 < refine_fixrelamp_list_nrcomps[index1]; index2++) {
+ comp2 = (refine_fixrelamp_list[index1])[index2];
+ fixed[3*comp2+2+internal_fitvonmises_fitbaseline] = 1;
+ dx[3*comp2+2+internal_fitvonmises_fitbaseline] = 0;
+      }
+      nrfitparameters -= refine_fixrelamp_list_nrcomps[index1] - 1;
     }
   }
   if(nrfitparameters == 1) {
@@ -604,32 +762,54 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
    printf("%e ", dx[i]);
  }
       }
+      printf("\n\nFull list of parameters (fixed, start value, stepsize)\n");
+      for(i = 0; i < 3*internal_fitvonmises_nrcomponents+internal_fitvonmises_fitbaseline+internal_fitvonmises_fitdummy; i++) {
+ printf("param %3d: %d %e %e ", i, fixed[i], xstart[i], dx[i]);
+ if(i == 0 && internal_fitvonmises_fitbaseline) {
+   printf("= baseline level\n");
+ }else if(i == 3*internal_fitvonmises_nrcomponents+internal_fitvonmises_fitbaseline && internal_fitvonmises_fitdummy) {
+   printf("= dummy variable\n");
+ }else {
+   int comp, resid;
+   comp = (i - internal_fitvonmises_fitbaseline)/3;
+   resid = i - 3*comp;
+   printf("= component %d ", comp);
+   if(resid == 0) {
+     printf("phase\n");
+   }else if(resid == 1) {
+     printf("concentration\n");
+   }else if(resid == 2) {
+     printf("amplitude\n");
+   }
+ }
+      }
       printf("\n");
     }
   }
   int ret;
   ret = doAmoeba(AmoebaAlgorithm, xstart, dx, fixed, xfit, &chi2, 3*internal_fitvonmises_nrcomponents+internal_fitvonmises_fitbaseline+internal_fitvonmises_fitdummy, &internal_fitvonmises_funk, 1e-4, &nfunk, 0*verbose.verbose, 0, 3.0, NULL, NULL);
   if(ret != 0) {
+    int retcode;
+    retcode = 2;
     fflush(stdout);
-    printerror(verbose.debug, "ERROR fitvonMises_refine_model: Amoeba failed.");
+    printerror(verbose.debug, "ERROR fitvonMises_refine_model: Downhill-simplex fitting failed.");
     if(ret == 1) {
       printerror(verbose.debug, "ERROR fitvonMises_refine_model: Maximum number of itterations exceeded.");
+      retcode = 1;
     }else if(ret == 2) {
       printerror(verbose.debug, "ERROR fitvonMises_refine_model: Memory allocation error.");
-    }else if(ret == 2) {
+    }else if(ret == 3) {
       printerror(verbose.debug, "ERROR fitvonMises_refine_model: Not enough free parameters to perform fit.");
-    }else if(ret == 2) {
+    }else if(ret == 4) {
       printerror(verbose.debug, "ERROR fitvonMises_refine_model: Algorithm is not available.");
-    }else if(ret == 2) {
-      printerror(verbose.debug, "ERROR fitvonMises_refine_model: Other fit fail error (such as singular matrix).");
-    }else if(ret == 2) {
+    }else {
       printerror(verbose.debug, "ERROR fitvonMises_refine_model: Undefined error code.");
     }
     free(xstart);
     free(dx);
     free(xfit);
     free(fixed);
-    return 0;
+    return retcode;
   }
   if(verbose.verbose) {
     printf("    chi2=%f after %d steps.\n", chi2, nfunk);
@@ -644,8 +824,20 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
     }
     components->concentration[i] = xfit[3*i+1+internal_fitvonmises_fitbaseline];
     components->height[i] = xfit[3*i+2+internal_fitvonmises_fitbaseline];
-    if(fixrelamp && i > 0)
+    if(fixrelamp && i > 0) {
       components->height[i] *= xfit[2+internal_fitvonmises_fitbaseline];
+    }
+  }
+  if(refine_fixrelamp_listlength > 0) {
+    int index1, index2;
+    for(index1 = 0; index1 < refine_fixrelamp_listlength; index1++) {
+      int comp1, comp2;
+      comp1 = (refine_fixrelamp_list[index1])[0];
+      for(index2 = 1; index2 < refine_fixrelamp_list_nrcomps[index1]; index2++) {
+ comp2 = (refine_fixrelamp_list[index1])[index2];
+ components->height[comp2] *= xfit[3*comp1+2+internal_fitvonmises_fitbaseline];
+      }
+    }
   }
   if(internal_fitvonmises_fitbaseline) {
     *baseline = xfit[0];
@@ -665,12 +857,15 @@ int fitvonmises_refine_model(datafile_definition psrdata, vonMises_collection_de
   }
   internal_fitvonmises_relative_phases = 0;
   internal_fitvonmises_relative_amps = 0;
+  internal_fitvonmises_relative_amps_list = NULL;
+  internal_fitvonmises_relative_amps_list_nrcomps = NULL;
+  internal_fitvonmises_relative_amps_listlength = 0;
   vonMises_simplify_parameters(components);
   free(xstart);
   free(dx);
   free(xfit);
   free(fixed);
-  return 1;
+  return 0;
 }
 void calcVonMisesProfile_shape_parameter_get_location_peak(double *xmax, double *ymax, vonMises_collection_definition *components, double shift, long nrbins_start, double phaseprecision, verbose_definition verbose)
 {
@@ -796,10 +991,11 @@ void calcVonMisesProfile_shape_parameter_search_peak_in_restricted_phase_range(i
     nrbins = nrbins_start;
     bin1 = startphase*nrbins;
     bin2 = endphase*nrbins;
+    int oldsign;
+    oldsign = 0;
     do {
       for(i = bin1; i <= bin2; i++) {
  double dydx;
- int oldsign;
  *x = i/(double)nrbins;
  dydx = calcVonMisesFunction_deriv(components, *x, shift);
  if(i == bin1) {
@@ -861,6 +1057,16 @@ void calcVonMisesProfile_shape_parameter(vonMises_collection_definition *compone
       return;
     }
     *measurement = components->height[comp1]/components->height[comp2];
+    return;
+  }else if(shapepar == SHAPEPAR_COMPAMPMEAN) {
+    int comp1;
+    comp1 = round(shapepar_aux[0]);
+    if(comp1 >= components->nrcomponents) {
+      printerror(verbose.debug, "ERROR calcVonMisesProfile_shape_parameter: Analytic model has %d components, but components %d (counting from zero) was specified to calculate the amplitude radio.", components->nrcomponents, comp1);
+      *measurement = sqrt(-1);
+      return;
+    }
+    *measurement = 2.0*M_PI*components->height[comp1]/integrateVonMisesFunction(components);
     return;
   }
   calcVonMisesProfile_shape_parameter_get_location_peak(&xmax, &ymax, components, shift, nrbins_start, phaseprecision, verbose);
@@ -1024,6 +1230,7 @@ void print_shape_par(FILE *fout, int showdescr, int shapepar, double measurement
       fprintf(fout, "Peak amplitude ratio: ");
       break;
     case SHAPEPAR_COMPAMPRATIO: fprintf(fout, "Component amplitude ratio: "); break;
+    case SHAPEPAR_COMPAMPMEAN: fprintf(fout, "Component amplitude relative to mean: "); break;
     case SHAPEPAR_AMPRATIO_ATPHASE: fprintf(fout, "Amplitude ratio at fixed phases: "); break;
     case SHAPEPAR_PEAKAMPRATIO_RECI: fprintf(fout, "Reciprocal peak amplitude ratio: "); break;
     default: printerror(0, "ERROR print_shape_par: Requested shape parameter is not implemented"); break;

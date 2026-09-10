@@ -553,7 +553,7 @@ int main(int argc, char **argv)
  }
  for(i = 0; i < contcol_nr_edge_steps; i++) {
    wopen = wopen_min + (wopen_max-wopen_min)*(double)i/(double)(contcol_nr_edge_steps-1);
-   printf("%e %e\n", wopen, rho_pc);
+     printf("%e %e\n", wopen, rho_pc);
  }
       }
     fprintf(stderr, "\nThe output can be re-directed to a file and used with the R option of ppolFit in interactive mode.\n");
@@ -620,7 +620,7 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ppolFit: Input file does not appear to be in a ppol format.");
       return 0;
     }
-    if(!openPSRData(&datain, argv[argc-1], iformat, 0, 1, 0, application.verbose_state))
+    if(!openPSRData(&datain, argv[argc-1], iformat, 0, 1, 0, application.obsnr, application.verbose_state))
       return 0;
     fitterinfo.NrDataPoints = filterPApoints(&datain, application.verbose_state);
     if(fitterinfo.NrDataPoints <= 0) {
@@ -912,7 +912,7 @@ int main(int argc, char **argv)
  if(fwrite(&fitterinfo.data_dpa[i], sizeof(float), 1, fin) != 1) {printerror(application.verbose_state.debug, "Write error."); return 0; }
       }
       int dummyint;
-      constructCommandLineString(txt, MaxStringLength, argc, argv, application.verbose_state);
+      constructCommandLineString(txt, MaxStringLength, argc, argv, application.history_cmd_only, application.verbose_state);
       dummyint = strlen(txt);
       if(fwrite(&dummyint, sizeof(int), 1, fin) != 1) {printerror(application.verbose_state.debug, "Write error."); return 0; }
       if(fwrite(txt, 1, dummyint, fin) != dummyint) {printerror(application.verbose_state.debug, "Write error."); return 0; }
@@ -1744,25 +1744,25 @@ int main(int argc, char **argv)
  break;
       case 82:
  {
-   char beamwidth_params_file[1000];
-   printf("Specify ascii file with pulse a width and rho contour (could use the -contcol option): ");
-   fflush(stdout);
-   if(macrofilename == 0) {
-     scanf("%s", beamwidth_params_file);
-   }else {
-     int ret;
-     ret = fscanf(macrofile, "%s", beamwidth_params_file);
-     if(ret != 1) {
-       printerror(application.verbose_state.debug, "ERROR ppolFit: failed to read in string from macrofile");
+     char beamwidth_params_file[1000];
+     printf("Specify ascii file with pulse widths and rho values to define contours (could use the -contcol option): ");
+     fflush(stdout);
+     if(macrofilename == 0) {
+       scanf("%s", beamwidth_params_file);
+     }else {
+       int ret;
+       ret = fscanf(macrofile, "%s", beamwidth_params_file);
+       if(ret != 1) {
+  printerror(application.verbose_state.debug, "ERROR ppolFit: failed to read in string from macrofile");
+  return 0;
+       }
+     }
+     printf("Will read parameters from %s\n", beamwidth_params_file);
+     beamwidth_params_fin = fopen(beamwidth_params_file, "r");
+     if(beamwidth_params_fin == NULL) {
+       printerror(application.verbose_state.debug, "ERROR ppolFit: cannot open '%s'", beamwidth_params_file);
        return 0;
      }
-   }
-   printf("Will read parameters from %s\n", beamwidth_params_file);
-   beamwidth_params_fin = fopen(beamwidth_params_file, "r");
-   if(beamwidth_params_fin == NULL) {
-     printerror(application.verbose_state.debug, "ERROR ppolFit: cannot open '%s'", beamwidth_params_file);
-     return 0;
-   }
  }
  printf("Specify MP or IP: ");
  fflush(stdout);
@@ -2589,15 +2589,21 @@ void PlotPAswing(double alpha, double beta, double pa0, double l0, int PlotFit, 
     ppgerr1(6, fitterinfo.data_l[i], derotate_180(fitterinfo.data_pa[i]), fitterinfo.data_dpa[i], 3);
   }
   if(PlotFit) {
+    ppgbbuf();
     ppgsci(2);
     oldpa = paswing_double(alpha, beta, 0, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh, fitterinfo.height_diff_bcw_only);
     ppgmove(0, oldpa);
-    for(i = 1; i < 3600; i++) {
-      newpa = paswing_double(alpha, beta, 0.1*i, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh, fitterinfo.height_diff_bcw_only);
+    long nrlongpoints;
+    nrlongpoints = 3600;
+    nrlongpoints = 100000;
+    for(i = 1; i < nrlongpoints; i++) {
+      float longitude;
+      longitude = 360.0*i/(float)nrlongpoints;
+      newpa = paswing_double(alpha, beta, longitude, pa0, l0, fitterinfo.nrJumps, fitterinfo.jump_longitude, fitterinfo.jump_offset, fitterinfo.add_height_longitude, dh, fitterinfo.height_diff_bcw_only);
       if(fabs(newpa-oldpa) < 100)
- ppgdraw(0.1*i, newpa);
+ ppgdraw(longitude, newpa);
       else
- ppgmove(0.1*i, newpa);
+ ppgmove(longitude, newpa);
       oldpa = newpa;
     }
     if(l0 > 360)
@@ -2614,6 +2620,7 @@ void PlotPAswing(double alpha, double beta, double pa0, double l0, int PlotFit, 
     ppgmove(l0, 0);
     ppgdraw(l0, 180);
     ppgsci(1);
+    ppgebuf();
   }
 }
 void PrintHelp()

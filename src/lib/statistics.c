@@ -20,7 +20,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <gsl/gsl_sort.h>
 #include <gsl/gsl_cdf.h>
 #include "psrsalsa.h"
-long randomUnsignedInt()
+long randomUnsignedInt(void)
 {
   time_t seconds;
   struct timeval precisetime;
@@ -359,4 +359,25 @@ void kstest(double *data1, long n1, double *data2, long n2, int cdf_type, double
     printf("can be rejected at the XXXX sigma level (need GSL >= 1.4 to get this number).\n");
 #endif
   }
+}
+void simple_linear_regression_f(float *x, float *y, long n, float *alpha, float *beta)
+{
+  long i;
+  double xav = 0;
+  double yav = 0;
+  for(i = 0; i < n; i++) {
+    xav += x[i];
+    yav += y[i];
+  }
+  xav /= (double)n;
+  yav /= (double)n;
+  *beta = 0;
+  float dx2 = 0;
+  for(i = 0; i < n; i++) {
+    float dx = x[i] - xav;
+    *beta += dx*(y[i] - yav);
+    dx2 += dx*dx;
+  }
+  *beta /= dx2;
+  *alpha = yav - *beta * xav;
 }

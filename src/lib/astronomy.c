@@ -306,8 +306,7 @@ void tempo2_ITRF_to_GRS80(double obs_X, double obs_Y, double obs_Z, double *long
     *longitude =
       -0.5*M_PI + 2.0*atan2(obs_X, sqrt(obs_X*obs_X+obs_Y*obs_Y)-obs_Y);
 }
-void
-tempo2_GRS80_to_ITRF(double longitude, double latitude, double height, double *obs_X, double *obs_Y, double *obs_Z)
+void tempo2_GRS80_to_ITRF(double longitude, double latitude, double height, double *obs_X, double *obs_Y, double *obs_Z)
 {
   double esq = GRS80_F * (2.0 - GRS80_F);
   double N = GRS80_A / sqrt(1.0-esq*sin(latitude)*sin(latitude));

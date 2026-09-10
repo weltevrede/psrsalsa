@@ -382,7 +382,7 @@ int main(int argc, char **argv)
  if(verbose.debug == 0)
    verbose.verbose = 0;
       }
-      i = openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 1, verbose);
+      i = openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 1, application.obsnr, verbose);
       if(i == 0) {
  printerror(application.verbose_state.debug, "ERROR pdist: Error opening data");
  return 0;

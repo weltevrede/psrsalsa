@@ -127,6 +127,8 @@ typedef struct
   float yrange[2];
   char xrangeset, yrangeset;
   datafile_history_entry_definition history;
+  int nr_ephemeris_lines;
+  char **ephemeris;
   float *data;
   float *offpulse_rms;
   float *scales, *offsets, *weights;
@@ -180,6 +182,7 @@ typedef struct {
   int switch_changeRefFreq; double newRefFreq;
   int switch_stokes, dostokes;
   int switch_coherence, docoherence;
+  int switch_invariant, doinvariant;
   int switch_noweights, noweights;
   int switch_useweights, useweights;
   int switch_uniformweights, uniformweights;
@@ -210,10 +213,12 @@ typedef struct {
   int switch_shuffle, doshuffle;
   int switch_rotateStokes; int nr_rotateStokes, rotateStokes1[maxNrRotateStokes], rotateStokes2[maxNrRotateStokes]; float rotateStokesAngle[maxNrRotateStokes];
   int switch_libversions;
+  int switch_subtractprof, dosubtractprof; char *subtractprof_fname;
   int doautot;
   int switch_forceUniformFreqLabelling;
   int switch_onpulse2, switch_onpulsef2;
   pulselongitude_regions_definition onpulse2;
+  int obsnr;
   int *fzapMask;
 }psrsalsaApplication;
 #define PSRSALSA_TYPEDEFS_LOADED 1

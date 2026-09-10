@@ -425,7 +425,7 @@ int main(int argc, char **argv)
  }
       }
     }
-    if(!openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.verbose_state))
+    if(!openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.obsnr, application.verbose_state))
       return 0;
     if(application.verbose_state.verbose) {
       fflush(stdout);
@@ -511,7 +511,7 @@ int main(int argc, char **argv)
     pgplot_options.box.label_ch = labelch*currentPanelScaling;
     pgplot_options.box.box_labelsize = boxch*currentPanelScaling;
     if(padist_filename_index) {
-      if(!openPSRData(&padist_data, argv[padist_filename_index], 0, 0, 1, 0, application.verbose_state))
+      if(!openPSRData(&padist_data, argv[padist_filename_index], 0, 0, 1, 0, application.obsnr, application.verbose_state))
  return 0;
       if(padist_data.gentype != GENTYPE_PADIST) {
  fflush(stdout);
@@ -525,7 +525,7 @@ int main(int argc, char **argv)
       }
     }
     if(elldist_filename_index) {
-      if(!openPSRData(&elldist_data, argv[elldist_filename_index], 0, 0, 1, 0, application.verbose_state))
+      if(!openPSRData(&elldist_data, argv[elldist_filename_index], 0, 0, 1, 0, application.obsnr, application.verbose_state))
  return 0;
       if(elldist_data.gentype != GENTYPE_ELLDIST) {
  fflush(stdout);

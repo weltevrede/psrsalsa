@@ -1017,6 +1017,8 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
     sprintf(dummy_txt, "ILVPATEL");
   }else if(datafile->poltype == POLTYPE_PAdPA) {
     sprintf(dummy_txt, "PAdPA");
+  }else if(datafile->poltype == POLTYPE_INVARIANT) {
+    sprintf(dummy_txt, "INVARIANT");
   }else {
     sprintf(dummy_txt, "UNKNOWN");
   }
@@ -1097,11 +1099,32 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
   }
   char *ttypes_history2[] = {"DATE_PRO", "USER", "HOSTNAME", "PROC_CMD", "NOTE"};
   char *tform_history2[] = {"24A", "24A", "32A", "1024A", "1024A"};
-  char *tunit_history2[] = {"", "", "", ""};
+  char *tunit_history2[] = {"", "", "", "", ""};
   if(fits_create_tbl(datafile->fits_fptr, BINARY_TBL, 0, 5, ttypes_history2, tform_history2, tunit_history2, "HISTORY_NOT_PSRFITS", &status) != 0) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot create table.");
     return 0;
+  }
+  if(datafile->nr_ephemeris_lines > 0) {
+    char *ttypes_eph[] = {"PARAM"};
+    char *tform_eph[] = {"128A"};
+    char *tunit_eph[] = {""};
+    if(fits_create_tbl(datafile->fits_fptr, BINARY_TBL, datafile->nr_ephemeris_lines, 1, ttypes_eph, tform_eph, tunit_eph, "PSRPARAM", &status) != 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot create table.");
+      return 0;
+    }
+    int index;
+    for(index = 0; index < datafile->nr_ephemeris_lines; index++) {
+      if(strlen(datafile->ephemeris[index]) > 128) {
+ printwarning(verbose.debug, "WARNING writePSRFITSHeader: Ephemeris line exceeds maximum length supported in PSRFITS. Line will be truncated.");
+      }
+      if(fits_write_col(datafile->fits_fptr, TSTRING, 1, index+1, 1, 1, &(datafile->ephemeris[index]), &status) != 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
+ return 0;
+      }
+    }
   }
   if(datafile->gentype != GENTYPE_RECEIVERMODEL && datafile->gentype != GENTYPE_RECEIVERMODEL2) {
     sprintf(dummy_txt, "%ldD", datafile->NrFreqChan);
@@ -1158,6 +1181,8 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
       sprintf(dummy_txt, "ILVPATEL");
     }else if(datafile->poltype == POLTYPE_PAdPA) {
       sprintf(dummy_txt, "PAdPA");
+    }else if(datafile->poltype == POLTYPE_INVARIANT) {
+      sprintf(dummy_txt, "INVARIANT");
     }else {
       sprintf(dummy_txt, "UNKNOWN");
     }
@@ -1166,7 +1191,7 @@ int writePSRFITSHeader(datafile_definition *datafile, verbose_definition verbose
       printerror(verbose.debug, "ERROR writePSRFITSHeader: Cannot write keyword.");
       return 0;
     }
-    if(datafile->poltype != POLTYPE_STOKES && datafile->poltype != POLTYPE_COHERENCY && datafile->poltype != POLTYPE_ILVPAdPA && datafile->poltype != POLTYPE_PAdPA && datafile->poltype != POLTYPE_ILVPAdPATEldEl) {
+    if(datafile->poltype != POLTYPE_STOKES && datafile->poltype != POLTYPE_COHERENCY && datafile->poltype != POLTYPE_ILVPAdPA && datafile->poltype != POLTYPE_PAdPA && datafile->poltype != POLTYPE_ILVPAdPATEldEl && datafile->poltype != POLTYPE_INVARIANT) {
       fflush(stdout);
       printwarning(verbose.debug, "WARNING writePSRFITSHeader: poltype is not set.");
     }
@@ -1485,6 +1510,8 @@ int parse_poltype_psrfits(char *poltypstr, int nowarnings, datafile_definition *
     return POLTYPE_ILVPAdPATEldEl;
   }else if(strcmp(poltypstr, "PAdPA") == 0 || strcmp(poltypstr, "PADPA") == 0 || strcmp(poltypstr, "PA") == 0) {
     return POLTYPE_PAdPA;
+  }else if(strcmp(poltypstr, "INVARIANT") == 0) {
+    return POLTYPE_INVARIANT;
   }else if(strcmp(poltypstr, "UNKNOWN") == 0) {
     return POLTYPE_UNKNOWN;
   }else {
@@ -2297,6 +2324,55 @@ int readPSRFITSHeader(datafile_definition *datafile, int readnoscales, int nowar
    if(nowarnings == 0) {
      printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): FREQUENCY=%f according to polyco", datafile->filename, dummy_double);
    }
+ }
+      }
+    }
+  }
+  if(verbose.debug)
+    printf("  readPSRFITSHeader (%s): Try to get ephemeris from PSRPARAM table\n", datafile->filename);
+  if(fits_movnam_hdu(datafile->fits_fptr, BINARY_TBL, "PSRPARAM", 0, &status)) {
+    if(verbose.debug)
+      printf("  readPSRFITSHeader (%s): PSRPARAM table does not exist\n", datafile->filename);
+    status = 0;
+  }else {
+    fits_get_hdrspace(datafile->fits_fptr, &nkeys, NULL, &status);
+    if(status) {
+      fflush(stdout);
+      fits_report_error(stderr, status);
+    }
+    if(fits_get_colnum (datafile->fits_fptr, CASEINSEN, "PARAM", &colnum, &status)) {
+      if(verbose.debug)
+ printf("  readPSRFITSHeader (%s): No PARAM in ephemeris table\n", datafile->filename);
+    }else {
+      fits_get_num_rows (datafile->fits_fptr, &numrows, &status);
+      if(numrows == 0) {
+ datafile->nr_ephemeris_lines = 0;
+ datafile->ephemeris = NULL;
+ if(nowarnings == 0) {
+   printwarning(verbose.debug, "WARNING readPSRFITSHeader (%s): No rows in PSRPARAM table", datafile->filename);
+ }
+ status = 0;
+      }else {
+ datafile->nr_ephemeris_lines = numrows;
+ datafile->ephemeris = malloc(numrows*sizeof(char *));
+ if(datafile->ephemeris == NULL) {
+   printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Memory allocation error", datafile->filename);
+   return 0;
+ }
+ for(i = 1; i <= numrows; i++) {
+   char_ptrptr[0] = dummy_txt;
+   if(fits_read_col(datafile->fits_fptr, TSTRING, colnum, i, 1, 1, NULL, &char_ptrptr, &anynul, &status)) {
+     fflush(stdout);
+     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Cannot read column", datafile->filename);
+     status = 0;
+     strcpy(dummy_txt, "?");
+   }
+   datafile->ephemeris[i-1] = malloc(strlen(dummy_txt)+1);
+   if(datafile->ephemeris[i-1] == NULL) {
+     printerror(verbose.debug, "ERROR readPSRFITSHeader (%s): Memory allocation error", datafile->filename);
+     return 0;
+   }
+   strcpy(datafile->ephemeris[i-1], dummy_txt);
  }
       }
     }

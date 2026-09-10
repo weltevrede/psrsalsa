@@ -26,10 +26,15 @@ long internal_application_filelist_Nrfilenames;
 int internal_application_filelist_fileopen;
 FILE *internal_application_filelist_fptr;
 char *internal_application_filelist_filename;
-void initApplication(psrsalsaApplication *application, char *name, char *genusage)
+void initApplication_internal(psrsalsaApplication *application, char *name, char *genusage, char *prog_psrsalsa_version)
 {
   verbose_definition verbose;
   cleanVerboseState(&verbose);
+  if(strcmp(PSRSALSA_PACKAGING_VERSION, prog_psrsalsa_version) != 0) {
+    printerror(0, "ERROR initApplication: The psrsalsa version of the executable and library loaded at runtime are different. Expect serious problems, such as segfaults and unexpected behaviour. None of the obtained results can be trusted.");
+    printerror(0, "PSRSALSA version: %s (library)\n", PSRSALSA_PACKAGING_VERSION);
+    printerror(0, "PSRSALSA version: %s (executable)\n", prog_psrsalsa_version);
+  }
   internal_application_cmdline_Nrfilenames = 0;
   internal_application_cmdline_CurFilename = 0;
   internal_application_filelist_CurFilename = 0;
@@ -102,6 +107,8 @@ void initApplication(psrsalsaApplication *application, char *name, char *genusag
   application->dostokes = 0;
   application->switch_coherence = 0;
   application->docoherence = 0;
+  application->switch_invariant = 0;
+  application->doinvariant = 0;
   application->switch_noweights = 0;
   application->noweights = 0;
   application->switch_useweights = 0;
@@ -160,7 +167,11 @@ void initApplication(psrsalsaApplication *application, char *name, char *genusag
   application->nr_rotateStokes = 0;
   application->switch_libversions = 0;
   application->switch_forceUniformFreqLabelling = 0;
+  application->switch_debase_slope = 0;
   application->dodebase_slope = 0;
+  application->switch_subtractprof = 0;
+  application->subtractprof_fname = NULL;
+  application->dosubtractprof = 0;
   application->fzapMask = NULL;
   application->doautot = 0;
   application->switch_onpulse2 = 0;
@@ -169,15 +180,18 @@ void initApplication(psrsalsaApplication *application, char *name, char *genusag
     printerror(0, "ERROR initApplication: Cannot initialise onpulse region.");
     exit(0);
   }
+  application->obsnr = -1;
 }
 void terminateApplication(psrsalsaApplication *application)
 {
   free(application->genusage);
   freePulselongitudeRegion(&(application->onpulse));
   freePulselongitudeRegion(&(application->onpulse2));
+  if(application->subtractprof_fname != NULL)
+    free(application->subtractprof_fname);
   closePSRData(&(application->template_file), 0, 0, application->verbose_state);
  }
-void printCitationInfo()
+void printCitationInfo(void)
 {
   printf("If you make use of PSRSALSA, please cite \"Weltevrede 2016, A&A, 590, A109\" and refer to the following website: https://github.com/weltevrede/psrsalsa\n");
 }
@@ -199,7 +213,7 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
     printf("parse_command_string: parsing \"%s\" as format \"%s\"\n", argv[argv_index], format);
   }
   nrarguments = 0;
-  for(i = 0; i < strlen(format); i++) {
+  for(i = 0; i < (int)strlen(format); i++) {
     if(format[i] == '%') {
       nrarguments++;
     }
@@ -265,7 +279,7 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
   expecttype = 0;
   expectnumber = 0;
   maxsize = 0;
-  for(i = 0; i < strlen(format); i++) {
+  for(i = 0; i < (int)strlen(format); i++) {
     handlednumber = 0;
     if(expecttype) {
       if(format[i] >= '0' && format[i] <= '9') {
@@ -318,7 +332,7 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
  if(verbose.debug) {
    printf("parse_command_string: Parsing \"%s\" as a string with maximum size %ld\n", word, maxsize);
  }
- if(strlen(word) + 1 >= maxsize) {
+ if((int)strlen(word) + 1 >= maxsize) {
    fflush(stdout);
    printerror(verbose.debug, "ERROR parse_command_string: Command line option '%s' exceeds the maximum variable length %ld", word, maxsize);
    if(maxsize == 0) {
@@ -340,9 +354,9 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
    else
      printf("parse_command_string: Parsing \"%s\" as a floating point\n", word);
  }
- float *float_ptr;
- double *double_ptr;
- char *endptr;
+ float *float_ptr = NULL;
+ double *double_ptr = NULL;
+ char *endptr = NULL;
  if(format[i] == 'l') {
    double_ptr = va_arg(args, double *);
    *double_ptr = strtod(word, &endptr);
@@ -359,10 +373,11 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
    return 0;
  }
  if(verbose.debug) {
-   if(format[i] == 'l')
+   if(format[i] == 'l') {
      printf("parse_command_string: Parsing \"%s\" as %lf\n", word, *double_ptr);
-   else
+   }else {
      printf("parse_command_string: Parsing \"%s\" as %f\n", word, *float_ptr);
+   }
  }
  if(format[i] == 'l')
    i++;
@@ -373,9 +388,9 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
    else
      printf("parse_command_string: Parsing \"%s\" as a int\n", word);
  }
- long int *long_ptr;
- int *int_ptr;
- char *endptr;
+ long int *long_ptr = NULL;
+ int *int_ptr = NULL;
+ char *endptr = NULL;
  if(format[i] == 'l') {
    long_ptr = va_arg(args, long int *);
    *long_ptr = strtol(word, &endptr, 0);
@@ -396,10 +411,11 @@ int parse_command_string(verbose_definition verbose, int argc, char **argv, int 
    return 0;
  }
  if(verbose.debug) {
-   if(format[i] == 'l')
+   if(format[i] == 'l') {
      printf("parse_command_string: Parsing \"%s\" as %ld\n", word, *long_ptr);
-   else
+   }else {
      printf("parse_command_string: Parsing \"%s\" as %d\n", word, *int_ptr);
+   }
  }
  if(format[i] == 'l')
    i++;
@@ -467,13 +483,14 @@ void printApplicationHelp(psrsalsaApplication *application)
     }
     if(application->switch_noweights)
       fprintf(stdout, "  -noweights        Ignore the weights in the PSRFITS input file\n");
-    if(application->switch_noweights)
+    if(application->switch_useweights)
       fprintf(stdout, "  -useweights       Force usage of the weights in the PSRFITS input file\n");
-    if(application->switch_noweights)
+    if(application->switch_uniformweights)
       fprintf(stdout, "  -uniformweights   Ignore weights in the PSRFITS input file, except if zero\n");
     if(application->switch_history_cmd_only) {
       fprintf(stdout, "  -history_cmd_only Write the history without timestamp, hence re-running the\n");
-      fprintf(stdout, "                    same command might result in identical files.\n");
+      fprintf(stdout, "                    same command might result in identical files. Any path\n");
+      fprintf(stdout, "                    in front of the executable name will be stripped.\n");
     }
   }
   if(application->switch_templatedata || application->switch_align || application->switch_template
@@ -488,7 +505,7 @@ void printApplicationHelp(psrsalsaApplication *application)
     if(application->switch_templatedata)
       fprintf(stdout, "  -templatedata file Use this data file as a template profile\n");
   }
-  if(application->switch_polselect || application->switch_rebin || application->switch_nread || application->switch_nskip || application->switch_conshift || application->switch_circshift || application->switch_rot || application->switch_rotdeg || application->switch_tscr || application->switch_TSCR || application->switch_tscr_complete || application->switch_fscr || application->switch_FSCR || application->switch_dedisperse || application->switch_deFaraday || application->switch_stokes || application->switch_coherence || application->switch_changeRefFreq || application->switch_scale || application->switch_debase || application->switch_deparang || application->switch_insertparang || application->switch_norm || application->switch_normglobal || application->switch_fchan || application->switch_blocksize || application->switch_shuffle || application->switch_clip || application->switch_rotateStokes
+  if(application->switch_polselect || application->switch_rebin || application->switch_nread || application->switch_nskip || application->switch_conshift || application->switch_circshift || application->switch_rot || application->switch_rotdeg || application->switch_tscr || application->switch_TSCR || application->switch_tscr_complete || application->switch_fscr || application->switch_FSCR || application->switch_dedisperse || application->switch_deFaraday || application->switch_stokes || application->switch_coherence || application->switch_invariant || application->switch_changeRefFreq || application->switch_scale || application->switch_debase || application->switch_deparang || application->switch_insertparang || application->switch_norm || application->switch_normglobal || application->switch_fchan || application->switch_blocksize || application->switch_shuffle || application->switch_clip || application->switch_rotateStokes || application->switch_debase_slope || application->switch_subtractprof
 ) {
     fprintf(stdout, "\nGeneral preprocess options:\n");
     if(application->switch_blocksize)
@@ -508,8 +525,12 @@ void printApplicationHelp(psrsalsaApplication *application)
       fprintf(stdout, "  -coherence      Convert Stokes to coherency parameters\n");
     if(application->switch_debase)
       fprintf(stdout, "  -debase         Subtract baseline from data (use with -onpulse)\n");
+    if(application->switch_debase_slope)
+      fprintf(stdout, "  -debase_slope   As -debase, but takes out a gradient\n");
     if(application->switch_fchan)
       fprintf(stdout, "  -fchan f        Use frequency channel f only\n");
+    if(application->switch_invariant)
+      fprintf(stdout, "  -invariant      Convert polarization parameters into the invariant interval\n");
     if(application->switch_norm) {
       fprintf(stdout, "  -norm           Normalize peak value of each subint/channel independently. If\n");
       fprintf(stdout, "                  an onpulse region is set, the peak of that region is used. The\n");
@@ -521,7 +542,7 @@ void printApplicationHelp(psrsalsaApplication *application)
     if(application->switch_nskip)
       fprintf(stdout, "  -nskip n        Skip n subintegrations in input data (default is 0)\n");
     if(application->switch_nread)
-      fprintf(stdout, "  -nread n        Use n subintegrationss in input data (default is all)\n");
+      fprintf(stdout, "  -nread n        Use n subintegrations in input data (default is all)\n");
     if(application->switch_insertparang)
       fprintf(stdout, "  -parang         Insert parallactic angle effect (-deparang corrects data)\n");
     if(application->switch_polselect)
@@ -563,6 +584,15 @@ void printApplicationHelp(psrsalsaApplication *application)
       fprintf(stdout, "  -shuffle        Shuffle the subints in a random order\n");
     if(application->switch_stokes)
       fprintf(stdout, "  -stokes         Convert to Stokes parameters\n");
+    if(application->switch_subtractprof) {
+      fprintf(stdout, "  -subtractprof   \"file mode\"   Subtract the the profile from file from\n");
+      fprintf(stdout, "                  each. If mode=1, this is a straightforward subtraction, while\n");
+      fprintf(stdout, "                  for mode=2 the data is scaled first to match the provided\n");
+      fprintf(stdout, "                  profile, while for mode=3 the profile is scaled first.\n");
+      fprintf(stdout, "                  The scaling includes an offset, and is based on the first\n");
+      fprintf(stdout, "                  polarization channel. Subintegrations can be aligned with\n");
+      fprintf(stdout, "                  profile using -alignsub.\n");
+    }
     if(application->switch_tscr) {
       fprintf(stdout, "  -tscr t         Add t successive subints together.\n");
       fprintf(stdout, "                  A negative number duplicates subints.\n");
@@ -719,14 +749,14 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     return 1;
   }else if(strcmp(argv[*index], "-template") == 0 && application->switch_template) {
     application->template_specified = ++(*index);
-    if(readVonMisesModel(argv[application->template_specified], &(application->vonMises_components), application->verbose_state) == 0) {
+    if(readVonMisesModel(argv[application->template_specified], &(application->vonMises_components), application->verbose_state) != 0) {
       exit(0);
     }
     return 1;
   }else if(strcmp(argv[*index], "-templatedata") == 0 && application->switch_templatedata) {
     application->template_data_index = ++(*index);
     closePSRData(&(application->template_file), 0, 0, application->verbose_state);
-    if(openPSRData(&(application->template_file), argv[application->template_data_index], 0, 0, 1, 0, application->verbose_state) == 0) {
+    if(openPSRData(&(application->template_file), argv[application->template_data_index], 0, 0, 1, 0, -1, application->verbose_state) == 0) {
       fflush(stdout);
       printerror(application->verbose_state.debug, "Cannot open template file.");
       exit(0);
@@ -740,7 +770,7 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     if(application->template_file.NrFreqChan > 1) {
       if(!preprocess_dedisperse(&(application->template_file), 0, 0, 0, application->verbose_state))
  return 0;
-      if(!preprocess_addsuccessiveFreqChans(application->template_file, &clone, application->template_file.NrFreqChan, NULL, application->verbose_state))
+      if(!preprocess_addsuccessiveFreqChans(application->template_file, &clone, application->template_file.NrFreqChan, 1, NULL, application->verbose_state))
  return 0;
       swap_orig_clone(&(application->template_file), &clone, application->verbose_state);
     }
@@ -894,11 +924,17 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
   }else if(strcmp(argv[*index], "-debase") == 0 && application->switch_debase) {
     application->dodebase = 1;
     return 1;
+  }else if(strcmp(argv[*index], "-debase_slope") == 0 && application->switch_debase_slope) {
+    application->dodebase_slope = 1;
+    return 1;
   }else if(strcmp(argv[*index], "-norm") == 0 && application->switch_norm) {
     application->do_norm = 1;
     return 1;
   }else if(strcmp(argv[*index], "-norm_global") == 0 && application->switch_normglobal) {
     application->do_normglobal = 1;
+    if(application->do_norm == 0) {
+      application->do_norm = 1;
+    }
     return 1;
   }else if(strcmp(argv[*index], "-TSCR") == 0 && application->switch_TSCR) {
     application->doTSCR = 1;
@@ -952,6 +988,9 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
     return 1;
   }else if(strcmp(argv[*index], "-coherence") == 0 && application->switch_coherence) {
     application->docoherence = 1;
+    return 1;
+  }else if(strcmp(argv[*index], "-invariant") == 0 && application->switch_invariant) {
+    application->doinvariant = 1;
     return 1;
   }else if(strcmp(argv[*index], "-shuffle") == 0 && application->switch_shuffle) {
     application->doshuffle = 1;
@@ -1011,6 +1050,23 @@ int processCommandLine(psrsalsaApplication *application, int argc, char **argv, 
       exit(0);
     }
     (application->nr_rotateStokes)++;
+    return 1;
+  }else if(strcasecmp(argv[*index], "-subtractprof") == 0 && application->switch_subtractprof) {
+    application->subtractprof_fname = malloc(10000+1);
+    if(application->subtractprof_fname == NULL) {
+      printerror(application->verbose_state.debug, "Memory allocation error while processing '%s' option.", argv[(*index)]);
+      exit(0);
+    }
+    if(parse_command_string(application->verbose_state, argc, argv, ++(*index), 0, -1, "%10000s %d", application->subtractprof_fname, &(application->dosubtractprof), NULL) == 0) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option.", argv[(*index)-1]);
+      exit(0);
+    }
+    if(application->dosubtractprof == 0) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "Cannot parse '%s' option - The second argument should be non-zero.", argv[(*index)-1]);
+      exit(0);
+    }
     return 1;
   }else if(application->switch_deparang && strcmp(argv[*index], "-deparang") == 0) {
     application->do_parang_corr = 1;
@@ -1093,11 +1149,27 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     if(preprocess_coherency(psrdata, verbose1) == 0)
       return 0;
   }
+  if(application->doinvariant) {
+    if(preprocess_invariant_interval(psrdata, verbose1) == 0)
+      return 0;
+  }
   if(application->nr_rotateStokes > 0) {
     for(i = 0; i < application->nr_rotateStokes; i++) {
       if(preprocess_rotateStokes(psrdata, &clone, 1, -1, application->rotateStokesAngle[i], NULL, application->rotateStokes1[i], application->rotateStokes2[i], verbose1) == 0)
  return 0;
     }
+  }
+  if(application->dosubtractprof) {
+    datafile_definition profile;
+    if(openPSRData(&profile, application->subtractprof_fname, 0, 0, 1, 0, -1, application->verbose_state) == 0) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "Cannot open profile file.");
+      exit(0);
+    }
+    if(preprocess_subtractprof(psrdata, profile, application->dosubtractprof, &clone, 1, verbose1) == 0) {
+      return 0;
+    }
+    closePSRData(&profile, 0, 0, application->verbose_state);
   }
   if(application->do_parang_corr > 0) {
     if(application->do_parang_corr == 2) {
@@ -1170,7 +1242,7 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     }
   }
   if(application->dofscr) {
-    if(!preprocess_addsuccessiveFreqChans(*psrdata, &clone, application->dofscr, application->fzapMask, verbose1))
+    if(!preprocess_addsuccessiveFreqChans(*psrdata, &clone, application->dofscr, 1, application->fzapMask, verbose1))
       return 0;
     swap_orig_clone(psrdata, &clone, application->verbose_state);
   }
@@ -1188,69 +1260,32 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     swap_orig_clone(psrdata, &clone, application->verbose_state);
   }
   if(application->doalign) {
-    if(verbose1.verbose) {
-      for(i = 0; i < verbose1.indent; i++)
- printf(" ");
-      if(application->doalign == 1) {
- printf("Aligning data using template\n");
-      }else {
- printf("Aligning data using template by allowing subints to rotate separately\n");
-      }
-    }
     if(application->template_specified == 0 && application->template_data_index == 0) {
       fflush(stdout);
       printerror(application->verbose_state.debug, "preprocessApplication: Can only use -align option when a template is specified on the command line.");
       return 0;
     }
-    if(application->doalign == 1) {
-      if(!preprocess_addsuccessivepulses(*psrdata, &clone, psrdata->NrSubints, application->tscr_complete, verbose2)) {
- return 0;
-      }
+    vonMises_collection_definition *vonMises_model;
+    vonMises_model = NULL;
+    datafile_definition *datafile_model;
+    datafile_model = NULL;
+    if(application->template_specified) {
+      vonMises_model = &(application->vonMises_components);
     }else {
-      if(!make_clone(*psrdata, &clone, verbose2)) {
- return 0;
-      }
+      datafile_model = &(application->template_file);
     }
-    if(!preprocess_dedisperse(&clone, 0, 0, 0, verbose2)) {
-      return 0;
-    }
-    if(psrdata->NrPols == 4) {
-      if(!preprocess_deFaraday(&clone, 0, 0, 0, NULL, verbose2))
- return 0;
-    }
-    datafile_definition clone2;
-    if(!preprocess_addsuccessiveFreqChans(clone, &clone2, clone.NrFreqChan, NULL, verbose2)) {
+    if(apply_doalign(psrdata, application->doalign, vonMises_model, datafile_model, &x, application->tscr_complete, application->verbose_state) == 0) {
+      fflush(stdout);
+      printerror(application->verbose_state.debug, "preprocessApplication: Error aligning the data");
       return 0;
     }
     if(application->doalign == 1) {
-      if(application->template_specified) {
- x = correlateVonMisesFunction(&(application->vonMises_components), clone2.NrBins, clone2.data, verbose2);
-      }else {
- if(clone2.NrBins != application->template_file.NrBins) {
-   fflush(stdout);
-   printerror(application->verbose_state.debug, "preprocessApplication: The template and the data file have a different amount of bins (%ld != %ld).", clone2.NrBins, application->template_file.NrBins);
-   return 0;
- }
- int lag;
- float correl_max;
- if(find_peak_correlation(clone2.data, application->template_file.data, clone2.NrBins, 0, 0, 1, 1, &lag, &correl_max, verbose2) == 0) {
-   return 0;
- }
- x = lag/(double)clone2.NrBins;
-      }
       if(application->doshiftphase) {
  application->shiftPhase -= x;
       }else {
  application->doshiftphase = 1;
  application->shiftPhase = -x;
       }
-    }
-    closePSRData(&clone2, 0, 0, verbose2);
-    closePSRData(&clone, 0, 0, verbose2);
-    if(verbose1.verbose) {
-      for(i = 0; i < verbose1.indent; i++)
- printf(" ");
-      printf("  done       \n");
     }
   }
   if(application->doshiftphase) {
@@ -1275,7 +1310,9 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     }
   }
   if(application->dorebin) {
-    if(!preprocess_rebin(*psrdata, &clone, application->rebin, verbose1))
+    int interp;
+    interp = 0;
+    if(!preprocess_rebin(*psrdata, &clone, application->rebin, interp, verbose1))
       return 0;
     swap_orig_clone(psrdata, &clone, application->verbose_state);
   }
@@ -1304,7 +1341,7 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
     if(device)
       ppgslct(device);
     closePSRData(&clone, 0, 0, verbose2);
-    regionShowNextTimeUse(application->onpulse, "-onpulse", "-onpulsef", stdout);
+    regionShowNextTimeUse(application->onpulse, "-onpulse", "-onpulsef", stdout, 0);
     if(verbose1.verbose) {
       for(i = 0; i < verbose1.indent; i++)
  printf(" ");
@@ -1314,27 +1351,30 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
   }
   if(application->dodebase || application->dodebase_slope) {
     if(application->dodebase == 2) {
- if(!preprocess_debase(psrdata, &(application->onpulse2), NULL, 0, verbose1))
-   return 0;
+      if(!preprocess_debase(psrdata, &(application->onpulse2), NULL, application->dodebase_slope, verbose1)) {
+ return 0;
+      }
     }else {
- if(!preprocess_debase(psrdata, &(application->onpulse), NULL, 0, verbose1))
-   return 0;
+      if(!preprocess_debase(psrdata, &(application->onpulse), NULL, application->dodebase_slope, verbose1)) {
+ return 0;
+      }
     }
   }
-  if(application->do_norm) {
-    if(preprocess_norm(*psrdata, application->normvalue, &(application->onpulse), 0, verbose1) == 0)
-      return 0;
+  if(application->do_norm == 1) {
+    if(application->do_normglobal == 0) {
+      if(preprocess_norm(*psrdata, application->normvalue, &(application->onpulse), 0, 0, verbose1) == 0)
+ return 0;
+    }else {
+      if(preprocess_norm(*psrdata, application->normvalue, &(application->onpulse), 1, 0, verbose1) == 0)
+ return 0;
+    }
   }
-  if(application->do_normglobal) {
-    if(preprocess_norm(*psrdata, application->normvalue, &(application->onpulse), 1, verbose1) == 0)
-      return 0;
-  }
-  if(application->do_clip) {
+  if(application->do_clip == 1) {
     if(preprocess_clip(*psrdata, application->clipvalue, verbose1) == 0)
       return 0;
   }
   if(application->doscale) {
-    if(preprocess_scale(*psrdata, application->scale_scale, application->scale_offset, verbose1) == 0)
+    if(preprocess_scale(*psrdata, application->scale_scale, application->scale_offset, -1, verbose1) == 0)
       return 0;
   }
   if(application->doshuffle) {
@@ -1368,6 +1408,8 @@ int preprocessApplication(psrsalsaApplication *application, datafile_definition 
  strcat(txt, " I, L, V, PA and its error, total polarization, ellipticity and its error");
       }else if(psrdata->poltype == POLTYPE_PAdPA) {
  strcat(txt, " PA and its error");
+      }else if(psrdata->poltype == POLTYPE_INVARIANT) {
+ strcat(txt, " Invariant polarization interval");
       }else {
  strcat(txt, " unknown polarisation state");
       }
@@ -1523,7 +1565,7 @@ char *getNextFilenameFromList(psrsalsaApplication *application, char **argv, ver
  printerror(application->verbose_state.debug, "ERROR getNextFilenameFromList: reading from %s failed", argv[application->filelist]);
  return 0;
       }
-      for(i = 0; i < strlen(internal_application_filelist_filename); i++) {
+      for(i = 0; i < (int)strlen(internal_application_filelist_filename); i++) {
  if(internal_application_filelist_filename[i] == '\n') {
    internal_application_filelist_filename[i] = 0;
    break;
@@ -1541,8 +1583,13 @@ char *getNextFilenameFromList(psrsalsaApplication *application, char **argv, ver
   }
   return NULL;
 }
+char * get_psrsalsa_library_packaging_version()
+{
+  return PSRSALSA_PACKAGING_VERSION;
+}
 void showlibraryversioninformation(FILE *stream)
 {
+  fprintf(stream, "PSRSALSA version: %s (library)\n", PSRSALSA_PACKAGING_VERSION);
   fprintf(stream, "cfitsio version: ");
   print_fitsio_version_used(stream);
   fprintf(stream, "\n");

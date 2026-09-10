@@ -33,6 +33,7 @@ int main(int argc, char **argv)
   double *rm_av, *rm_square, rmsigma, expectedRMerror, ftol;
   char outputname[MaxFilenameLength];
   FILE *ofile;
+  int device_nobootstrap;
   psrsalsaApplication application;
   datafile_definition datain, clone;
   pgplot_options_definition pgplot_options;
@@ -66,12 +67,14 @@ int main(int argc, char **argv)
   bootstrap = 0;
   not_normal_result_warning = 0;
   ftol = -1;
+  device_nobootstrap = 0;
   if(argc < 2) {
     printApplicationHelp(&application);
     fprintf(stdout, "Other options:\n");
     fprintf(stdout, "  -device       pgplot device for the Faraday depth plot.\n");
     fprintf(stdout, "  -device2      pgplot device for the longitude resolved map.\n");
     fprintf(stdout, "  -device3      pgplot device for the profile (used with -bootstrap).\n");
+    fprintf(stdout, "  -device_nobootstrap  Do not include the results of the bootstrap itterations to the Faraday depth plot.\n");
     fprintf(stdout, "  -rm           \"min max steps\" Set the minimum and maximum rm to search over and the nr of rm steps to use.\n");
     fprintf(stdout, "  -parabola     Fit data with parabola rather than estimated reponds.\n");
     fprintf(stdout, "  -long         Get a RM for each bin independently.\n");
@@ -115,6 +118,8 @@ int main(int argc, char **argv)
  collapse = 0;
       }else if(strcmp(argv[i], "-ascii") == 0) {
  write_ascii = 1;
+      }else if(strcmp(argv[i], "-device_nobootstrap") == 0) {
+ device_nobootstrap = 1;
       }else if(strcmp(argv[i], "-device") == 0) {
  pgplot_rmdevice = i+1;
  i++;
@@ -166,7 +171,7 @@ int main(int argc, char **argv)
   else
     randomize_idnum(&idnum);
   gsl_rng_set(rand_num_gen, idnum);
-  if(!openPSRData(&datain, argv[argc-1], 0, 0, 1, 0, application.verbose_state))
+  if(!openPSRData(&datain, argv[argc-1], 0, 0, 1, 0, application.obsnr, application.verbose_state))
     return 0;
   if(PSRDataHeader_parse_commandline(&datain, argc, argv, application.verbose_state) == 0)
     return 0;
@@ -196,7 +201,7 @@ int main(int argc, char **argv)
   if(preprocess_dedisperse(&datain, 0, 0, 0, application.verbose_state) == 0) {
     return 0;
   }
-    if(!preprocess_addsuccessiveFreqChans(datain, &profiledata, datain.NrFreqChan, NULL, application.verbose_state)) {
+    if(!preprocess_addsuccessiveFreqChans(datain, &profiledata, datain.NrFreqChan, 1, NULL, application.verbose_state)) {
       return 0;
     }
   pgplot_clear_options(&pgplot_options);
@@ -212,7 +217,7 @@ int main(int argc, char **argv)
     pgplotGraph1(&pgplot_options, profiledata.data, NULL, NULL, profiledata.NrBins, 0, profiledata.NrBins-1, 0, 0, profiledata.NrBins-1, 0, 0, 0, 1, 0, 1, 0, 1, 1, &(application.onpulse2), -1, application.verbose_state);
   }
     region_int_to_frac(&(application.onpulse2), 1.0/(float)datain.NrBins, 0);
-  regionShowNextTimeUse(application.onpulse2, "-onpulse2", "-onpulsef2", stdout);
+  regionShowNextTimeUse(application.onpulse2, "-onpulse2", "-onpulsef2", stdout, 0);
   if(bootstrap) {
     rms_channels = (float *)calloc(datain.NrFreqChan, sizeof(float));
     rm_av = (double *)calloc(datain.NrBins, sizeof(double));
@@ -248,8 +253,10 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR rmsynth: Cannot allocate memory");
     return 0;
   }
-  for(bootstrap_itt = 0; bootstrap_itt <= bootstrap; bootstrap_itt++) {
-    if(bootstrap_itt == 1 && application.verbose_state.verbose)
+  int start_index;
+  start_index = -1;
+  for(bootstrap_itt = start_index; bootstrap_itt < bootstrap; bootstrap_itt++) {
+    if(bootstrap_itt == 0 && application.verbose_state.verbose)
       printf("Starting bootstrap\n");
     if(application.verbose_state.debug)
       printf("  itteration %d: Making clone of data with added noise\n", bootstrap_itt+1);
@@ -260,7 +267,7 @@ int main(int argc, char **argv)
      printerror(application.verbose_state.debug, "ERROR rmsynth: Cannot read data.");
      return 0;
    }
-   if(bootstrap_itt > 0)
+   if(bootstrap_itt >= 0)
      sample += gsl_ran_gaussian(rand_num_gen, rms_channels[freqchannelnr]);
    if(writePulsePSRData(&clone, 0, polnr, freqchannelnr, binnr, 1, &sample, application.verbose_state) != 1) {
      printerror(application.verbose_state.debug, "ERROR rmsynth: Cannot write data.");
@@ -272,7 +279,7 @@ int main(int argc, char **argv)
     verbose_definition verbose2;
     copyVerboseState(application.verbose_state, &verbose2);
     verbose2.verbose = application.verbose_state.verbose;
-    if(bootstrap_itt != 0)
+    if(bootstrap_itt != start_index)
       verbose2.verbose = 0;
     if(application.verbose_state.debug)
       verbose2.verbose = 1;
@@ -280,9 +287,9 @@ int main(int argc, char **argv)
       printf("  itteration %d: Applying RM synthesis\n", bootstrap_itt+1);
     if(rmSynthesis(clone, rmmin, rmmax, &rmsynth_array, nrrmsteps, &(application.onpulse), verbose2) == 0)
       return 0;
-    if((application.verbose_state.verbose && bootstrap_itt == 0) || application.verbose_state.debug)
+    if((application.verbose_state.verbose && bootstrap_itt == start_index) || application.verbose_state.debug)
       printf("RM synthesis calculation done\n");
-    if(bootstrap_itt == 0) {
+    if(bootstrap_itt == start_index) {
       for(i = 0; i < datain.NrBins; i++) {
  for(j = 0; j < nrrmsteps; j++) {
    cmap[j*datain.NrBins + i] = rmsynth_array[2*(j*datain.NrBins+i)];
@@ -297,7 +304,7 @@ int main(int argc, char **argv)
       pgplot_options.viewport.dontclose = 1;
       strcpy(pgplot_options.box.xlabel, "Pulse longitude (bin)");
       strcpy(pgplot_options.box.ylabel, "RM (rad/m\\u2\\d)");
-      pgplotMap(&pgplot_options, cmap, datain.NrBins, nrrmsteps, 0, datain.NrBins-1, 0-0.5, datain.NrBins-1 + 0.5, rmmin, rmmax, rmmin, rmmax, PPGPLOT_HEAT, 0, 0, 0, NULL, 0, 0, 1.0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, application.verbose_state);
+      pgplotMap(&pgplot_options, cmap, datain.NrBins, nrrmsteps, 0, datain.NrBins-1, 0-0.5, datain.NrBins-1 + 0.5, rmmin, rmmax, rmmin-0.5*(rmmax-rmmin)/(float)nrrmsteps, rmmax+0.5*(rmmax-rmmin)/(float)nrrmsteps, PPGPLOT_HEAT, 0, 0, 0, NULL, 0, 0, 1.0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, application.verbose_state);
       pgplot_clear_options(&pgplot_options);
       if(pgplot_mapdevice)
  strcpy(pgplot_options.viewport.plotDevice, argv[pgplot_mapdevice]);
@@ -319,9 +326,9 @@ int main(int argc, char **argv)
       }
       ppgend();
       region_int_to_frac(&(application.onpulse), 1.0/(float)datain.NrBins, 0);
-      regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
+      regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout, 0);
     }
-    if(bootstrap_itt == 0) {
+    if(bootstrap_itt == start_index) {
       pgplot_clear_options(&pgplot_options);
       if(pgplot_rmdevice)
  strcpy(pgplot_options.viewport.plotDevice, argv[pgplot_rmdevice]);
@@ -351,11 +358,13 @@ int main(int argc, char **argv)
    rmgrid[i] = rmmin + (rmmax-rmmin)*i/(float)(nrrmsteps-1);
    sigmagrid[i] = 1.0;
  }
- pgplot_options.viewport.dontclose = 1;
- strcpy(pgplot_options.box.ylabel, "RM synthesis power");
- strcpy(pgplot_options.box.xlabel, "RM (rad/m\\u2\\d)");
- pgplotGraph1(&pgplot_options, singlespectrum, NULL, NULL, nrrmsteps, rmmin, rmmax, 0, rmmin, rmmax, 0, 0, 0, 0, 0, 1, -10, 1, 1, NULL, -1, application.verbose_state);
- pgplot_options.viewport.dontopen = 1;
+ if((device_nobootstrap == 0 && bootstrap_itt >= 0) || bootstrap_itt == -1) {
+   pgplot_options.viewport.dontclose = 1;
+   strcpy(pgplot_options.box.ylabel, "RM synthesis power");
+   strcpy(pgplot_options.box.xlabel, "RM (rad/m\\u2\\d)");
+   pgplotGraph1(&pgplot_options, singlespectrum, NULL, NULL, nrrmsteps, rmmin, rmmax, 0, rmmin, rmmax, 0, 0, 0, 0, 0, 1, -10, 1, 1, NULL, -1, application.verbose_state);
+   pgplot_options.viewport.dontopen = 1;
+ }
  if(parabola) {
    if(application.verbose_state.debug)
      printf("  itteration %d: Start fitting of parabola for bin %ld\n", bootstrap_itt+1, binnr);
@@ -395,15 +404,17 @@ int main(int argc, char **argv)
      printf("  itteration %d: Start fitting of parabola for bin %ld done\n", bootstrap_itt+1, binnr);
      print_fitfunctions(&function, 0, 0, -1, application.verbose_state);
    }
-   ppgbbuf();
-   ppgsci(2);
-   for(i = 0; i < nrrmsteps; i++) {
-     if(i == 0)
-       ppgmove(rmgrid[i], evaluate_fitfunc_collection(&function, rmgrid[i], application.verbose_state));
-     else
-       ppgdraw(rmgrid[i], evaluate_fitfunc_collection(&function, rmgrid[i], application.verbose_state));
+   if((device_nobootstrap == 0 && bootstrap_itt >= 0) || bootstrap_itt == -1) {
+     ppgbbuf();
+     ppgsci(2);
+     for(i = 0; i < nrrmsteps; i++) {
+       if(i == 0)
+  ppgmove(rmgrid[i], evaluate_fitfunc_collection(&function, rmgrid[i], application.verbose_state));
+       else
+  ppgdraw(rmgrid[i], evaluate_fitfunc_collection(&function, rmgrid[i], application.verbose_state));
+     }
+     ppgebuf();
    }
-   ppgebuf();
    rmcurestimate[binnr] = -0.5*function.func[1].value[0]/function.func[2].value[0];
  }else {
    float best_rm, best_offset, best_scale, *rmsynth_responds;
@@ -434,17 +445,19 @@ int main(int argc, char **argv)
    rmcurestimate[binnr] = best_rm;
    if(application.verbose_state.debug)
      printf("  itteration %d: Plotting instrumental shape for bin %ld\n", bootstrap_itt+1, binnr);
-   ppgbbuf();
-   ppgsci(2);
-   for(i = 0; i < nrrmsteps; i++) {
-     rmsynth_responds[i] *= best_scale;
-     rmsynth_responds[i] += best_offset;
-     if(i == 0)
-       ppgmove(rmgrid[i], rmsynth_responds[i]);
-     else
-       ppgdraw(rmgrid[i], rmsynth_responds[i]);
+   if((device_nobootstrap == 0 && bootstrap_itt >= 0) || bootstrap_itt == -1) {
+     ppgbbuf();
+     ppgsci(2);
+     for(i = 0; i < nrrmsteps; i++) {
+       rmsynth_responds[i] *= best_scale;
+       rmsynth_responds[i] += best_offset;
+       if(i == 0)
+  ppgmove(rmgrid[i], rmsynth_responds[i]);
+       else
+  ppgdraw(rmgrid[i], rmsynth_responds[i]);
+     }
+     ppgebuf();
    }
-   ppgebuf();
    free(rmsynth_responds);
  }
  if(!isnormal(rmcurestimate[binnr])) {
@@ -455,7 +468,7 @@ int main(int argc, char **argv)
  if(application.verbose_state.debug)
    printf("  itteration %d: Ignoring bin %ld\n", bootstrap_itt+1, binnr);
       }
-      if(bootstrap_itt > 0) {
+      if(bootstrap_itt >= 0) {
  rm_av[binnr] += rmcurestimate[binnr];
  rm_square[binnr] += rmcurestimate[binnr]*rmcurestimate[binnr];
       }else {
@@ -465,8 +478,8 @@ int main(int argc, char **argv)
  break;
       if(application.verbose_state.debug)
  printf("\n");
-      if(application.verbose_state.nocounters == 0 && bootstrap && application.verbose_state.verbose && bootstrap_itt > 0) {
- printf("\r%.2f%%       ", 100.0*((bootstrap_itt-1)*datain.NrBins+binnr)/(float)(datain.NrBins*bootstrap));
+      if(application.verbose_state.nocounters == 0 && bootstrap && application.verbose_state.verbose && bootstrap_itt >= 0) {
+ printf("\r%.2f%%       ", 100.0*((bootstrap_itt)*datain.NrBins+binnr)/(float)(datain.NrBins*bootstrap));
  fflush(stdout);
       }
       if(application.verbose_state.debug)
@@ -513,7 +526,7 @@ int main(int argc, char **argv)
   if(application.verbose_state.verbose)
     printf("Adding frequency channels\n");
   closePSRData(&clone, 0, 0, application.verbose_state);
-  if(!preprocess_addsuccessiveFreqChans(datain, &clone, datain.NrFreqChan, NULL, application.verbose_state))
+  if(!preprocess_addsuccessiveFreqChans(datain, &clone, datain.NrFreqChan, 1, NULL, application.verbose_state))
     return 0;
   if(application.verbose_state.verbose) {
     printf("Calculating L from Q and U\n");

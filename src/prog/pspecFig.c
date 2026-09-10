@@ -71,7 +71,7 @@ int main(int argc, char **argv)
   int i, j, xi, SelectP2Region, LoadTwo, NrSelectedOverSaturize;
   int file_number, ImaxSet, IminSet, type_of_plots, maxSubpulsePhaseSet, minSubpulsePhaseSet, do_phase_slope, extprefix, domarkavmod;
   char PlotDevice[100], filename[1000], txt[1000];
-  int title_index, Load2dfs, LoadLRFS, plotvariance, plotmodindex, ok_flag, altProf, lineStyle, ret, longsnap;
+  int title_index, Load2dfs, LoadLRFS, plotvariance, plotmodindex, ok_flag, altProf, lineStyle, ret, longsnap, includep2Nyquist;
   double P3RegionLow, P3RegionHigh, maxSubpulsePhase, minSubpulsePhase;
   float I, x, profilescale;
   float maxvalue_mod, maxvalue_stddev, maxsigma_stddev, maxsigma_mod, ImaxValue, IminValue, phase_slope_g, phase_slope_o;
@@ -98,6 +98,7 @@ int main(int argc, char **argv)
   extprefix = 0;
   longsnap = 0;
   domarkavmod = 0;
+  includep2Nyquist = 0;
   if(argc < 2) {
     printf("Program to plot some of the pspec output\n\nUsage: pspecFig [options] stack_file (i.e. the name of the pulse stack that has been processed by pspec). By default the profile/modulation index/standard deviation profile/lrfs/2dfs are combined in a single plot (mode A). When -phaseplot is specified, a plot of the profile/subpulse amplitude and subpulse phase is produced (mode B).\n\n");
     printf("Where optional options are:\n\n");
@@ -436,6 +437,7 @@ int main(int argc, char **argv)
  twodfs2_allinfo.f2_min = twodfs_allinfo.f2_min;
  twodfs2_allinfo.f2_max = twodfs_allinfo.f2_max;
       }else {
+ SelectP2Region = 2;
  if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%lf %lf", &(twodfs2_allinfo.f2_min), &(twodfs2_allinfo.f2_max), NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pspecFig: Cannot parse '%s' option.", argv[i]);
    return 0;
@@ -780,12 +782,58 @@ int main(int argc, char **argv)
   twodfs_allinfo.f3_max = 0.5;
   if(type_of_plots == 0 && Load2dfs != 0) {
     if(load2dfs(&twodfs_allinfo, AverageProfile, file_number, extprefix, 0, argc, argv, plotoptions, application.verbose_state) == 0) {
+      closePSRData(&AverageProfile, 0, 0, application.verbose_state);
+      closePSRData(&(twodfs_allinfo.datafile), 0, 0, application.verbose_state);
+      closePSRData(&(twodfs2_allinfo.datafile), 0, 0, application.verbose_state);
+      closePSRData(&lrfs, 0, 0, application.verbose_state);
+      closePSRData(&VarianceProfile, 0, 0, application.verbose_state);
+      closePSRData(&ModProfile, 0, 0, application.verbose_state);
+      closePSRData(&VarianceProfileErr, 0, 0, application.verbose_state);
+      closePSRData(&ModProfileErr, 0, 0, application.verbose_state);
+      closePSRData(&subpulseTrackProfile, 0, 0, application.verbose_state);
+      closePSRData(&subpulseTrackProfileErr, 0, 0, application.verbose_state);
+      closePSRData(&subpulseAmpProfile, 0, 0, application.verbose_state);
+      terminateApplication(&application);
       return 0;
+    }
+    if(includep2Nyquist == 0 && SelectP2Region == 0) {
+      double f2_resolution;
+      f2_resolution = (twodfs_allinfo.f2_max - twodfs_allinfo.f2_min)/(double)(twodfs_allinfo.datafile.NrBins-1);
+      if(fabs(twodfs_allinfo.f2_min + twodfs_allinfo.f2_max) > 0.5*f2_resolution) {
+ if(application.verbose_state.verbose) {
+   printf("Adjust P2 range of 2DFS in order to drop Nyquist frequency in %s: %f ... %f cpp -> ", twodfs_allinfo.datafile.filename, twodfs_allinfo.f2_min, twodfs_allinfo.f2_max);
+ }
+ if(twodfs_allinfo.f2_max > -twodfs_allinfo.f2_min) {
+   twodfs_allinfo.f2_max = -twodfs_allinfo.f2_min;
+ }else {
+   twodfs_allinfo.f2_min = -twodfs_allinfo.f2_max;
+ }
+ if(application.verbose_state.verbose) {
+   printf("%f ... %f cpp\n", twodfs_allinfo.f2_min, twodfs_allinfo.f2_max);
+ }
+      }
     }
     if(LoadTwo != 0) {
       file_number++;
       if(load2dfs(&twodfs2_allinfo, AverageProfile, file_number, extprefix, 0, argc, argv, plotoptions, application.verbose_state) == 0) {
  return 0;
+      }
+      if(includep2Nyquist == 0 && SelectP2Region == 0) {
+ double f2_resolution;
+ f2_resolution = (twodfs_allinfo.f2_max - twodfs_allinfo.f2_min)/(double)(twodfs_allinfo.datafile.NrBins-1);
+ if(fabs(twodfs2_allinfo.f2_min + twodfs2_allinfo.f2_max) > 0.5*f2_resolution) {
+   if(application.verbose_state.verbose) {
+     printf("Adjust P2 range of 2DFS in order to drop Nyquist frequency in %s: %f ... %f cpp -> ", twodfs2_allinfo.datafile.filename, twodfs2_allinfo.f2_min, twodfs2_allinfo.f2_max);
+   }
+   if(twodfs2_allinfo.f2_max > -twodfs2_allinfo.f2_min) {
+     twodfs2_allinfo.f2_max = -twodfs2_allinfo.f2_min;
+   }else {
+     twodfs2_allinfo.f2_min = -twodfs2_allinfo.f2_max;
+   }
+   if(application.verbose_state.verbose) {
+     printf("%f ... %f cpp\n", twodfs2_allinfo.f2_min, twodfs2_allinfo.f2_max);
+   }
+ }
       }
     }
     if(plotoptions.SelectP3Region != 0) {
@@ -1292,9 +1340,6 @@ int main(int argc, char **argv)
     }
     if(plotoptions.plot_ylabel != 0) {
       ppgsch(0.3*plotoptions.labelscale);
-      if(plotoptions.usephase)
- ppgmtxt("l",2.8,0.5,0.5,"Subpulse phase (phase)");
-      else
  ppgmtxt("l",2.8,0.5,0.5,"Subpulse phase (deg)");
       ppgsch(0.38*plotoptions.labelscale);
     }
@@ -1484,6 +1529,10 @@ void IntegrateSubsetHorizontal(datafile_definition lrfs, twodfs_def twodfs_allin
   }else {
     GetExtremesSubsetHorizontal(twodfs2_allinfo.datafile, 1, twodfs2_allinfo.f2_min, twodfs2_allinfo.f2_max, twodfs2_allinfo.f3_min, twodfs2_allinfo.f3_max, &Imin, &Imax, plotoptions);
   }
+  if(Imin == Imax) {
+    Imin = 0;
+    Imax = 1;
+  }
   double scale;
   scale = fabs(Imax);
   if(fabs(Imin) > scale)
@@ -1555,17 +1604,41 @@ void IntegrateSubsetHorizontal(datafile_definition lrfs, twodfs_def twodfs_allin
       }
     }
   }
-  y = floor(log10(Imax*0.33/scale));
-  x = floor(Imax*0.33/(pow(10,y)*scale));
-  x = x*pow(10,y);
-  char labelnumbers[3];
-  if(plotoptions.nointegrateNumbers == 0) {
-    strcpy(labelnumbers, "n");
+  float x_prefac;
+  if(Imax/scale > 0.0) {
+    y = floor(log10(Imax*0.33/scale));
+    x_prefac = floor(Imax*0.33/(pow(10,y)*scale));
+    x = x_prefac*pow(10,y);
   }else {
-    strcpy(labelnumbers, "");
+    y = floor(log10(-Imin/scale));
+    x_prefac = -floor(-Imin/(pow(10,y)*scale));
+    x = x_prefac*pow(10,y);
   }
   ppgsch(0.38*plotoptions.labelscale*0.66);
-  ppgaxis(labelnumbers,0,twodfs_allinfo.f3_max,Imax*0.33/scale,twodfs_allinfo.f3_max,0,Imax*0.33/scale,x,1,0.3,0,0,-0.5,90);
+  ppgsclp(0);
+  ppgmove(x,twodfs_allinfo.f3_max);
+  ppgdraw(x,twodfs_allinfo.f3_max+0.3*(twodfs_allinfo.f3_max-0.0)*(0.38*plotoptions.labelscale*0.66/40.0)/(0.15*plotoptions.scaleFig_y));
+  if(Imax/scale >= 0.0 && Imin <= 0.0) {
+    ppgmove(0,twodfs_allinfo.f3_max);
+    ppgdraw(0,twodfs_allinfo.f3_max+0.3*(twodfs_allinfo.f3_max-0.0)*(0.38*plotoptions.labelscale*0.66/40.0)/(0.15*plotoptions.scaleFig_y));
+  }
+  ppgsclp(1);
+  if(plotoptions.nointegrateNumbers == 0) {
+    char txt[100];
+    if(y < -2.95 || y > 3.95) {
+      if(x_prefac > 1.5) {
+ sprintf(txt, "%.0f\\x10\\u%.0f", x_prefac, y);
+      }else {
+ sprintf(txt, "10\\u%.0f", y);
+      }
+    }else {
+      sprintf(txt, "%g", x);
+    }
+    ppgptxt(x,twodfs_allinfo.f3_max+0.4*(twodfs_allinfo.f3_max-0.0)*(0.38*plotoptions.labelscale*0.66/40.0)/(0.15*plotoptions.scaleFig_y),-90,1.0,txt);
+    if(Imax*0.33/scale > 0.0 && Imin < 0.0) {
+      ppgptxt(0,twodfs_allinfo.f3_max+0.4*(twodfs_allinfo.f3_max-0.0)*(0.38*plotoptions.labelscale*0.66/40.0)/(0.15*plotoptions.scaleFig_y),-90,1.0,"0");
+    }
+  }
   ppgsch(0.38*plotoptions.labelscale);
   datafile_definition *spectrum;
   double xmin, xmax, ymin, ymax;
@@ -1596,10 +1669,14 @@ void IntegrateSubsetHorizontal(datafile_definition lrfs, twodfs_def twodfs_allin
  I += spectrum->data[yi*spectrum->NrBins+xi];
       }
     }
-    if(yi == 0) {
-      ppgmove(2.0*I/scale, y);
-    }else {
-      ppgdraw(2.0*I/scale, y);
+    float Iscaled;
+    Iscaled = 2.0*I/scale;
+    if(isfinite(Iscaled)) {
+      if(yi == 0) {
+ ppgmove(2.0*I/scale, y);
+      }else {
+ ppgdraw(2.0*I/scale, y);
+      }
     }
   }
   ppgslw(1);
@@ -1716,7 +1793,11 @@ void PlotLRFS(datafile_definition lrfs, datafile_definition AverageProfile, twod
     if(plotoptions.inside) {
       ppgbox("bcnst",0.0,0,"cst",0.0,0);
     }else {
-      ppgbox("bcnsti",0.0,0,"csti",0.0,0);
+      if(plotoptions.showwedge == 0) {
+ ppgbox("bcnsti",0.0,0,"csti",0.0,0);
+      }else {
+ ppgbox("bcnsti",0.0,0,"cst",0.0,0);
+      }
     }
   }
   if(plotoptions.noside == 0) {
@@ -1735,29 +1816,58 @@ void IntegrateSubsetVertical(twodfs_def twodfs_allinfo, int twodfsonly, int Numb
     ppgsvp(0.2, 0.2+0.11*plotoptions.scaleFig_x, 0.95-0.37*plotoptions.scaleFig_y-0.22*Number*plotoptions.scaleFig_y-offset*plotoptions.scaleFig_y, 0.95-0.33*plotoptions.scaleFig_y-0.22*Number*plotoptions.scaleFig_y-offset*plotoptions.scaleFig_y);
   }
   GetExtremesSubsetVertical(twodfs_allinfo, &Imin, &Imax);
+  if(Imin == Imax) {
+    Imin = 0;
+    Imax = 1;
+  }
   double scale;
   scale = fabs(Imax);
   if(fabs(Imin) > scale)
     scale = fabs(Imin);
-  if(normalise == 0)
+  if(normalise == 0) {
     scale = 1.0;
+  }
   ppgswin(twodfs_allinfo.f2_min,twodfs_allinfo.f2_max,Imin/scale,1.05*Imax/scale);
   if(plotoptions.noxlabels == 0)
     ppgbox("bnst",0.0,0,"bcvi",0.0,0);
   else
     ppgbox("bst",0.0,0,"bcvi",0.0,0);
   ppgbox("c",0.0,0,"",0.0,0);
-  y = floor(log10(Imax*0.7/scale));
-  x = floor(Imax*0.7/(pow(10,y)*scale));
-  x = x*pow(10,y);
-  char labelnumbers[3];
-  if(plotoptions.nointegrateNumbers == 0) {
-    strcpy(labelnumbers, "n");
+  float x_prefac;
+  if(Imax/scale > 0.0) {
+    y = floor(log10(Imax*0.7/scale));
+    x_prefac = floor(Imax*0.7/(pow(10,y)*scale));
+    x = x_prefac*pow(10,y);
   }else {
-    strcpy(labelnumbers, "");
+    y = floor(log10(-Imin/scale));
+    x_prefac = -floor(-Imin/(pow(10,y)*scale));
+    x = x_prefac*pow(10,y);
   }
   ppgsch(0.38*plotoptions.labelscale*0.66);
-  ppgaxis(labelnumbers,twodfs_allinfo.f2_min, 0,twodfs_allinfo.f2_min, Imax*.7/scale,0,Imax*.7/scale,x,1,0.3,0,0,-0.8,90);
+  ppgsclp(0);
+  ppgmove(twodfs_allinfo.f2_min, x);
+  ppgdraw(twodfs_allinfo.f2_min-0.3*(twodfs_allinfo.f2_max-twodfs_allinfo.f2_min)*(0.38*plotoptions.labelscale*0.66/40.0)/(0.15*plotoptions.scaleFig_y), x);
+  if(Imax/scale >= 0.0 && Imin/scale <= 0.0) {
+    ppgmove(twodfs_allinfo.f2_min, 0);
+    ppgdraw(twodfs_allinfo.f2_min-0.3*(twodfs_allinfo.f2_max-twodfs_allinfo.f2_min)*(0.38*plotoptions.labelscale*0.66/40.0)/(0.15*plotoptions.scaleFig_y), 0);
+  }
+  ppgsclp(1);
+  if(plotoptions.nointegrateNumbers == 0) {
+    char txt[100];
+    if(y < -2.95 || y > 3.95) {
+      if(x_prefac > 1.5) {
+ sprintf(txt, "%.0f\\x10\\u%.0f", x_prefac, y);
+      }else {
+ sprintf(txt, "10\\u%.0f", y);
+      }
+    }else {
+      sprintf(txt, "%g", x);
+    }
+    ppgptxt(twodfs_allinfo.f2_min-0.8*(twodfs_allinfo.f2_max-twodfs_allinfo.f2_min)*(0.38*plotoptions.labelscale*0.66/40.0)/(0.15*plotoptions.scaleFig_y), x, 0, 1.0,txt);
+    if(Imax*0.33/scale > 0.0 && Imin < 0.0) {
+      ppgptxt(twodfs_allinfo.f2_min-0.8*(twodfs_allinfo.f2_max-twodfs_allinfo.f2_min)*(0.38*plotoptions.labelscale*0.66/40.0)/(0.15*plotoptions.scaleFig_y), 0, 0, 1.0,"0");
+    }
+  }
   ppgsch(0.38*plotoptions.labelscale);
   int direction;
   for(direction = 1-plotoptions.intflip; direction < 2; direction++) {
@@ -1772,15 +1882,20 @@ void IntegrateSubsetVertical(twodfs_def twodfs_allinfo, int twodfsonly, int Numb
       I = 0;
       for(yi = 0; yi < twodfs_allinfo.datafile.NrSubints; yi++) {
  pgplotMapCoordinateInverse(&x, &y, xi, yi);
- if(y >= twodfs_allinfo.P3IntegrateLow && y <= twodfs_allinfo.P3IntegrateHigh)
+ if(y >= twodfs_allinfo.P3IntegrateLow && y <= twodfs_allinfo.P3IntegrateHigh) {
    I += twodfs_allinfo.datafile.data[yi*twodfs_allinfo.datafile.NrBins+xi];
+ }
       }
       if(direction == 0)
  x *= -1.0;
-      if(xi == 0) {
- ppgmove(x,2.0*I/scale);
-      }else {
- ppgdraw(x,2.0*I/scale);
+      float Iscaled;
+      Iscaled = 2.0*I/scale;
+      if(isfinite(Iscaled)) {
+ if(xi == 0) {
+   ppgmove(x,Iscaled);
+ }else {
+   ppgdraw(x,Iscaled);
+ }
       }
     }
   }
@@ -1846,7 +1961,11 @@ void Plot2dfs(twodfs_def twodfs_allinfo, twodfs_def twodfs2_allinfo, datafile_de
     ppgscf(1);
     ppgsch(0.38*plotoptions.labelscale);
   }
-  ppgswin(twodfs_allinfo.f2_min,twodfs_allinfo.f2_max,twodfs_allinfo.f3_min,twodfs_allinfo.f3_max);
+  if(Number == 0) {
+    ppgswin(twodfs_allinfo.f2_min,twodfs_allinfo.f2_max,twodfs_allinfo.f3_min,twodfs_allinfo.f3_max);
+  }else {
+    ppgswin(twodfs2_allinfo.f2_min,twodfs2_allinfo.f2_max,twodfs2_allinfo.f3_min,twodfs2_allinfo.f3_max);
+  }
   if(plotoptions.plot_ylabel != 0) {
     ppgsch(0.3*plotoptions.labelscale);
     if(plotoptions.noside) {
@@ -1914,7 +2033,11 @@ void Plot2dfs(twodfs_def twodfs_allinfo, twodfs_def twodfs2_allinfo, datafile_de
       if(plotoptions.inside) {
  ppgbox("cst",0.0,0,"cst",0.0,0);
       }else {
- ppgbox("csti",0.0,0,"csti",0.0,0);
+ if(plotoptions.showwedge == 0) {
+   ppgbox("csti",0.0,0,"csti",0.0,0);
+ }else {
+   ppgbox("csti",0.0,0,"csty",0.0,0);
+ }
       }
     }
     ppgbox("c",0.0,0,"c",0.0,0);
@@ -1973,14 +2096,20 @@ void Plot2dfs(twodfs_def twodfs_allinfo, twodfs_def twodfs2_allinfo, datafile_de
       if(marktwodfsnr == Number + 1) {
  set_color_featurenumber(featurenr, 1);
  ppgslw(13);
- ppgerr1(1, markp2, markp3, markp2errpos, 1.0);
- ppgerr1(3, markp2, markp3, markp2errneg, 1.0);
- ppgerr1(6, markp2, markp3, markp3err, 1.0);
+ if(markp2errpos > 0.0)
+   ppgerr1(1, markp2, markp3, markp2errpos, 1.0);
+ if(markp2errneg > 0.0)
+   ppgerr1(3, markp2, markp3, markp2errneg, 1.0);
+ if(markp3err > 0.0)
+   ppgerr1(6, markp2, markp3, markp3err, 1.0);
  ppgslw(1);
  ppgsci(1);
- ppgerr1(1, markp2, markp3, markp2errpos, 1.0);
- ppgerr1(3, markp2, markp3, markp2errneg, 1.0);
- ppgerr1(6, markp2, markp3, markp3err, 1.0);
+ if(markp2errpos > 0.0)
+   ppgerr1(1, markp2, markp3, markp2errpos, 1.0);
+ if(markp2errneg > 0.0)
+   ppgerr1(3, markp2, markp3, markp2errneg, 1.0);
+ if(markp3err > 0.0)
+   ppgerr1(6, markp2, markp3, markp3err, 1.0);
  featurenr++;
       }
       i++;
@@ -2165,7 +2294,7 @@ int loadLRFS(datafile_definition *lrfs, int extprefix, int longsnap, int argc, c
     printf("Reading %s\n", filename);
   }
   closePSRData(lrfs, 0, 0, verbose);
-  if(!openPSRData(lrfs, filename, 0, 0, 1, 0, verbose)) {
+  if(!openPSRData(lrfs, filename, 0, 0, 1, 0, -1, verbose)) {
     return 0;
   }
   if(PSRDataHeader_parse_commandline(lrfs, argc, argv, verbose) == 0) {
@@ -2215,9 +2344,9 @@ int loadHeaderPulseStack(datafile_definition *AverageProfile, datafile_definitio
   if(verbose.verbose)
     printf("Reading %s\n", argv[argc-1]);
   closePSRData(AverageProfile, 0, 0, verbose);
-  if(!openPSRData(AverageProfile, argv[argc-1], 0, 0, 0, 0, verbose))
+  if(!openPSRData(AverageProfile, argv[argc-1], 0, 0, 0, 0, -1, verbose))
     return 0;
-  if(!readHeaderPSRData(AverageProfile, 0, 0, verbose))
+  if(!readHeaderPSRData(AverageProfile, 0, 0, -1, verbose))
     return 0;
   if(PSRDataHeader_parse_commandline(AverageProfile, argc, argv, verbose) == 0)
     return 0;
@@ -2270,7 +2399,7 @@ int load2dfs(twodfs_def *twodfs_allinfo, datafile_definition AverageProfile, int
     printf("Reading %s\n", filename);
   }
   closePSRData(&(twodfs_allinfo->datafile), 0, 0, verbose);
-  if(!openPSRData(&(twodfs_allinfo->datafile), filename, 0, 0, 1, 0, verbose)) {
+  if(!openPSRData(&(twodfs_allinfo->datafile), filename, 0, 0, 1, 0, -1, verbose)) {
     return 0;
   }
   if(PSRDataHeader_parse_commandline(&(twodfs_allinfo->datafile), argc, argv, verbose) == 0) {

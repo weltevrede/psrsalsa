@@ -22,13 +22,14 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
+#include <gsl/gsl_sort.h>
 #include "psrsalsa.h"
 psrsalsaApplication application;
 int main(int argc, char **argv)
 {
-  int index, c_index, nrwords, iformat_initial_value, didhistory, didweights, didrmstable, didfreqlist, nohead, noweights, normstable, show_linenumber;
+  int index, c_index, nrwords, iformat_initial_value, didhistory, dideph, didweights, didrmstable, didfreqlist, nohead, noweights, normstable, show_linenumber;
   int maxfilenamelength, maxobservatorylength, maxgentypelength, maxscanidlength, maxobserverlength, maxprojectidlength, maxinstrumentlength, maxfileformatlength, j;
-  int showfootnotes, footnote_length, footnote_length2, footnote_search, footnote_parang, precision;
+  int showfootnotes, footnote_length, footnote_length2, footnote_search, footnote_parang, precision, dosort;
   long i;
   char *filename_ptr, cmd[5000];
   datafile_definition *datain;
@@ -49,6 +50,7 @@ int main(int argc, char **argv)
   footnote_parang = 0;
   show_linenumber = 0;
   precision = 0;
+  dosort = 0;
   if(argc < 2) {
     printf("Program to show the header information of pulsar data. Usage:\n\n");
     printApplicationHelp(&application);
@@ -87,6 +89,7 @@ int main(int argc, char **argv)
  printf("dec           Declination\n");
  printf("dm            Dispersion measure\n");
  printf("dt            Time interval per phase bin\n");
+ printf("eph           Show ephemeris (if supported in file)\n");
  printf("format        Format identifier of the observation\n");
  printf("freq          Centre frequency\n");
  printf("freqlist      Show the (weighted) frequency for each channel/subint\n");
@@ -127,6 +130,9 @@ int main(int argc, char **argv)
  c_index = ++i;
       }else if(strcmp(argv[i], "-linenr") == 0) {
  show_linenumber = 1;
+      }else if(strcmp(argv[i], "-E") == 0) {
+ printerror(application.verbose_state.verbose, "pheader -E is not a supported command-line option. Maybe you intended to use -c eph instead?");
+ return 0;
       }else {
  if(argv[i][0] == '-') {
    printerror(application.verbose_state.verbose, "Unknown option: %s\n\nRun pheader without command line arguments to show help", argv[i]);
@@ -173,6 +179,7 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "mjd") == 0) {
       }else if(strcasecmp(cmd, "format") == 0) {
       }else if(strcasecmp(cmd, "hist") == 0) {
+      }else if(strcasecmp(cmd, "eph") == 0 || strcasecmp(cmd, "ephemeris") == 0) {
       }else if(strcasecmp(cmd, "weights") == 0) {
  noweights = 0;
       }else if(strcasecmp(cmd, "rms_table") == 0) {
@@ -215,7 +222,7 @@ int main(int argc, char **argv)
       free(datain);
       return 0;
     }
-    if(openPSRData(&datain[i], filename_ptr, application.iformat, 0, 0, 0, application.verbose_state) == 0) {
+    if(openPSRData(&datain[i], filename_ptr, application.iformat, 0, 0, 0, application.obsnr, application.verbose_state) == 0) {
       printerror(application.verbose_state.verbose, "pheader: Error opening data");
       return 0;
     }
@@ -231,7 +238,7 @@ int main(int argc, char **argv)
     if(normstable == 0) {
       noscales_option = 0;
     }
-    if(readHeaderPSRData(&datain[i], noscales_option, 0, verbose2) == 0) {
+    if(readHeaderPSRData(&datain[i], noscales_option, 0, application.obsnr, verbose2) == 0) {
       printerror(application.verbose_state.verbose, "pheader: Error reading header");
       return 0;
     }
@@ -246,6 +253,23 @@ int main(int argc, char **argv)
    printf("History for %s\n", filename_ptr);
    showHistory(datain[i], noverbose);
    didhistory = 1;
+ }
+      }
+      dideph = 0;
+      pickWordFromString(argv[c_index], 1, &nrwords, 0, ' ', application.verbose_state);
+      for(j = 0; j < nrwords; j++) {
+ sscanf(pickWordFromString(argv[c_index], j+1, &nrwords, 0, ' ', application.verbose_state), "%s", cmd);
+ if(strcasecmp(cmd, "eph") == 0 || strcasecmp(cmd, "ephemeris") == 0) {
+   if(datain[i].nr_ephemeris_lines == 0) {
+     printf("Ephemeris for %s -- Not stored in input file\n", filename_ptr);
+   }else {
+     printf("Ephemeris for %s\n", filename_ptr);
+     int line;
+     for(line = 0; line < datain[i].nr_ephemeris_lines; line++) {
+       printf("%s\n", datain[i].ephemeris[line]);
+     }
+   }
+   dideph = 1;
  }
       }
       didweights = 0;
@@ -319,7 +343,7 @@ int main(int argc, char **argv)
     terminateApplication(&application);
     return 0;
   }
-  if(nrwords == didhistory + didweights + didfreqlist + didrmstable) {
+  if(nrwords == didhistory + dideph + didweights + didfreqlist + didrmstable) {
     for(i = 0; i < numberInApplicationFilenameList(&application, argv, application.verbose_state); i++) {
       closePSRData(&datain[i], 0, 0, application.verbose_state);
     }
@@ -456,6 +480,7 @@ int main(int argc, char **argv)
       }else if(strcasecmp(cmd, "depar") == 0) {
  printf(" depar");
       }else if(strcasecmp(cmd, "hist") == 0) {
+      }else if(strcasecmp(cmd, "eph") == 0 || strcasecmp(cmd, "ephemeris") == 0) {
       }else if(strcasecmp(cmd, "weights") == 0) {
       }else if(strcasecmp(cmd, "freqlist") == 0) {
       }else if(strcasecmp(cmd, "rms_table") == 0) {
@@ -507,7 +532,33 @@ int main(int argc, char **argv)
     }
     printf("\n");
   }
-  for(index = 0; index < numberInApplicationFilenameList(&application, argv, application.verbose_state); index++) {
+  unsigned long *sort_indx;
+  int index_loop;
+  if(dosort) {
+    double *sort_value;
+    sort_indx = (unsigned long *)malloc(numberInApplicationFilenameList(&application, argv, application.verbose_state)*sizeof(unsigned long));
+    sort_value = (double *)malloc(numberInApplicationFilenameList(&application, argv, application.verbose_state)*sizeof(double));
+    if(sort_indx == NULL || sort_value == NULL) {
+      printerror(application.verbose_state.debug, "ERROR pheader: Memory allocation error\n");
+      return 1;
+    }
+    for(index_loop = 0; index_loop < numberInApplicationFilenameList(&application, argv, application.verbose_state); index_loop++) {
+      if(strcasecmp(argv[dosort], "mjd") == 0) {
+ sort_value[index_loop] = datain[index_loop].mjd_start;
+      }else {
+ printerror(application.verbose_state.debug, "ERROR pheader: %s is not recognized as a supported paramter to sort output.\n", argv[dosort]);
+ return 1;
+      }
+    }
+    gsl_sort_index(sort_indx, sort_value, 1, numberInApplicationFilenameList(&application, argv, application.verbose_state));
+    free(sort_value);
+  }
+  for(index_loop = 0; index_loop < numberInApplicationFilenameList(&application, argv, application.verbose_state); index_loop++) {
+    if(dosort == 0) {
+      index = index_loop;
+    }else {
+      index = sort_indx[index_loop];
+    }
     if(show_linenumber)
       printf("%-4d ", index+1);
     printf("%s", datain[index].filename);
@@ -631,6 +682,7 @@ int main(int argc, char **argv)
  }else if(strcasecmp(cmd, "depar") == 0) {
    printf(" %5d", datain[index].isDePar);
  }else if(strcasecmp(cmd, "hist") == 0) {
+ }else if(strcasecmp(cmd, "eph") == 0 || strcasecmp(cmd, "ephemeris") == 0) {
  }else if(strcasecmp(cmd, "weights") == 0) {
  }else if(strcasecmp(cmd, "freqlist") == 0) {
  }else if(strcasecmp(cmd, "rms_table") == 0) {
@@ -661,6 +713,9 @@ int main(int argc, char **argv)
     closePSRData(&datain[i], 0, 0, application.verbose_state);
   }
   free(datain);
+  if(dosort) {
+    free(sort_indx);
+  }
   terminateApplication(&application);
   return 0;
 }

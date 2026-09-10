@@ -774,7 +774,7 @@ int paswing_remove_observed_PA_swing(datafile_definition *datafile, datafile_def
   }
   return 1;
 }
-int writePPOLHeader(datafile_definition datafile, int argc, char **argv, verbose_definition verbose)
+int writePPOLHeader(datafile_definition datafile, int argc, char **argv, int strippath_executable, verbose_definition verbose)
 {
   char *txt;
   txt = malloc(10000);
@@ -783,7 +783,7 @@ int writePPOLHeader(datafile_definition datafile, int argc, char **argv, verbose
     printerror(verbose.debug, "ERROR writePPOLHeader: Memory allocation error.");
     return 0;
   }
-  constructCommandLineString(txt, 10000, argc, argv, verbose);
+  constructCommandLineString(txt, 10000, argc, argv, strippath_executable, verbose);
   fprintf(datafile.fptr_hdr, "#ppol file: %s\n", txt);
   free(txt);
   return 1;
@@ -1236,7 +1236,7 @@ int make_polarization_projection_map(datafile_definition datafile, float *map, i
   int ok;
   long i, xi, yi, pulsenr;
   float longitude, stokesI, L, P, latitude, x, y, weight;
-  if(projection < 1 || projection > 3) {
+  if(projection < 1 || projection > 4) {
     fflush(stdout);
     printerror(verbose.debug, "ERROR make_projection_map_formIQUV: Projection type is not implemented.");
     return 0;
@@ -1350,6 +1350,9 @@ int make_polarization_projection_map(datafile_definition datafile, float *map, i
    }
    if(projection == 1) {
      projectionHammerAitoff_xy(longitude, latitude, rot_long, rot_lat, &x, &y);
+     weight = 1;
+   }else if(projection == 4) {
+     projectionMollweide_xy(longitude, latitude, rot_long, rot_lat, &x, &y);
      weight = 1;
    }else if(projection == 2) {
      projection_sphere_xy(longitude, latitude, rot_long, rot_lat, &x, &y, &weight);

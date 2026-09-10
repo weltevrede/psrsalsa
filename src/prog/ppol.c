@@ -176,11 +176,11 @@ int main(int argc, char **argv)
     fprintf(stdout, "               is 2, this sum is normalised by the sum of Stokes I. If weighting\n");
     fprintf(stdout, "               is 3, then the samples are weighted by Stokes I.\n");
     fprintf(stdout, "               Type 1 is the (equal area) Hammer-Aitoff, type 2 is a normal\n");
-    fprintf(stdout, "               spherical projection, 3 is a long/lat map. The orientation of\n");
-    fprintf(stdout, "               the projection can be set by dlong and dlat. No S/N limit is\n");
-    fprintf(stdout, "               imposed when the input is Stokes data. ppol -extendedpol can\n");
-    fprintf(stdout, "               be used first to calculate PA's and ellipticity, which allows\n");
-    fprintf(stdout, "               ppol -sigma to be used.\n");
+    fprintf(stdout, "               spherical projection, 3 is a long/lat map, 4 is a Mollweide\n");
+    fprintf(stdout, "               projection. The orientation of the projection can be set by dlong\n");
+    fprintf(stdout, "               and dlat. No S/N limit is imposed when the input is Stokes data.\n");
+    fprintf(stdout, "               ppol -extendedpol can be used first to calculate PA's and\n");
+    fprintf(stdout, "               ellipticity, which allows ppol -sigma to be used.\n");
     fprintf(stdout, "\nOptions affecting the plotting:\n");
     fprintf(stdout, "-1             Only plot PA-swing once (equivalent to -yrange \"0 180\").\n");
     fprintf(stdout, "-device        Specify plotting device for onpulse region selection.\n");
@@ -243,8 +243,8 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR ppol: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
- if(proj_type < 1 || proj_type > 3) {
-   printerror(application.verbose_state.debug, "ERROR ppol: In the '%s' option an invalid type was specified.", argv[i]);
+ if(proj_type < 1 || proj_type > 4) {
+   printerror(application.verbose_state.debug, "ERROR ppol: In the '%s' option an invalid projection type was specified.", argv[i]);
    return 0;
  }
  if(projection_weighting < 0 || projection_weighting > 3) {
@@ -353,7 +353,7 @@ int main(int argc, char **argv)
       }
     }
     cleanPSRData(&dataout, application.verbose_state);
-    if(!openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.verbose_state))
+    if(!openPSRData(&datain, filename_ptr, application.iformat, 0, 1, 0, application.obsnr, application.verbose_state))
       return 0;
     if(application.verbose_state.verbose) {
       fflush(stdout);
@@ -488,11 +488,11 @@ int main(int argc, char **argv)
  }
       }
       region_int_to_frac(&(application.onpulse), 1.0/(float)total_nr_offpulse_file_bins, 0);
-      regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
+      regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout, 0);
     }
     if(decompose_method == 0) {
       if(subtractFile) {
- if(!openPSRData(&subtract_fin, argv[subtractFile], 0, 0, 1, 0, application.verbose_state))
+ if(!openPSRData(&subtract_fin, argv[subtractFile], 0, 0, 1, 0, application.obsnr, application.verbose_state))
    return 0;
  if(subtract_fin.NrBins != datain.NrBins) {
    fflush(stdout);
@@ -696,7 +696,7 @@ int main(int argc, char **argv)
    if(oformat == PPOL_format) {
      oformat = FITS_format;
    }
-   if(!openPSRData(&padist_data, ofilename, oformat, 1, 0, 0, application.verbose_state))
+   if(!openPSRData(&padist_data, ofilename, oformat, 1, 0, 0, -1, application.verbose_state))
      return 0;
    if(!writeHeaderPSRData(&padist_data, argc, argv, application.history_cmd_only, NULL, application.verbose_state))
      return 0;
@@ -723,7 +723,7 @@ int main(int argc, char **argv)
  strcpy(ofilename, argv[writeoutFilename]);
       }
       if(writeoutFilename != -1 || extension != NULL) {
- if(!openPSRData(&dataout, ofilename, application.oformat, 1, 0, 0, application.verbose_state))
+ if(!openPSRData(&dataout, ofilename, application.oformat, 1, 0, 0, -1, application.verbose_state))
    return 0;
       }else {
  if(datain.NrSubints > 1 || datain.NrFreqChan > 1) {

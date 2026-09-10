@@ -142,7 +142,7 @@ int main(int argc, char **argv)
   if(application.verbose_state.verbose) {
     printf("Reading %s\n", filename);
   }
-  if(!openPSRData(&lrfs, filename, 0, 0, 1, 0, application.verbose_state)) {
+  if(!openPSRData(&lrfs, filename, 0, 0, 1, 0, application.obsnr, application.verbose_state)) {
     return 0;
   }
   if(application.verbose_state.verbose)
@@ -159,9 +159,9 @@ int main(int argc, char **argv)
   fl_max = lrfs.NrBins-1;
   if(application.verbose_state.verbose)
     printf("Reading %s\n", filename);
-  if(!openPSRData(&AverageProfile, input_filename_ptr, 0, 0, 0, 0, application.verbose_state))
+  if(!openPSRData(&AverageProfile, input_filename_ptr, 0, 0, 0, 0, application.obsnr, application.verbose_state))
     return 0;
-  if(!readHeaderPSRData(&AverageProfile, 0, 0, application.verbose_state))
+  if(!readHeaderPSRData(&AverageProfile, 0, 0, application.obsnr, application.verbose_state))
     return 0;
   AverageProfile.data = malloc(AverageProfile.NrBins*sizeof(float));
   if(AverageProfile.data == NULL) {
@@ -177,7 +177,7 @@ int main(int argc, char **argv)
     AverageProfile.NrPols = 1;
     AverageProfile.NrFreqChan = 1;
     AverageProfile.NrSubints = 1;
-    if(preprocess_rebin(AverageProfile, &clone, lrfs.NrBins, application.verbose_state) == 0) {
+    if(preprocess_rebin(AverageProfile, &clone, lrfs.NrBins, 0, application.verbose_state) == 0) {
       printwarning(application.verbose_state.debug, "WARNING: Rebinning of profile failed.");
       return 0;
     }
@@ -692,7 +692,7 @@ int load_2dfs(char *input_filename_ptr, int extprefix, int component_number, int
       return 0;
     }
   }
-  if(!openPSRData(&twodfs, filename, 0, 0, 1, 0, application.verbose_state)) {
+  if(!openPSRData(&twodfs, filename, 0, 0, 1, 0, application.obsnr, application.verbose_state)) {
     return 0;
   }
   if(twodfs.NrPols > 1) {

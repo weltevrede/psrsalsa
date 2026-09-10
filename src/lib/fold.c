@@ -98,21 +98,21 @@ void foldP3_simple(float *data, long nry, long starty, long nrx, float *map, flo
     }
   }
 }
-int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float foldp3, int refine, int cyclesperblock, int noSmooth, float smoothWidth, float slope, float subpulse_offset, pulselongitude_regions_definition *onpulse
-, verbose_definition verbose)
+int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float foldp3, int refine, float cyclesperblock, int noSmooth, float smoothWidth, float slope, float subpulse_offset, pulselongitude_regions_definition *onpulse
+    , int oldcorrelation, verbose_definition verbose)
 {
   float *blockmap, correl, maxcorrel, *template, *nrcounts, *nrcounts_block;
   int i, b, offset, *bestoffset, itt, ok;
   long startpulse, pulsesleft, dN, blockcounter;
-  if(cyclesperblock < 1) {
+  if(cyclesperblock < 1.0) {
     fflush(stdout);
-    printerror(verbose.debug, "foldP3: cyclesperblock (%d) makes no sense", cyclesperblock);
+    printerror(verbose.debug, "foldP3: cyclesperblock (%f) is expected to be >= 1.0", cyclesperblock);
     return 0;
   }
   dN = foldp3*cyclesperblock;
     {
       if(verbose.verbose)
- printf("Folding data onto P3=%f using %ld subint blocks of data (refine=%d cyclesperblock=%d smoothWidth=%f slope=%f deg/bin offset=%f)\n", foldp3, dN, refine, cyclesperblock, smoothWidth, slope, subpulse_offset);
+ printf("Folding data onto P3=%f using %ld subint blocks of data (refine=%d cyclesperblock=%f smoothWidth=%f slope=%f deg/bin offset=%f)\n", foldp3, dN, refine, cyclesperblock, smoothWidth, slope, subpulse_offset);
     }
   nrcounts = (float *)malloc(nrx*nr_p3_bins*sizeof(float));
   if(nrcounts == NULL) {
@@ -160,12 +160,17 @@ int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float fo
       startpulse = 0;
       pulsesleft = nry;
       blockcounter = 0;
-      while(pulsesleft > foldp3*cyclesperblock) {
+      while(pulsesleft > dN) {
  {
    maxcorrel = 0;
    for(offset = 0; offset < nr_p3_bins; offset++) {
-     foldP3_simple(data, startpulse+dN, startpulse, nrx, blockmap, nrcounts_block, nr_p3_bins, foldp3, offset*foldp3/(float)nr_p3_bins, 1, noSmooth, smoothWidth, slope, subpulse_offset,
-0*verbose.debug);
+     if(oldcorrelation == 1) {
+       foldP3_simple(data, startpulse+dN, startpulse, nrx, blockmap, nrcounts_block, nr_p3_bins, foldp3, offset*foldp3/(float)nr_p3_bins, 1, noSmooth, smoothWidth, slope, subpulse_offset,
+       0*verbose.debug);
+     }else {
+       foldP3_simple(data, startpulse+dN, startpulse, nrx, blockmap, nrcounts_block, nr_p3_bins, foldp3, offset*foldp3/(float)nr_p3_bins, 0, noSmooth, smoothWidth, slope, subpulse_offset,
+       0*verbose.debug);
+     }
      correl = 0;
      for(i = 0; i < nr_p3_bins; i++) {
        for(b = 0; b < nrx; b++) {
@@ -176,10 +181,19 @@ int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float fo
     ok = 1;
   }
   if(ok) {
-    if(itt > 0)
-      correl += template[i*nrx+b]*template[i*nrx+b]*blockmap[i*nrx+b]*blockmap[i*nrx+b];
-    else
-      correl += map[i*nrx+b]*map[i*nrx+b]*blockmap[i*nrx+b]*blockmap[i*nrx+b];
+    if(itt > 0) {
+      if(oldcorrelation == 1) {
+        correl += template[i*nrx+b]*template[i*nrx+b]*blockmap[i*nrx+b]*blockmap[i*nrx+b];
+      }else {
+        correl += template[i*nrx+b]*blockmap[i*nrx+b];
+      }
+    }else {
+      if(oldcorrelation == 1) {
+        correl += map[i*nrx+b]*map[i*nrx+b]*blockmap[i*nrx+b]*blockmap[i*nrx+b];
+      }else {
+        correl += map[i*nrx+b]*blockmap[i*nrx+b];
+      }
+    }
   }
        }
      }

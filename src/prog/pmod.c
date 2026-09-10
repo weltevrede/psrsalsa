@@ -23,6 +23,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <string.h>
 #include "psrsalsa.h"
 #include "gsl/gsl_randist.h"
+#include <gsl/gsl_fit.h>
 int readZapFile(char *zaplistname, int *zapMask, int zapSkipLines, int nrZapCols, int zapColumn, int zapColumn2, int inverseZap, verbose_definition verbose);
 void make_blocks(long baseline_length, long blockSize, long nrPulses, long *nrOutputBlocks, int *zapMask, verbose_definition verbose);
 int main(int argc, char **argv)
@@ -34,6 +35,8 @@ int main(int argc, char **argv)
   int selectMoreOnpulseRegions;
   int outputlist, filename;
   int *zapMask, *fzapMask;
+  int debase_slope_flag;
+  int debase_highpass_flag;
   long i, j, k, l, m, tmp_used_pulses;
   long nrOutputBlocks, nrZapped, baseline_length, blockSize, firstPulseToKeep, lastPulseToKeep, nrPulses;
   long dataout2_pulse, pulse_nr_in_output, idnum;
@@ -41,6 +44,7 @@ int main(int argc, char **argv)
   char *filename_ptr, zaplistname[MaxFilenameLength], fzaplistname[MaxFilenameLength];
   char output_suffix[MaxFilenameLength], output_suffix2[MaxFilenameLength], output_name[MaxFilenameLength], output_name2[MaxFilenameLength];
   char txt[1000];
+  double *profileI2_double, *profilex_double;
   datafile_definition datain, dataout, dataout2;
   psrsalsaApplication application;
   gsl_rng *rand_num_gen;
@@ -75,6 +79,7 @@ int main(int argc, char **argv)
   application.switch_polselect = 1;
   application.switch_stokes = 1;
   application.switch_coherence = 1;
+  application.switch_invariant = 1;
   application.switch_noweights = 1;
   application.switch_useweights = 1;
   application.switch_uniformweights = 1;
@@ -90,6 +95,7 @@ int main(int argc, char **argv)
   application.switch_shuffle = 1;
   application.switch_rotateStokes = 1;
   application.switch_libversions = 1;
+  application.switch_subtractprof = 1;
   application.switch_forceUniformFreqLabelling = 1;
   debase_flag = 0;
   debase_offset_flag = 0;
@@ -116,6 +122,8 @@ int main(int argc, char **argv)
   strcpy(output_suffix, "debase.gg");
   strcpy(output_suffix2, "zapped.gg");
   filename = 0;
+  debase_slope_flag = 0;
+  debase_highpass_flag = 0;
   pgplot_clear_options(&pgplot_options);
   if(argc < 2) {
     printf("Program to modify pulsar data in various ways. Usage:\n\n");
@@ -125,6 +133,10 @@ int main(int argc, char **argv)
     printf("-debase_length       Specify number of pulses before and after the pulse to\n");
     printf("                     determine running baseline (default is -debase_length 0).\n");
     printf("                     Note that the number of pulses used is 2N+1\n");
+    printf("-debase_slope        Subtract linear baseline from each freqency channel/subint\n");
+    printf("                     separately using the off-pulse region. This is done with\n");
+    printf("                     linear regression");
+    printf(".\n");
     printf("-debase_value        Subtract the specified value baseline (fixed value) rather\n");
     printf("                     than the determined baseline, i.e. -debase_value 1.234\n");
     printf("-list                List the zap list to a file\n");
@@ -149,7 +161,7 @@ int main(int argc, char **argv)
     printf("-fzap             Specify first and last frequency channel to zap\n");
     printf("                  (can specify -fzap multiple times)\n");
     printf("-blocksize        Nr of succesive nonzapped pulses that should be writen out\n");
-    printf("-remove           Remove zapped pulses instead of making them zero\n");
+    printf("-remove           Remove zapped pulses (subints) instead of making them zero\n");
     printf("\nOn-pulse definition:\n\n");
     printf("-onpulsegr        Enables selecting more on-pulse regions graphically than\n");
     printf("                  defined by -onpulse\n");
@@ -184,6 +196,8 @@ int main(int argc, char **argv)
  i++;
       }else if(strcmp(argv[i], "-onpulse_subst_noise") == 0) {
  removeOnPulse_flag = 1;
+      }else if(strcmp(argv[i], "-debase_slope") == 0) {
+ debase_slope_flag = 1;
       }else if(strcmp(argv[i], "-debase_length") == 0) {
  if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%ld", &baseline_length, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pmod: Cannot parse '%s' option.", argv[i]);
@@ -309,6 +323,19 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR pmod: No files specified");
     return 0;
   }
+  int do_fzap;
+  do_fzap = 0;
+  for(i = 1; i < argc; i++) {
+    if(strcmp(argv[i], "-fzap") == 0) {
+      do_fzap = 1;
+    }
+  }
+  if(fzapoption != 0) {
+    do_fzap = 1;
+  }
+  if(remove_pulses_flag && do_fzap) {
+    printwarning(application.verbose_state.debug, "WARNING pmod: The -remove option is ONLY applied to subints, not frequency channels.");
+  }
   strcpy(pgplot_options.viewport.plotDevice, application.pgplotdevice);
   pgplot_options.viewport.dontclose = 1;
   gsl_rng_env_setup();
@@ -348,13 +375,13 @@ int main(int argc, char **argv)
       terminateApplication(&application);
       return 0;
     }
-    i = openPSRData(&datain, filename_ptr, application.iformat, 0, read_whole_file, 0, application.verbose_state);
+    i = openPSRData(&datain, filename_ptr, application.iformat, 0, read_whole_file, 0, application.obsnr, application.verbose_state);
     if(i == 0) {
       printerror(application.verbose_state.debug, "ERROR pmod: Error opening data");
       return 0;
     }
     if(!read_whole_file) {
-      if(readHeaderPSRData(&datain, 0, 0, application.verbose_state) == 0) {
+      if(readHeaderPSRData(&datain, 0, 0, application.obsnr, application.verbose_state) == 0) {
  printerror(application.verbose_state.debug, "pmod: Error reading header");
  return 0;
       }
@@ -470,7 +497,9 @@ int main(int argc, char **argv)
     runningBaseline = (float *)malloc(nrPulses*nrPol*sizeof(float));
     baseline = (float *)malloc(nrPulses*nrPol*sizeof(float));
     runningRMS = (float *)malloc(nrPulses*nrPol*sizeof(float));
-    if(profileI == NULL || rms == NULL || runningBaseline == NULL || baseline == NULL || runningRMS == NULL
+    profileI2_double = (double *)malloc(nrBins*sizeof(double));
+    profilex_double = (double *)malloc(nrBins*sizeof(double));
+    if(profileI == NULL || rms == NULL || runningBaseline == NULL || baseline == NULL || runningRMS == NULL || profileI2_double == NULL || profilex_double == NULL
        ) {
       printerror(application.verbose_state.debug, "ERROR pmod: Memory allocation error.");
       return 0;
@@ -506,7 +535,7 @@ int main(int argc, char **argv)
  }
       }
     region_int_to_frac(&(application.onpulse), 1.0/(float)datain.NrBins, 0);
-    regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
+    regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout, 0);
     if(application.verbose_state.verbose) {
       long nronpulsebins, nroffpulsebins;
       nronpulsebins = nroffpulsebins = 0;
@@ -584,7 +613,7 @@ int main(int argc, char **argv)
     if(remove_pulses_flag)
       dataout.NrSubints -= nrZapped;
     if(application.verbose_state.verbose) printf("Output data contains %ld bins, %ld pulses, %ld polarizations and %ld frequencies.\n", dataout.NrBins, dataout.NrSubints, dataout.NrPols, dataout.NrFreqChan);
-    if(openPSRData(&dataout, output_name, application.oformat, 1, 0, 0, application.verbose_state) == 0) {
+    if(openPSRData(&dataout, output_name, application.oformat, 1, 0, 0, -1, application.verbose_state) == 0) {
       printf("Cannot open %s\n\n", output_name);
       return 0;
     }
@@ -597,7 +626,7 @@ int main(int argc, char **argv)
       dataout2.NrBins = nrBins;
       dataout2.NrSubints = nrZapped;
       if(dataout2.NrSubints > 0) {
- if(openPSRData(&dataout2, output_name2, application.oformat, 1, 0, 0, application.verbose_state) == 0) {
+ if(openPSRData(&dataout2, output_name2, application.oformat, 1, 0, 0, -1, application.verbose_state) == 0) {
    printf("Cannot open %s\n\n", output_name);
    return 0;
  }
@@ -607,6 +636,7 @@ int main(int argc, char **argv)
  }
       }
     }
+    if(debase_slope_flag == 0 && debase_highpass_flag == 0) {
       for(k=0; k < nrPol; k++) {
  for(l = 0; l < NrFreqChan; l++) {
    if(l == 0) {
@@ -758,6 +788,42 @@ int main(int argc, char **argv)
    deviceOpened = 1;
  }
       }
+    }
+    if(debase_slope_flag || debase_highpass_flag) {
+      if(debase_slope_flag && debase_highpass_flag == 0) {
+ double a, b, cov00, cov01, cov11, sumsq;
+ float value_float;
+ long n;
+ n = 0;
+ for(j = 0; j < nrBins; j++) {
+   if(checkRegions(j, &(application.onpulse), 0, application.verbose_state) == 0)
+     profilex_double[n++] = j;
+ }
+ for(k=0; k < nrPol; k++) {
+   for(l = 0; l < NrFreqChan; l++) {
+     for(i = 0; i < nrPulses; i++) {
+       n = 0;
+       for(j = 0; j < nrBins; j++) {
+  if(checkRegions(j, &(application.onpulse), 0, application.verbose_state) == 0) {
+    readPulsePSRData(&datain, i, k, l, j, 1, &value_float, application.verbose_state);
+    profileI2_double[n] = value_float;
+    n++;
+  }
+       }
+       gsl_fit_linear(profilex_double, 1, profileI2_double, 1, n, &a, &b, &cov00, &cov01, &cov11, &sumsq);
+       readPulsePSRData(&datain, i, k, l, 0, nrBins, profileI, application.verbose_state);
+       for(j = 0; j < nrBins; j++) {
+  profileI[j] -= a+(float)j*b;
+       }
+       if(writePulsePSRData(&dataout, i, k, l, 0, nrBins, profileI, application.verbose_state) != 1) {
+  printerror(application.verbose_state.debug, "pmod: Writing data failed.");
+  return 0;
+       }
+     }
+   }
+ }
+      }
+    }
     free(profileI);
     free(baseline);
     free(rms);
@@ -765,6 +831,8 @@ int main(int argc, char **argv)
     free(runningRMS);
     free(zapMask);
     free(fzapMask);
+    free(profileI2_double);
+    free(profilex_double);
     closePSRData(&datain, 0, 0, application.verbose_state);
     closePSRData(&dataout, 0, 0, application.verbose_state);
     closePSRData(&dataout2, 0, 0, application.verbose_state);

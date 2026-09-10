@@ -32,13 +32,13 @@ int apply_p2p3zap(float *twodfs,
   long nrBins, int fft_size, int regionnr, int argc, char **argv, psrsalsaApplication application);
 int main(int argc, char **argv)
 {
-  int fft_size, index, originalNrPols, selectMoreOnpulseRegions, powertwo, track_only_first_region, evenonpulse;
+  int fft_size, index, originalNrPols, selectMoreOnpulseRegions, powertwo, track_only_first_region, evenonpulse, notgated;
   int profile_flag, lrfs_flag, stddev_flag, mod_flag, twodfs_flag, bootstrap, subtractDC, track_flag, amplitude_flag, ftrack_mask, inverseFFT, write_flag, modSimple_flag, zoom_flag, zoom_flag1, p2range_set, regionnr, s2dfs_p3_flag, s2dfs_p2_flag, autorebin, autofft_size, do_avrg_mod, do_min_mod, extprefix, allow_cat_offpulse, noise_subtract_mode_2dfs;
   long fft_blocks, junk_int;
   long i, j, k, l, p, nrpointsrms;
   float xmin, xmax, xmin_zoom, xmax_zoom, mod_sigma, stddev_sigma, sampleI, freq_min, freq_max, var_rms_lrfs;
   float *profileI, *lrfs, *stddev, *modindex, *rms_sigma, *rms_modindex, *twodfs, *clone_profileI, *phase_track, *phase_track_phases, *amplitude_profile, slope, track_dphase;
-  float zapmin, zapmax, p2min, p2max, p3, junk_float;
+  float zapmin, zapmax, p2min, p2max, p3;
   double *stddev_av, *modindex_av, *stddev_square, *modindex_square, rms, avrg, avrg_mod_av, avrg_mod_square, avrg_mod_found, avrg_mod_err_found;
   char lrfsdevice[1000], onpulseselectdevice[1000], profiledevice[1000], trackdevice[1000], amplitudedevice[1000], twodfsdevice[1000], outputname[1000], txt[1000], s2dfs_p3_device[1000], s2dfs_p2_device[1000];
   FILE *fout_ascii;
@@ -115,6 +115,7 @@ int main(int argc, char **argv)
   extprefix = 0;
   allow_cat_offpulse = 0;
   noise_subtract_mode_2dfs = 1;
+  notgated = 0;
   application.oformat = FITS_format;
   if(argv[argc-1][0] == '-' && strcmp(argv[argc-1], "-formatlist") != 0 && strcmp(argv[argc-1], "-headerlist") != 0) {
     printerror(application.verbose_state.debug, "pspec: Last command line option is expected to be a file name (got %s).\nRun pspec without command line arguments to show help", argv[argc-1]);
@@ -124,47 +125,55 @@ int main(int argc, char **argv)
   if(argc < 2) {
     printf("Program to analyse (folded) single pulse data using mostly Fourier techniques.\nIt is assumed the data contains a single pulse in each subint and that the\nbaseline is subtracted (use pmod -debase).\n\n");
     printApplicationHelp(&application);
-    printf("General options:\n");
+    printf("General pspec specific options:\n");
     printf("  -nfft               Set size of fft's [default=%d].\n", fft_size);
-    printf("  -evenonpulse        When the onpulse region has an odd length, allow the 2dfs\n");
-    printf("                      analysis to expand the onpulse region to make it even.\n");
     printf("  -w                  Write out the results to files.\n");
+    printf("\nRequest main type of spectral calculation:\n");
+    printf("  -2dfs               Compute 2DFS (for each selected onpulse region).\n");
+    printf("  -amplitude          Compute modulation amplitude (use with -freq).\n");
+    printf("  -lrfs               Compute LRFS.\n");
+    printf("  -mod                Compute modulation index profile.\n");
+    printf("  -prof               Compute pulse profile.\n");
+    printf("  -s2dfs_p3           Compute S2DFS (sliding 2DFS P3 map).\n");
+    printf("  -s2dfs_p2           Compute S2DFS (sliding 2DFS P2 map)\n");
+    printf("                      (for first selected region only).\n");
+    printf("  -stddev             Compute standard deviation profile, normalised by the\n");
+    printf("                      average intensity in the pulse longitude bin where the\n");
+    printf("                      profile peaks.\n");
+    printf("  -track              Compute subpulse phase track (use with -freq).\n");
+    printf("\n2DFS/LRFS refinement settings / additional spectral calculations:\n");
+    printf("  -DC                 Leave the DC channel in the LRFS and 2DFS.\n");
+    printf("  -p2zap              \"P2min P2max\" Zap fluctuations in this P2 range in cpp.\n");
+    printf("  -p3zap              \"P3min P3max\" Zap fluctuations in this P3 range.\n");
+    printf("                      P3min and P3max can be specified as bins or in cpp.\n");
+    printf("\nMod. index/std. dev. refinement settings / additional spectral calculations:\n");
     printf("  -bootstrap          Find error bars on the standard deviation, modulation\n");
     printf("                      index and subpulse phase by random adding noise to the\n");
     printf("                      data. This will be done for the specified number of times\n");
     printf("                      (larger value will be more precise, but takes longer). The\n");
     printf("                      error bars (although somewhat overestimated) are more\n");
     printf("                      accurate than the analytic approximation used by default.\n");
-    printf("\nOutput options:\n");
-    printf("  -prof               Compute pulse profile.\n");
-    printf("  -lrfs               Compute LRFS.\n");
-    printf("  -DC                 Leave the DC channel in the LRFS.\n");
-    printf("  -stddev             Compute standard deviation profile, normalised by the average\n");
-    printf("                      intensity in the pulse longitude bin where the profile peaks.\n");
-    printf("  -stddev_sigma       Specify sigma threshold for the stddev output to file.\n");
-    printf("                      The plot (shown with -prof) only shows 3 sigma detections.\n");
-    printf("  -mod                Compute modulation index profile.\n");
-    printf("  -mod_sigma          Specify sigma threshold for the mod. index output to file.\n");
-    printf("                      The plot (shown with -prof) only shows 3 sigma detections.\n");
-    printf("  -track              Compute subpulse phase track (use with -freq).\n");
+    printf("  -mod_sigma          Used with -mod. Specify sigma threshold for the mod. index\n");
+    printf("                      output to file (if -w is used). Note that the plot shown\n");
+    printf("                      with -prof only shows 3 sigma detections.\n");
+    printf("  -stddev_sigma       Used with -stddev. Specify sigma threshold for the stddev\n");
+    printf("                      output to file (if -w is used). Note that the plot shown\n");
+    printf("                      with -prof only shows 3 sigma detections.\n");
+    printf("\nPhase track/amp. refinement settings / additional spectral calculations:\n");
+    printf("  -bootstrap          See above.\n");
+    printf("  -freq               Define which fluctuation frequencies (in cpp) are used for\n");
+    printf("                      the subpulse phase track/amplitude calculation\n");
+    printf("                      Can only be used once on the command-line.\n");
+    printf("  -slope              Subtract slope from subpulse phases (in degrees subpulse\n");
+    printf("                      phase per degree pulse longitude).\n");
     printf("  -track_dphase       Add specified offset (in deg) to the subpulse phase track.\n");
     printf("  -track_firstregion  Only use the first selected onpulse region to find the\n");
     printf("                      alignments of the phases of the different fft blocks.\n");
     printf("                      The other onpulse regions are still used to subtract from\n");
     printf("                      the LRFS from which the phases are derived.\n");
-    printf("  -slope              Subtract slope from subpulse phases (in degrees subpulse\n");
-    printf("                      phase per degree pulse longitude).\n");
-    printf("  -amplitude          Compute modulation amplitude (use with -freq).\n");
-    printf("  -2dfs               Compute 2DFS (for each selected onpulse region).\n");
-    printf("  -s2dfs_p3           Compute S2DFS (sliding 2DFS P3 map).\n");
-    printf("  -s2dfs_p2           Compute S2DFS (sliding 2DFS P2 map)\n");
-    printf("                      (for first selected region only).\n");
-    printf("  -freq               Define which fluctuation frequencies (in cpp) are used for\n");
-    printf("                      the subpulse phase track/amplitude calculation\n");
-    printf("                      Can only be used once on the command-line.\n");
-    printf("  -p2zap              \"P2min P2max\" Zap fluctuations in this P2 range in cpp.\n");
-    printf("  -p3zap              \"P3min P3max\" Zap fluctuations in this P3 range.\n");
-    printf("                      P3min and P3max can be specified as bins or in cpp.\n");
+    printf("\nOff-pulse region/noise related options:\n");
+    printf("  -evenonpulse        When the onpulse region has an odd length, allow the 2dfs\n");
+    printf("                      analysis to expand the onpulse region to make it even.\n");
     printf("\nGraphics options:\n");
     printf("  -onpulsed           Set pgplot device for the selection of the onpulse region.\n");
     printf("  -profd              Set pgplot device for the pulse profile.\n");
@@ -304,6 +313,13 @@ int main(int argc, char **argv)
       }
     }
   }
+#ifdef USEFFTW3
+  if(fft_size % 2 != 0) {
+    printerror(application.verbose_state.debug, "ERROR pspec: fft length is not an even number.");
+    return 0;
+  }
+#else
+  float junk_float;
   junk_float = log(fft_size)/log(2);
   junk_int = junk_float;
   junk_float = pow(2, junk_int);
@@ -311,6 +327,7 @@ int main(int argc, char **argv)
     printerror(application.verbose_state.debug, "ERROR pspec: fft length is not a power of two.");
     return 0;
   }
+#endif
   for(i = 0; i < MaxNrPolarizations; i++)
     cleanPSRData(&fin[i], application.verbose_state);
   if(application.iformat <= 0) {
@@ -323,7 +340,7 @@ int main(int argc, char **argv)
     return 0;
   }
   closePSRData(&fin[0], 0, 0, application.verbose_state);
-  if(!openPSRData(&fin[0], argv[argc-1], application.iformat, 0, 1, 0, application.verbose_state))
+  if(!openPSRData(&fin[0], argv[argc-1], application.iformat, 0, 1, 0, application.obsnr, application.verbose_state))
     return 0;
   if(PSRDataHeader_parse_commandline(&fin[0], argc, argv, application.verbose_state) == 0)
     return 0;
@@ -422,7 +439,7 @@ int main(int argc, char **argv)
     }
   }
   region_int_to_frac(&(application.onpulse), 1.0/(float)fin[0].NrBins, 0);
-  regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout);
+  regionShowNextTimeUse(application.onpulse, "-onpulse", "-onpulsef", stdout, 0);
   if(initialise_binning_dependent_variables(evenonpulse, twodfs_flag, s2dfs_p3_flag, s2dfs_p2_flag, zoom_flag, zoom_flag1, fin[0].NrBins, xmin, xmax, &xmin_zoom, &xmax_zoom, &application) == 0) {
     return 0;
   }
@@ -713,7 +730,7 @@ int main(int argc, char **argv)
      if(change_filename_extension(argv[argc-1], outputname, txt, 1000, application.verbose_state) == 0) {
        return 0;
      }
-     if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, application.verbose_state))
+     if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, -1, application.verbose_state))
        return 0;
      if(writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, NULL, application.verbose_state) == 0) {
        printerror(application.verbose_state.debug, "ERROR pspec: Unable to write header.\n");
@@ -871,6 +888,7 @@ int main(int argc, char **argv)
  }
       }
       pgplotGraph1(&pgplot_options, profileI, NULL, NULL, fin[0].NrBins, xmin, xmax, 0, xmin_zoom, xmax_zoom, 0, 0, 0, 0, 0, 1, 0, 1, 1, NULL, -1, application.verbose_state);
+      ppgbbuf();
       ppgsci(2);
       for(i = 0; i < fin[0].NrBins; i++) {
  float x;
@@ -882,6 +900,7 @@ int main(int argc, char **argv)
  }
       }
       ppgsci(1);
+      ppgebuf();
       ppgclos();
       if(write_flag) {
  if(extprefix == 0) {
@@ -910,82 +929,136 @@ int main(int argc, char **argv)
     free(amplitude_profile);
   }
   if(twodfs_flag) {
-    for(regionnr = 0; regionnr < application.onpulse.nrRegions; regionnr++) {
-      int disabled = 0;
-      if(disabled == 0) {
- if(application.onpulse.bins_defined[regionnr] == 0) {
-   printerror(application.verbose_state.debug, "ERROR pspec: region not defined in bins");
-   return 0;
- }
- twodfs = (float *)malloc((1+fft_size/2)*(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1)*sizeof(float));
- if(twodfs == NULL) {
-   printerror(application.verbose_state.debug, "ERROR pspec: Cannot allocate memory");
-   return 0;
- }
- float var_rms_2dfs;
- if(calc2DFS(fin[0].data, fin[0].NrSubints, fin[0].NrBins, fft_size, twodfs, &application.onpulse, regionnr, allow_cat_offpulse, noise_subtract_mode_2dfs, &var_rms_2dfs, application.verbose_state) == 0) {
-   printerror(application.verbose_state.debug, "ERROR pspec: Cannot calculate 2DFS");
-   return 0;
- }
- apply_p2p3zap(twodfs,
-        fin[0].NrBins, fft_size, regionnr, argc, argv, application);
- if(p2range_set == 0) {
-   p2min = -fin[0].NrBins/2.0;
-   p2max = -fin[0].NrBins/2.0 +fin[0].NrBins*(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr])/(float)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1);
- }
-   float *twodfs_input;
-     twodfs_input = twodfs;
-   if(twodfs_input != NULL) {
-     if(strcmp(twodfsdevice, "?") == 0)
-       printf("Specify plotting device to show the 2DFS: \n  ");
-     strcpy(pgplot_options.viewport.plotDevice, twodfsdevice);
-     strcpy(pgplot_options.box.xlabel, "P2 [cpp]");
-     strcpy(pgplot_options.box.ylabel, "P3 [cpp]");
-       strcpy(pgplot_options.box.title, "2DFS");
-     pgplotMap(&pgplot_options, twodfs_input, application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1, fft_size/2+1, -fin[0].NrBins/2.0, fin[0].NrBins/2.0 -0.5*fin[0].NrBins/(float)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1), p2min, p2max, 0, 0.5, 0, 0.5, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, application.verbose_state);
-     if(write_flag) {
-       fout.NrSubints = fft_size/2+1;
-       fout.NrBins = application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1;
-       fout.gentype = GENTYPE_2DFS;
-       fout.tsubMode = TSUBMODE_FIXEDTSUB;
-       if(fout.tsub_list != NULL) {
-  free(fout.tsub_list);
+    int gating_message;
+    gating_message = 1;
+    int nr_twodfs_blocks;
+    nr_twodfs_blocks = 1;
+    int twodfs_block_nr;
+    for(twodfs_block_nr = 0; twodfs_block_nr < nr_twodfs_blocks; twodfs_block_nr++) {
+      if(application.verbose_state.debug) {
+ printf("Going to compute 2dfs for block %d.\n", twodfs_block_nr);
+      }
+      for(regionnr = 0; regionnr < application.onpulse.nrRegions; regionnr++) {
+ int disabled = 0;
+ if(disabled == 0) {
+   if(application.onpulse.bins_defined[regionnr] == 0) {
+     printerror(application.verbose_state.debug, "ERROR pspec: region not defined in bins");
+     return 0;
+   }
+   twodfs = (float *)malloc((1+fft_size/2)*(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1)*sizeof(float));
+   if(twodfs == NULL) {
+     printerror(application.verbose_state.debug, "ERROR pspec: Cannot allocate memory");
+     return 0;
+   }
+   float var_rms_2dfs;
+   float *input_data;
+   input_data = fin[0].data;
+   long input_length;
+   input_length = fin[0].NrSubints;
+   if(calc2DFS(input_data, input_length, fin[0].NrBins, fft_size, twodfs, &application.onpulse, regionnr, allow_cat_offpulse, noise_subtract_mode_2dfs, &var_rms_2dfs, twodfs_flag-1, subtractDC, application.verbose_state) == 0) {
+     printerror(application.verbose_state.debug, "ERROR pspec: Cannot calculate 2DFS");
+     return 0;
+   }
+   apply_p2p3zap(twodfs,
+   fin[0].NrBins, fft_size, regionnr, argc, argv, application);
+   double nrbins_full_period;
+   int have_full_period;
+   if(notgated) {
+     if(gating_message && application.verbose_state.verbose) {
+       printf("-notgated was used, so calculations of P/P_2 will be based on the assumption that the full period would cover %ld bins.\n", fin[0].NrBins);
+       gating_message = 0;
+     }
+     nrbins_full_period = fin[0].NrBins;
+     have_full_period = 1;
+   }else {
+     if(application.verbose_state.debug) {
+       printf("Going to guess if the full period is stored: sampling time = %lf s, period = %lf s, number bins = %ld\n", get_tsamp(fin[0], 0, application.verbose_state), period, fin[0].NrBins);
+     }
+     nrbins_full_period = period/get_tsamp(fin[0], 0, application.verbose_state);
+     if(application.verbose_state.debug) {
+       printf("  So a full period should be %lf bins\n", nrbins_full_period);
+     }
+     have_full_period = 1;
+     if(fin[0].NrBins > nrbins_full_period + 0.5) {
+       if(gating_message) {
+  printerror(application.verbose_state.debug, "ERROR pspec: The sampling time (%lf s) suggest that %ld bins cover more as a full period (%lf s). Calculations of P/P_2 will potentially incorrectly assume the full period is stored. Please fix the header parameters.\n", get_tsamp(fin[0], 0, application.verbose_state), fin[0].NrBins, period);
        }
-       fout.tsub_list = (double *)malloc(sizeof(double));
-       if(fout.tsub_list == NULL) {
-  fflush(stdout);
-  printerror(application.verbose_state.debug, "ERROR pspec: Memory allocation error");
-  return 0;
+       have_full_period = 1;
+     }else {
+       if(fabs(fin[0].NrBins - nrbins_full_period) < 1.0) {
+  if(gating_message && application.verbose_state.verbose) {
+    printf("The sampling time in header suggest the full period is stored. Calculations of P/P_2 will be based on this assumption.\n");
+  }
+  have_full_period = 1;
+       }else {
+  if(gating_message) {
+    printf("The sampling time in header suggest the only a fraction of the period is stored. Calculations of P/P_2 will be based on this assumption that the full period would cover %lf bins.\n", nrbins_full_period);
+  }
+  have_full_period = 0;
        }
-       fout.tsub_list[0] = get_tobs(fin[0], application.verbose_state);
-       fout.yrangeset = 1;
-       fout.yrange[0] = 0;
-       fout.yrange[1] = 0.5;
-       fout.xrangeset = 1;
-       fout.xrange[0] = -fin[0].NrBins/2.0;
-       fout.xrange[1] = -fin[0].NrBins/2.0 +fin[0].NrBins*(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr])/(float)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1);
-       if(fout.offpulse_rms != NULL) {
-  free(fout.offpulse_rms);
-       }
-       if(fout.NrPols != 1 || fout.NrFreqChan != 1) {
-  printerror(application.verbose_state.debug, "ERROR pspec: Multiple polarizations/frequency channels not implemented when writing out a 2dfs.\n");
-  return 0;
-       }
-       fout.offpulse_rms = malloc(fout.NrPols*fout.NrFreqChan*fout.NrSubints*sizeof(float));
-       if(fout.offpulse_rms == NULL) {
-  printerror(application.verbose_state.debug, "ERROR pspec: Cannot allocate memory");
-  return 0;
-       }
-       for(i = 0; i < fout.NrSubints; i++) {
-  fout.offpulse_rms[i] = var_rms_2dfs;
-       }
+     }
+     gating_message = 0;
+   }
+   if(have_full_period) {
+     nrbins_full_period = fin[0].NrBins;
+   }
+   if(p2range_set == 0) {
+     p2min = -nrbins_full_period/2.0;
+     p2max = -nrbins_full_period/2.0 +nrbins_full_period*(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr])/(float)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1);
+   }
+     float *twodfs_input;
+       twodfs_input = twodfs;
+     if(twodfs_input != NULL) {
+       if(strcmp(twodfsdevice, "?") == 0)
+  printf("Specify plotting device to show the 2DFS: \n  ");
+       strcpy(pgplot_options.viewport.plotDevice, twodfsdevice);
+       strcpy(pgplot_options.box.xlabel, "P2 [cpp]");
+       strcpy(pgplot_options.box.ylabel, "P3 [cpp]");
+  strcpy(pgplot_options.box.title, "2DFS");
+       pgplotMap(&pgplot_options, twodfs_input, application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1, fft_size/2+1, -nrbins_full_period/2.0, nrbins_full_period/2.0 -0.5*nrbins_full_period/(float)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1), p2min, p2max, 0, 0.5, 0, 0.5, PPGPLOT_INVERTED_HEAT, application.itf, 0, 0, NULL, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, application.verbose_state);
+       if(write_flag) {
+  fout.NrSubints = fft_size/2+1;
+  fout.NrBins = application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1;
+  fout.gentype = GENTYPE_2DFS;
+  fout.tsubMode = TSUBMODE_FIXEDTSUB;
+  if(fout.tsub_list != NULL) {
+    free(fout.tsub_list);
+  }
+  fout.tsub_list = (double *)malloc(sizeof(double));
+  if(fout.tsub_list == NULL) {
+    fflush(stdout);
+    printerror(application.verbose_state.debug, "ERROR pspec: Memory allocation error");
+    return 0;
+  }
+  fout.tsub_list[0] = get_tobs(fin[0], application.verbose_state);
+  fout.yrangeset = 1;
+  fout.yrange[0] = 0;
+  fout.yrange[1] = 0.5;
+  fout.xrangeset = 1;
+  fout.xrange[0] = -nrbins_full_period/2.0;
+  fout.xrange[1] = -nrbins_full_period/2.0 +nrbins_full_period*(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr])/(double)(application.onpulse.right_bin[regionnr]-application.onpulse.left_bin[regionnr]+1);
+  if(fout.offpulse_rms != NULL) {
+    free(fout.offpulse_rms);
+  }
+  if(fout.NrPols != 1 || fout.NrFreqChan != 1) {
+    printerror(application.verbose_state.debug, "ERROR pspec: Multiple polarizations/frequency channels not implemented when writing out a 2dfs.\n");
+    return 0;
+  }
+  fout.offpulse_rms = malloc(fout.NrPols*fout.NrFreqChan*fout.NrSubints*sizeof(float));
+  if(fout.offpulse_rms == NULL) {
+    printerror(application.verbose_state.debug, "ERROR pspec: Cannot allocate memory");
+    return 0;
+  }
+  for(i = 0; i < fout.NrSubints; i++) {
+    fout.offpulse_rms[i] = var_rms_2dfs;
+  }
        if(extprefix == 0) {
     sprintf(txt, "%d.2dfs", regionnr+1);
        }
        if(change_filename_extension(argv[argc-1], outputname, txt, 1000, application.verbose_state) == 0) {
   return 0;
        }
-       if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, application.verbose_state))
+       if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, -1, application.verbose_state))
   return 0;
        sprintf(txt, "2DFS generated from pulse stack with %ld bins, using bins %d to %d and nfft=%d.", fin[0].NrBins, application.onpulse.left_bin[regionnr], application.onpulse.right_bin[regionnr], fft_size);
        if(writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, txt, application.verbose_state) == 0) {
@@ -1016,6 +1089,7 @@ int main(int argc, char **argv)
  free(twodfs);
       }
     }
+    }
   }
   if(s2dfs_p3_flag || s2dfs_p2_flag) {
     float *s2dfs_p3, *s2dfs_p2;
@@ -1040,7 +1114,7 @@ int main(int argc, char **argv)
     noverbose.verbose = 0;
     noverbose.nocounters = 1;
     for(i = 0; i < fin[0].NrSubints-fft_size+1; i++) {
-      if(calc2DFS(&fin[0].data[i*fin[0].NrBins], fft_size, fin[0].NrBins, fft_size, twodfs, &application.onpulse, 0, allow_cat_offpulse, noise_subtract_mode_2dfs, NULL, noverbose) == 0) {
+      if(calc2DFS(&fin[0].data[i*fin[0].NrBins], fft_size, fin[0].NrBins, fft_size, twodfs, &application.onpulse, 0, allow_cat_offpulse, noise_subtract_mode_2dfs, NULL, 0, subtractDC, noverbose) == 0) {
  printerror(application.verbose_state.debug, "ERROR pspec: Cannot calculate 2DFS");
  return 0;
       }
@@ -1111,7 +1185,7 @@ int main(int argc, char **argv)
  if(change_filename_extension(argv[argc-1], outputname, txt, 1000, application.verbose_state) == 0) {
    return 0;
  }
- if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, application.verbose_state))
+ if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, -1, application.verbose_state))
    return 0;
  if(writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, NULL, application.verbose_state) == 0) {
    printerror(application.verbose_state.debug, "ERROR pspec: Unable to write header.\n");
@@ -1159,7 +1233,7 @@ int main(int argc, char **argv)
  if(change_filename_extension(argv[argc-1], outputname, txt, 1000, application.verbose_state) == 0) {
    return 0;
  }
- if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, application.verbose_state))
+ if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, -1, application.verbose_state))
    return 0;
  if(writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, NULL, application.verbose_state) == 0) {
    printerror(application.verbose_state.debug, "ERROR pspec: Unable to write header.\n");
@@ -1231,6 +1305,7 @@ int pgplotProfile(char *plotDevice, int windowwidth, int windowheight, float *pr
   ppgswin(xmin_zoom, xmax_zoom, min, max*1.03);
   ppgbox("bcnsti",0.0,0,"bcntsi",0.0,0);
   ppglab(xlabel, ylabel, title);
+  ppgbbuf();
   ppgsci(1);
   ppgslw(5);
   for(i = 0; i < nrx; i++) {
@@ -1264,6 +1339,7 @@ int pgplotProfile(char *plotDevice, int windowwidth, int windowheight, float *pr
       }
     }
   }
+  ppgebuf();
   ppgclos();
   return 1;
 }

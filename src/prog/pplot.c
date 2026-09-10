@@ -99,6 +99,7 @@ int main(int argc, char **argv)
   int polymode_flag;
   int noboxx, noboxy;
   int heading_string_index;
+  int invertedticks;
   pgplot_text_state_def heading_font;
   pgplot_frame_def_internal pgplot_frame;
   pgplot_text_state_def title_font;
@@ -149,6 +150,7 @@ int main(int argc, char **argv)
   application.switch_filelist = 1;
   application.switch_size = 1;
   application.switch_macro = 1;
+  application.macro_ptr = NULL;
   application.switch_cmaplist = 1;
   application.switch_cmap = 1;
   application.switch_onpulse = 1;
@@ -163,6 +165,7 @@ int main(int argc, char **argv)
   application.switch_templatedata = 1;
   application.switch_template = 1;
   application.switch_libversions = 1;
+  application.switch_fixseed = 1;
   application.cmap = PPGPLOT_INVERTED_HEAT;
 #ifdef HAVEPGPLOT2
   strcpy(application.pgplotdevice, "/pw");
@@ -238,6 +241,7 @@ int main(int argc, char **argv)
   yUnitsMHz = 0;
   clear_pgplot_frame(&pgplot_frame);
   scalerange = 0;
+  invertedticks = 0;
   if(argc < 2) {
     printf("Program to plot pulsar data in various ways.\n");
     printApplicationHelp(&application);
@@ -304,6 +308,7 @@ int main(int argc, char **argv)
     printf("-nonumside        Disable numbering on the side panels.\n");
     printf("-noboxx           Disable drawing the x-axis.\n");
     printf("-noboxy           Disable drawing the y-axis.\n");
+    printf("-invertedticks    Invert the tickmarks (outside rather than inside)\n");
     printf("-labels           \"heading_ch heading_lw heading_f title_ch title_lw title_f label_ch label_lw label_f box_ch box_lw box_f");
     printf("\".\n");
     printf("                  default is \"%.1f %d %d %.1f %d %d %.1f %d %d %.1f %d %d", heading_font.characterheight, heading_font.linewidth, heading_font.font, title_font.characterheight, title_font.linewidth, title_font.font, label_font.characterheight, label_font.linewidth, label_font.font, box_font.characterheight, box_font.linewidth, box_font.font);
@@ -333,6 +338,8 @@ int main(int argc, char **argv)
         i++;
       }else if(strcmp(argv[i], "-appendframes") == 0) {
  appendframes_flag = 1;
+      }else if(strcmp(argv[i], "-invertedticks") == 0) {
+ invertedticks = 1;
       }else if(strcmp(argv[i], "-lw") == 0) {
  if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%d", &plotlw, NULL) == 0) {
    printerror(application.verbose_state.debug, "ERROR pplot: Cannot parse '%s' option.", argv[i]);
@@ -722,7 +729,7 @@ int main(int argc, char **argv)
    return 0;
  }
  closePSRData(&fin, 0, 0, application.verbose_state);
- if(!openPSRData(&fin, inputfilename, iformat, 0, 1, 0, application.verbose_state)) {
+ if(!openPSRData(&fin, inputfilename, iformat, 0, 1, 0, application.obsnr, application.verbose_state)) {
    printerror(application.verbose_state.debug, "ERROR pplot: Error opening file.\n");
    return 0;
  }
@@ -968,6 +975,7 @@ int main(int argc, char **argv)
      stack_state[current_stack_pos].grayscalemode = 1;
    }else {
      stack_state[current_stack_pos].grayscalemode = 0;
+     showwedge = 0;
    }
  }
  if(data_read == 0) {
@@ -1368,6 +1376,9 @@ int main(int argc, char **argv)
       ppgslw(box_font.linewidth);
       sprintf(txt1, "bc");
       sprintf(txt2, "bc");
+      if(invertedticks && showwedge) {
+ sprintf(txt2, "b");
+      }
       if(noboxx) {
  txt1[0] = 0;
  sprintf(txt2, "b");
@@ -1375,6 +1386,10 @@ int main(int argc, char **argv)
       if(noboxy) {
  sprintf(txt1, "b");
  txt2[0] = 0;
+      }
+      if(invertedticks) {
+ strcat(txt1, "i");
+ strcat(txt2, "i");
       }
       pgplot_options_definition pgplot_options;
       pgplot_clear_options(&pgplot_options);
@@ -2257,12 +2272,11 @@ int setBaselineParams(datafile_definition fin, float *baseline, float *dxshift, 
     if(fin.isFolded != 0 || fin.gentype != GENTYPE_SEARCHMODE) {
       if(period < 0.001) {
  fflush(stdout);
- printwarning(verbose.debug, "pplot: The period does not appear to be set in the header. Consider using the -header option.");
  if(xUnitsSwitch != XUNIT_BINS) {
-   printerror(verbose.debug, "       Terminating.");
+   printerror(verbose.debug, "pplot: The period does not appear to be set in the header. Consider using the -header option to make plotting work.");
    return 0;
  }else {
-   printwarning(verbose.debug, "       (warning only)");
+   printwarning(verbose.debug, "pplot: The period does not appear to be set in the header. Consider using the -header option.");
  }
       }
     }

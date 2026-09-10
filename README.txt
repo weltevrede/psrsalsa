@@ -26,36 +26,7 @@ include:
   - gsl
 See below for a description of those dependencies.
 
-The entries in the Makefile that might need editing are:
-
-* The LIBS variable.
-
-  The following libraries are directly used by the code: libcfitsio, libcpgplot, libgsl and libfftw3f.
-
-  However, they might depend on other libraries themselves and which
-  ones is system dependent.
-
-* The LIBDIRS variable.
-
-  If libraries are located in a place the compiler does not look by
-  default, they can be defined with this variable. By default, it is
-  adding the location which is set by the PGPLOT_DIR environment
-  variable.
-
-* The INCDIRS variable.
-
-  If header files are located in a place the compiler does not look by
-  default. Again, by default it is adding the location which is set by
-  the PGPLOT_DIR environment variable.
-
-* GSLFLAGS variable
-
-  The library version of the GSL library you use can be specified with
-  the -DGSL_VERSION_NUMBER=XXX. Changing this number enables/disables
-  different pieces of the code, such that the code is compilable
-  agains a range of versions. The functionality of the code might be
-  restricted depending on the version of GSL you're compiling the code
-  against.
+See the top of the Makefile for some explanations of things that might require editing to make the compilation work for your system configuration.
 
 
 DEPENDENCIES

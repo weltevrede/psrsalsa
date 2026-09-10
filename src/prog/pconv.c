@@ -63,6 +63,7 @@ int main(int argc, char **argv)
   application.switch_stokes = 1;
   application.switch_deparang = 1;
   application.switch_history_cmd_only = 1;
+  application.switch_filelist = 1;
   read_wholefile = 1;
   if(argc <= 1) {
     printApplicationHelp(&application);
@@ -113,14 +114,14 @@ int main(int argc, char **argv)
       terminateApplication(&application);
       return 0;
     }
-  if(!openPSRData(&fin, dummy_ptr, application.iformat, 0, read_wholefile, 0, application.verbose_state))
+  if(!openPSRData(&fin, dummy_ptr, application.iformat, 0, read_wholefile, 0, application.obsnr, application.verbose_state))
     return 0;
   if(read_wholefile == 0) {
     if(application.fchan_select != -1) {
       printerror(application.verbose_state.debug, "ERROR pconv: -fchan option doesn't work with -memsave option.");
       return 0;
     }
-    if(!readHeaderPSRData(&fin, 0, 0, application.verbose_state))
+    if(!readHeaderPSRData(&fin, 0, 0, application.obsnr, application.verbose_state))
       return 0;
   }
   if(PSRDataHeader_parse_commandline(&fin, argc, argv, application.verbose_state) == 0)
@@ -164,7 +165,7 @@ int main(int argc, char **argv)
   else
     n2 = fin.NrSubints;
   fout.NrSubints = n2 - n1;
-  if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, application.verbose_state))
+  if(!openPSRData(&fout, outputname, application.oformat, 1, 0, 0, -1, application.verbose_state))
     return 0;
   if(!writeHeaderPSRData(&fout, argc, argv, application.history_cmd_only, NULL, application.verbose_state))
     return 0;

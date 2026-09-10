@@ -19,8 +19,10 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include "gsl/gsl_errno.h"
 #include "gsl/gsl_randist.h"
 #include "gsl/gsl_fit.h"
+#include <gsl/gsl_sort_float.h>
+#include <gsl/gsl_statistics_float.h>
 #include "psrsalsa.h"
-int preprocess_rebin(datafile_definition original, datafile_definition *clone, long NrBins, verbose_definition verbose)
+int preprocess_rebin(datafile_definition original, datafile_definition *clone, long NrBins, int allow_interpolation, verbose_definition verbose)
 {
   long p, f, n;
   int i;
@@ -39,12 +41,17 @@ int preprocess_rebin(datafile_definition original, datafile_definition *clone, l
     printerror(verbose.debug, "ERROR preprocess_rebin: Cannot handle PA data.");
     return 0;
   }
-  if(NrBins > original.NrBins) {
+  if(original.poltype == POLTYPE_INVARIANT) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_rebin: Cannot rebin to a larger amount of bins.");
+    printerror(verbose.debug, "ERROR preprocess_rebin: Cannot handle invariant polarization interval data.");
     return 0;
   }
-  if(original.NrBins % NrBins != 0) {
+  if(NrBins > original.NrBins && allow_interpolation == 0) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_rebin: Rebinning to a larger amount of bins is not enabled.");
+    return 0;
+  }
+  if(NrBins <= original.NrBins && original.NrBins % NrBins != 0) {
     fflush(stdout);
     printwarning(verbose.debug, "WARNING preprocess_rebin: Rebinning from %ld to %ld bins implies that separate bins are not entirely independent.", original.NrBins, NrBins);
   }
@@ -284,21 +291,21 @@ int preprocess_channelselect(datafile_definition original, datafile_definition *
   }
   if(chanelnr < 0 || chanelnr >= original.NrFreqChan) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_chanelselect: Invalid frequency chanel number.");
-    return 0;
-  }
-  if(original.NrSubints > 1 && original.freqMode != FREQMODE_UNIFORM) {
-    fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_chanelselect: Selecting single frequency channels from a multi-subint dataset is only implemented when the frequency channels are uniformely separated.");
+    printerror(verbose.debug, "ERROR preprocess_chanelselect: Invalid frequency channel number (selected channel = %ld, total nr channels = %ld).", chanelnr, original.NrFreqChan);
     return 0;
   }
   cleanPSRData(clone, verbose);
   copy_params_PSRData(original, clone, verbose);
   clone->NrFreqChan = 1;
-  clone->freqMode = FREQMODE_UNIFORM;
-  if(clone->freqlabel_list != NULL) {
-    free(clone->freqlabel_list);
-    clone->freqlabel_list = NULL;
+  if(original.freqMode == FREQMODE_FREQTABLE) {
+    if(clone->freqlabel_list != NULL)
+      free(clone->freqlabel_list);
+    clone->freqlabel_list = malloc((clone->NrFreqChan)*(clone->NrSubints)*sizeof(double));
+    if(clone->freqlabel_list == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_chanelselect: Memory allocation error.");
+      return 0;
+    }
   }
   clone->data = (float *)malloc((clone->NrBins)*(clone->NrPols)*(clone->NrFreqChan)*(clone->NrSubints)*sizeof(float));
   pulse = (float *)malloc((clone->NrBins)*sizeof(float));
@@ -332,6 +339,15 @@ int preprocess_channelselect(datafile_definition original, datafile_definition *
      fflush(stdout);
      printerror(verbose.debug, "ERROR preprocess_chanelselect: Error writing pulse.");
      return 0;
+   }
+   if(original.freqMode == FREQMODE_FREQTABLE) {
+     double newfreq;
+     newfreq = get_weighted_channel_freq(original, n, f, verbose);
+     if(set_weighted_channel_freq(clone, n, 0, newfreq, verbose) == 0) {
+       fflush(stdout);
+       printerror(verbose.debug, "ERROR preprocess_chanelselect: Setting frequency labelling failed.");
+       return 0;
+     }
    }
  }
       }
@@ -394,6 +410,58 @@ int preprocess_polselect(datafile_definition original, datafile_definition *clon
     }
   }
   free(pulse);
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("  done              \n");
+  }
+  return 1;
+}
+int preprocess_phasebinselect(datafile_definition original, datafile_definition *clone, long phasebin, verbose_definition verbose)
+{
+  long p, f, n;
+  int i;
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("Selecting phase bin %ld\n", phasebin);
+  }
+  if(original.format != MEMORY_format) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_phasebinselect: only works if data is loaded into memory.");
+    return 0;
+  }
+  if(phasebin < 0 || phasebin >= original.NrBins) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_phasebinselect: Invalid phase bin number.");
+    return 0;
+  }
+  cleanPSRData(clone, verbose);
+  copy_params_PSRData(original, clone, verbose);
+  clone->NrBins = 1;
+  clone->data = (float *)malloc((clone->NrBins)*(clone->NrPols)*(clone->NrFreqChan)*(clone->NrSubints)*sizeof(float));
+  if(clone->data == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_phasebinselect: Memory allocation error.");
+    return 0;
+  }
+  for(p = 0; p < original.NrPols; p++) {
+    for(f = 0; f < clone->NrFreqChan; f++) {
+      for(n = 0; n < clone->NrSubints; n++) {
+ float value;
+ if(readPulsePSRData(&original, n, p, f, phasebin, clone->NrBins, &value, verbose) != 1) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR preprocess_phasebinselect: Error reading pulse.");
+   return 0;
+ }
+ if(writePulsePSRData(clone, n, p, f, 0, clone->NrBins, &value, verbose) != 1) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR preprocess_phasebinselect: Error writing pulse.");
+   return 0;
+ }
+      }
+    }
+  }
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
@@ -622,7 +690,7 @@ int preprocess_addsuccessivepulses(datafile_definition original, datafile_defini
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
     if(nrpulses >= 0)
-      printf("Add each %ld succesive subints\n", nrpulses);
+      printf("Add each %ld successive subints\n", nrpulses);
     else
       printf("Write out each subint %ld times\n", -nrpulses);
   }
@@ -654,12 +722,16 @@ int preprocess_addsuccessivepulses(datafile_definition original, datafile_defini
  printf(" ");
       printf("  Correcting for parallactic angle changes first.\n");
     }
-    if(preprocess_corrParAng(&original, &clone_depar, 0, verbose2) == 0) {
+    int ret;
+    ret = preprocess_corrParAng(&original, &clone_depar, 0, verbose2);
+    if(ret == 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR preprocess_addsuccessivepulses: Parallactic angle correction failed.");
       return 0;
     }
-    use_depar = 1;
+    if(ret == 3) {
+      use_depar = 1;
+    }
   }
   cleanPSRData(clone, verbose);
   if(use_depar)
@@ -786,7 +858,140 @@ int preprocess_addsuccessivepulses(datafile_definition original, datafile_defini
   }
   return 1;
 }
-int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_definition *clone, long nrfreq, int *fzapMask, verbose_definition verbose)
+int preprocess_construct_median_profile(datafile_definition original, datafile_definition *clone, verbose_definition verbose)
+{
+  long p, f, n, b;
+  float *intensity_sequence, *medianpulse;
+  int i, use_depar;
+  datafile_definition clone_depar;
+  verbose_definition verbose2;
+  copyVerboseState(verbose, &verbose2);
+  verbose2.indent = verbose.indent + 2;
+  use_depar = 0;
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("Produce median profile from %ld subints\n", original.NrSubints);
+  }
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_construct_median_profile: Cannot handle position angle data when adding subints. Add subints using Stokes parameter data.");
+    return 0;
+  }
+  if(original.NrSubints == 1) {
+    fflush(stdout);
+    printwarning(verbose.debug, "WARNING preprocess_construct_median_profile: With one subint, this function doesn't do anything.");
+  }else {
+    if(original.freqMode != FREQMODE_UNIFORM) {
+      if(original.NrSubints != 1) {
+ if(preprocess_dedisperse(&original, 0, 1, -1.0, verbose) != 2) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR preprocess_construct_median_profile: Dedispersion failed.");
+   return 0;
+ }
+      }
+    }
+    if(original.NrPols == 4 && original.isDePar == -1) {
+      fflush(stdout);
+      printwarning(verbose.debug, "WARNING preprocess_construct_median_profile: Parallactic angle correction state is unknown, no correction will be done.");
+    }else if(original.NrPols == 4 && original.isDePar == 0) {
+      if(verbose.verbose) {
+ for(i = 0; i < verbose.indent; i++)
+   printf(" ");
+ printf("  Correcting for parallactic angle changes first.\n");
+      }
+      if(preprocess_corrParAng(&original, &clone_depar, 0, verbose2) == 0) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR preprocess_construct_median_profile: Parallactic angle correction failed.");
+ return 0;
+      }
+      use_depar = 1;
+    }
+  }
+  cleanPSRData(clone, verbose);
+  if(use_depar) {
+    copy_params_PSRData(clone_depar, clone, verbose);
+  }else {
+    copy_params_PSRData(original, clone, verbose);
+  }
+  clone->NrSubints = 1;
+  clone->tsubMode = TSUBMODE_TSUBLIST;
+  if(clone->tsub_list != NULL) {
+    free(clone->tsub_list);
+  }
+  clone->tsub_list = (double *)malloc(clone->NrSubints * sizeof(double));
+  if(clone->tsub_list == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_construct_median_profile: Memory allocation error");
+    return 0;
+  }
+  clone->format = MEMORY_format;
+  if(clone->gentype == GENTYPE_PULSESTACK || clone->gentype == GENTYPE_SUBINTEGRATIONS) {
+    clone->gentype = GENTYPE_PROFILE;
+  }
+  if(clone->gentype != GENTYPE_PROFILE && clone->gentype != GENTYPE_SUBINTEGRATIONS && clone->gentype != GENTYPE_PULSESTACK && clone->gentype != GENTYPE_UNDEFINED && clone->gentype != GENTYPE_POLNCAL) {
+    fflush(stdout);
+    printwarning(verbose.debug, "WARNING preprocess_construct_median_profile: Unsure about adding subints for a %s file. Setting gentype to undefined.", returnGenType_str(clone->gentype));
+    clone->gentype = GENTYPE_UNDEFINED;
+  }
+  clone->data = (float *)malloc((clone->NrBins)*(clone->NrPols)*(clone->NrFreqChan)*(clone->NrSubints)*sizeof(float));
+  intensity_sequence = (float *)malloc((original.NrSubints)*sizeof(float));
+  medianpulse = (float *)malloc((clone->NrBins)*sizeof(float));
+  if(clone->data == NULL || intensity_sequence == NULL || medianpulse == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_construct_median_profile: Memory allocation error.");
+    return 0;
+  }
+  double curtsub;
+  curtsub = 0;
+  for(p = 0; p < original.NrPols; p++) {
+    for(f = 0; f < clone->NrFreqChan; f++) {
+      for(b = 0; b < original.NrBins; b++) {
+ for(n = 0; n < original.NrSubints; n++) {
+   if(use_depar) {
+     if(readPulsePSRData(&clone_depar, n, p, f, b, 1, &(intensity_sequence[n]), verbose) != 1) {
+       fflush(stdout);
+       printerror(verbose.debug, "ERROR preprocess_construct_median_profile: Error reading pulse.");
+       return 0;
+     }
+     if(b == 0 && p == 0 && f == 0) {
+       curtsub += get_tsub(clone_depar, n, verbose);
+     }
+   }else {
+     if(readPulsePSRData(&original, n, p, f, b, 1, &(intensity_sequence[n]), verbose) != 1) {
+       fflush(stdout);
+       printerror(verbose.debug, "ERROR preprocess_construct_median_profile: Error reading pulse.");
+       return 0;
+     }
+     if(b == 0 && p == 0 && f == 0) {
+       curtsub += get_tsub(original, n, verbose);
+     }
+   }
+ }
+ gsl_sort_float(intensity_sequence, 1, original.NrSubints);
+ medianpulse[b] = gsl_stats_float_median_from_sorted_data(intensity_sequence, 1, original.NrSubints);
+      }
+      if(writePulsePSRData(clone, 0, p, f, 0, clone->NrBins, medianpulse, verbose) != 1) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR preprocess_construct_median_profile: Error writing pulse.");
+ return 0;
+      }
+    }
+  }
+  clone->tsub_list[0] = curtsub;
+  free(medianpulse);
+  free(intensity_sequence);
+  if(use_depar) {
+    closePSRData(&clone_depar, 0, 0, verbose);
+  }
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    if(verbose.verbose) printf("  done                            \n");
+  }
+  return 1;
+}
+int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_definition *clone, long nrfreq, int complete, int *fzapMask, verbose_definition verbose)
 {
   long p, f, n, n2, b;
   float *pulse, *addedpulse;
@@ -795,7 +1000,7 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
     if(nrfreq >= 0)
-      printf("Add %ld succesive frequency channels\n", nrfreq);
+      printf("Add each %ld successive frequency channels\n", nrfreq);
     else
       printf("Write out each frequency channel %ld times\n", -nrfreq);
   }
@@ -813,9 +1018,12 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
   copy_params_PSRData(original, clone, verbose);
   if(nrfreq > 0) {
     clone->NrFreqChan = original.NrFreqChan/nrfreq;
-    if(clone->NrFreqChan * nrfreq != original.NrFreqChan) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING preprocess_addsuccessiveFreqChans: Last channel will be the sum of a different number of channels compared to the others. The frequency labeling will no longer be correct.");
+    if(complete == 0) {
+      if(clone->NrFreqChan * nrfreq != original.NrFreqChan) {
+ fflush(stdout);
+ printwarning(verbose.debug, "WARNING preprocess_addsuccessiveFreqChans: Last channel will be the sum of a different number of channels compared to the others. The frequency labeling will no longer be correct.");
+ clone->NrFreqChan += 1;
+      }
     }
   }else {
     clone->NrFreqChan = original.NrFreqChan*(-nrfreq);
@@ -850,24 +1058,26 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
    for(b = 0; b < original.NrBins; b++)
      addedpulse[b] = 0;
    for(n2 = 0; n2 < nrfreq; n2++) {
-     ok = 1;
-     if(fzapMask != NULL) {
-       if(fzapMask[f*nrfreq+n2] != 0) {
-  ok = 0;
+     if(f*nrfreq+n2 < original.NrFreqChan) {
+       ok = 1;
+       if(fzapMask != NULL) {
+  if(fzapMask[f*nrfreq+n2] != 0) {
+    ok = 0;
+  }
        }
-     }
-     if(ok) {
-       if(readPulsePSRData(&original, n, p, f*nrfreq+n2, 0, clone->NrBins, pulse, verbose) != 1) {
-  fflush(stdout);
-  printerror(verbose.debug, "ERROR preprocess_addsuccessiveFreqChans: Error reading pulse.");
-  return 0;
+       if(ok) {
+  if(readPulsePSRData(&original, n, p, f*nrfreq+n2, 0, clone->NrBins, pulse, verbose) != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_addsuccessiveFreqChans: Error reading pulse.");
+    return 0;
+  }
+  if(original.freqMode == FREQMODE_FREQTABLE) {
+    newfreq += get_weighted_channel_freq(original, n, f*nrfreq+n2, verbose);
+    newfreq_nradded++;
+  }
+  for(b = 0; b < original.NrBins; b++)
+    addedpulse[b] += pulse[b];
        }
-       if(original.freqMode == FREQMODE_FREQTABLE) {
-  newfreq += get_weighted_channel_freq(original, n, f*nrfreq+n2, verbose);
-  newfreq_nradded++;
-       }
-       for(b = 0; b < original.NrBins; b++)
-  addedpulse[b] += pulse[b];
      }
    }
    newfreq /= (double)newfreq_nradded;
@@ -928,7 +1138,7 @@ int preprocess_addsuccessiveFreqChans(datafile_definition original, datafile_def
   }
   return 1;
 }
-int preprocess_debase(datafile_definition *original, pulselongitude_regions_definition *onpulse, float **baseline, int remove_shape, verbose_definition verbose)
+int preprocess_debase(datafile_definition *original, pulselongitude_regions_definition *onpulse, float **baseline, int remove_slope, verbose_definition verbose)
 {
   long p, f, n, j, nrOffpulseBins, offpulse_bin_nr;
   int i;
@@ -966,9 +1176,9 @@ int preprocess_debase(datafile_definition *original, pulselongitude_regions_defi
     }
   }
   double *profilex_double, *profile_double;
-  if(remove_shape != 0) {
-    profilex_double = (double *)malloc((original->NrBins)*sizeof(double));
-    profile_double = (double *)malloc((original->NrBins)*sizeof(double));
+  if(remove_slope != 0) {
+    profilex_double = (double *)calloc(original->NrBins, sizeof(double));
+    profile_double = (double *)calloc(original->NrBins, sizeof(double));
     if(profilex_double == NULL || profile_double == NULL) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR preprocess_debase: Memory allocation error.");
@@ -1010,18 +1220,18 @@ int preprocess_debase(datafile_definition *original, pulselongitude_regions_defi
    if(ok) {
      avrg += pulse[j];
      nrOffpulseBins++;
-     if(remove_shape != 0) {
+     if(remove_slope != 0) {
        profile_double[offpulse_bin_nr++] = pulse[j];
      }
    }
  }
  if(nrOffpulseBins > 0) {
-   if(remove_shape == 0) {
+   if(remove_slope == 0) {
      avrg /= (float)nrOffpulseBins;
      for(j = 0; j < original->NrBins; j++) {
        pulse[j] -= avrg;
      }
-   }else if(remove_shape == 1) {
+   }else if(remove_slope == 1) {
      double a, b, cov00, cov01, cov11, sumsq;
      gsl_fit_linear(profilex_double, 1, profile_double, 1, offpulse_bin_nr, &a, &b, &cov00, &cov01, &cov11, &sumsq);
      for(j = 0; j < original->NrBins; j++) {
@@ -1059,7 +1269,7 @@ int preprocess_debase(datafile_definition *original, pulselongitude_regions_defi
   }
   original->isDebase = 1;
   free(pulse);
-  if(remove_shape != 0) {
+  if(remove_slope != 0) {
     free(profilex_double);
     free(profile_double);
   }
@@ -1087,7 +1297,7 @@ int preprocess_addNoise(datafile_definition original, datafile_definition *clone
     printerror(verbose.debug, "ERROR preprocess_addNoise: Adding noise only works if data is loaded into memory.");
     return 0;
   }
-  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl) {
+  if(original.poltype == POLTYPE_ILVPAdPA || original.poltype == POLTYPE_PAdPA || original.poltype == POLTYPE_ILVPAdPATEldEl || original.poltype == POLTYPE_INVARIANT) {
     if(original.NrPols == 1) {
       fflush(stdout);
       printwarning(verbose.debug, "WARNING preprocess_addNoise: The polarization state suggests this is not necessarily a Stokes parameter, hence the error distribution is not necessarily Gaussian, which is assumed to be the case. This might be a problem.");
@@ -1223,6 +1433,113 @@ int preprocess_shuffle(datafile_definition original, datafile_definition *clone,
   free(subintlist);
   return 1;
 }
+int preprocess_subtractprof(datafile_definition *original, datafile_definition profile, int mode, datafile_definition *clone, int inplace, verbose_definition verbose)
+{
+  long n, f, b, p;
+  if(verbose.verbose) {
+    for(n = 0; n < verbose.indent; n++)
+      printf(" ");
+    printf("Subtracting profile from each subint to form residuals ");
+    if(mode == 1) {
+      printf("(straight substraction)\n");
+    }else if(mode == 2) {
+      printf("(data scaled first)\n");
+    }else if(mode == 3) {
+      printf("(profile scaled first)\n");
+    }
+  }
+  if(mode < 1 || mode > 3) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_subtractprof: Invalid mode provided.");
+    return 0;
+  }
+  if(original->format != MEMORY_format) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_subtractprof: Data needs to be loaded into memory first.");
+    return 0;
+  }
+  if(profile.format != MEMORY_format) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_subtractprof: Profile needs to be loaded into memory first.");
+    return 0;
+  }
+  if(profile.NrSubints != 1) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_subtractprof: Provided profile should contain 1 subint only (got %ld).", profile.NrSubints);
+    return 0;
+  }
+  if(profile.NrBins != original->NrBins) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_subtractprof: The number of longitude bins do not match for provided profile and input data.");
+    return 0;
+  }
+  if(profile.NrPols != original->NrPols) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_subtractprof: The number of polarizations do not match for provided profile and input data.");
+    return 0;
+  }
+  if(profile.NrFreqChan != original->NrFreqChan) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_subtractprof: The number of frequency channels do not match for provided profile and input data.");
+    return 0;
+  }
+  if(profile.poltype != original->poltype) {
+    fflush(stdout);
+    printwarning(verbose.debug, "ERROR preprocess_subtractprof: The polarization stite might be different for the provided profile and input data.");
+  }
+  if(inplace == 0) {
+    cleanPSRData(clone, verbose);
+    copy_params_PSRData(*original, clone, verbose);
+    clone->data = (float *)malloc((clone->NrBins)*(clone->NrPols)*(clone->NrFreqChan)*(clone->NrSubints)*sizeof(float));
+    if(clone->data == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_subtractprof: Memory allocation error.");
+      return 0;
+    }
+  }
+  for(f = 0; f < original->NrFreqChan; f++) {
+    for(n = 0; n < original->NrSubints; n++) {
+      float *original_ptr;
+      if(mode != 1) {
+ if(get_pointer_PulsePSRData(original, n, 0, f, 0, &original_ptr, verbose) == 0) {
+   fflush(stdout);
+   printerror(verbose.debug, "ERROR preprocess_subtractprof: Obtaining data pointer failed.");
+   return 0;
+ }
+      }
+      float alpha, beta;
+      if(mode == 2) {
+ simple_linear_regression_f(original_ptr, profile.data, original->NrBins, &alpha, &beta);
+      }else if(mode == 3) {
+ simple_linear_regression_f(profile.data, original_ptr, original->NrBins, &alpha, &beta);
+      }
+      for(p = 0; p < original->NrPols; p++) {
+ for(b = 0; b < original->NrBins; b++) {
+   if(mode == 1) {
+     if(inplace) {
+       original->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b] -= profile.data[original->NrBins*p+b];
+     }else {
+       clone->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b] -= profile.data[original->NrBins*p+b];
+     }
+   }else if(mode == 2) {
+     if(inplace) {
+       original->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b] = alpha + beta * original->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b] - profile.data[original->NrBins*p+b];
+     }else {
+       clone->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b] = alpha + beta * original->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b] - profile.data[original->NrBins*p+b];
+     }
+   }else if(mode == 3) {
+     if(inplace) {
+       original->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b] -= alpha + beta * profile.data[original->NrBins*p+b];
+     }else {
+       clone->data[original->NrBins*(p+original->NrPols*(f+n*original->NrFreqChan))+b] -= alpha + beta * profile.data[original->NrBins*p+b];
+     }
+   }
+ }
+      }
+    }
+  }
+  return 1;
+}
 int preprocess_rotateStokes(datafile_definition *original, datafile_definition *clone, int inplace, int subint, float angle, float *angle_array, int stokes1, int stokes2, verbose_definition verbose)
 {
   int i;
@@ -1350,7 +1667,7 @@ int preprocess_rotateStokes(datafile_definition *original, datafile_definition *
   }
   return 1;
 }
-int preprocess_norm(datafile_definition original, float normvalue, pulselongitude_regions_definition *onpulse, int global, verbose_definition verbose)
+int preprocess_norm(datafile_definition original, float normvalue, pulselongitude_regions_definition *onpulse, int global, int normavrg, verbose_definition verbose)
 {
   int ok, first, itt;
   long p, f, n, b, i;
@@ -1393,6 +1710,9 @@ int preprocess_norm(datafile_definition original, float normvalue, pulselongitud
       else
  printf("  Applying normalisation contant %e                   \n", fac);
     }
+    double sum, globalsum;
+    globalsum = 0;
+    long nrnonzapped = 0;
     for(f = 0; f < original.NrFreqChan; f++) {
       for(n = 0; n < original.NrSubints; n++) {
  p = 0;
@@ -1400,6 +1720,7 @@ int preprocess_norm(datafile_definition original, float normvalue, pulselongitud
  if(f == 0 && n == 0 && itt == 0)
    globalmax = max;
  first = 1;
+ sum = 0;
  for(b = 0; b < original.NrBins; b++) {
    ok = 0;
    if(onpulse == NULL) {
@@ -1413,20 +1734,52 @@ int preprocess_norm(datafile_definition original, float normvalue, pulselongitud
      max = original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b];
      first = 0;
    }
+   if(normavrg && ok) {
+     sum += original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b];
+   }
+ }
+ int nrbins;
+ if(onpulse == NULL) {
+   nrbins = original.NrBins;
+ }else {
+   nrbins = count_nrbins_in_Regions(onpulse, verbose.debug);
+   if(nrbins == 0) {
+     nrbins = original.NrBins;
+   }
  }
  if(itt == 0) {
-   if(max > globalmax) {
-     globalmax = max;
-     if(globalmax != 0)
-       fac = normvalue/globalmax;
-     else
+   if(normavrg == 0) {
+     if(max > globalmax) {
+       globalmax = max;
+       if(globalmax != 0)
+  fac = normvalue/globalmax;
+       else
+  fac = 1;
+     }
+   }else {
+     if(sum != 0.0 || max != 0.0) {
+       nrnonzapped++;
+     }
+     globalsum += sum;
+     if(globalsum != 0) {
+       fac = normvalue/(globalsum/(double)(nrbins * nrnonzapped));
+     }else {
        fac = 1;
+     }
    }
  }else if(global == 0) {
-   if(max != 0)
-     fac = normvalue/max;
-   else
-     fac = 1;
+   if(normavrg == 0) {
+     if(max != 0)
+       fac = normvalue/max;
+     else
+       fac = 1;
+   }else {
+     if(sum != 0) {
+       fac = normvalue/(sum/(double)nrbins);
+     }else {
+       fac = 1;
+     }
+   }
  }
  if(itt == 1) {
    for(p = 0; p < original.NrPols; p++) {
@@ -1609,17 +1962,17 @@ int preprocess_coherency(datafile_definition *original, verbose_definition verbo
   }
   if(original->format != MEMORY_format) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_stokes: only works if data is loaded into memory.");
+    printerror(verbose.debug, "ERROR preprocess_coherency: only works if data is loaded into memory.");
     return 0;
   }
   if(original->NrPols != 4) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_stokes: Expected 4 polarization channels, only %ld present.", original->NrPols);
+    printerror(verbose.debug, "ERROR preprocess_coherency: Expected 4 polarization channels, only %ld present.", original->NrPols);
     return 0;
   }
   if(original->poltype != POLTYPE_STOKES) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_stokes: Expected poltype=%d (Stokes parameters), got %d.", POLTYPE_STOKES, original->poltype);
+    printerror(verbose.debug, "ERROR preprocess_coherency: Expected poltype=%d (Stokes parameters), got %d.", POLTYPE_STOKES, original->poltype);
     return 0;
   }
   if(original->feedtype == FEEDTYPE_LINEAR || original->feedtype == FEEDTYPE_INV_LINEAR) {
@@ -1628,7 +1981,7 @@ int preprocess_coherency(datafile_definition *original, verbose_definition verbo
     basis = 2;
   }else {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_stokes: Expected feedtype=%d, this basis is not implemented.", original->feedtype);
+    printerror(verbose.debug, "ERROR preprocess_coherency: Expected feedtype=%d, this basis is not implemented.", original->feedtype);
     return 0;
   }
   if(verbose.verbose) {
@@ -1641,7 +1994,7 @@ int preprocess_coherency(datafile_definition *original, verbose_definition verbo
   }
   if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA || original->poltype == POLTYPE_ILVPAdPATEldEl) {
     fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_stokes: Cannot handle PA data.");
+    printerror(verbose.debug, "ERROR preprocess_coherency: Cannot handle PA data.");
     return 0;
   }
   for(f = 0; f < original->NrFreqChan; f++) {
@@ -1677,14 +2030,97 @@ int preprocess_coherency(datafile_definition *original, verbose_definition verbo
   }
   return 1;
 }
-int preprocess_scale(datafile_definition original, float factor, float offset, verbose_definition verbose)
+int preprocess_invariant_interval(datafile_definition *original, verbose_definition verbose)
+{
+  long f, n, b, i;
+  float I, Q, U, V;
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("Forming invariant interval\n");
+  }
+  if(original->format != MEMORY_format) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_invariant_interval: only works if data is loaded into memory.");
+    return 0;
+  }
+  if(original->NrPols != 4) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_invariant_interval: Expected 4 input polarization channels, but there are %ld present.", original->NrPols);
+    return 0;
+  }
+  if(original->poltype == POLTYPE_COHERENCY) {
+    for(i = 0; i < verbose.indent+2; i++)
+      printf(" ");
+    printf("Forming Stokes parameters first\n");
+    if(preprocess_stokes(original, verbose) != 1) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_invariant_interval: Forming Stokes parameters failed.");
+      return 0;
+    }
+  }
+  if(original->poltype == POLTYPE_UNKNOWN) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_invariant_interval: Polarization state is unknown. Set it to Stokes parameters or coherency parameters first, depending on what the polarization state of the data is.");
+    return 0;
+  }
+  if(original->poltype == POLTYPE_ILVPAdPA || original->poltype == POLTYPE_PAdPA || original->poltype == POLTYPE_ILVPAdPATEldEl) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_invariant_interval: Cannot handle PA data.");
+    return 0;
+  }
+  if(original->poltype != POLTYPE_STOKES) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_invariant_interval: Unexpected polarization state. Expected Stokes parameters or coherency parameters as an input.");
+    return 0;
+  }
+  float *newdata;
+  newdata = (float *)malloc(original->NrBins*original->NrFreqChan*original->NrSubints*sizeof(float));
+  if(newdata == NULL) {
+    fflush(stdout);
+    printerror(verbose.debug, "ERROR preprocess_invariant_interval (%s): Cannot allocate memory.", original->filename);
+    return 0;
+  }
+  float invsquared;
+  for(f = 0; f < original->NrFreqChan; f++) {
+    for(n = 0; n < original->NrSubints; n++) {
+      for(b = 0; b < original->NrBins; b++) {
+ I = original->data[original->NrBins*(0+original->NrPols*(f+n*original->NrFreqChan))+b];
+ Q = original->data[original->NrBins*(1+original->NrPols*(f+n*original->NrFreqChan))+b];
+ U = original->data[original->NrBins*(2+original->NrPols*(f+n*original->NrFreqChan))+b];
+ V = original->data[original->NrBins*(3+original->NrPols*(f+n*original->NrFreqChan))+b];
+ invsquared = I*I-Q*Q-U*U-V*V;
+ if(invsquared >= 0.0) {
+   newdata[original->NrBins*(0+1*(f+n*original->NrFreqChan))+b] = sqrt(I*I-Q*Q-U*U-V*V);
+ }else {
+   newdata[original->NrBins*(0+1*(f+n*original->NrFreqChan))+b] = -sqrt(-(I*I-Q*Q-U*U-V*V));
+ }
+      }
+    }
+  }
+  free(original->data);
+  original->data = newdata;
+  original->poltype = POLTYPE_INVARIANT;
+  original->NrPols = 1;
+  if(verbose.verbose) {
+    for(i = 0; i < verbose.indent; i++)
+      printf(" ");
+    printf("  done                    \n");
+  }
+  return 1;
+}
+int preprocess_scale(datafile_definition original, float factor, float offset, int polnr, verbose_definition verbose)
 {
   long p, f, n, b, i;
   float sample;
   if(verbose.verbose) {
     for(i = 0; i < verbose.indent; i++)
       printf(" ");
-    printf("Scale data with %f and offset %f\n", factor, offset);
+    if(polnr < 0) {
+      printf("Scale data with %f and offset %f\n", factor, offset);
+    }else {
+      printf("Scale data with %f and offset %f (polarization channel %d)\n", factor, offset, polnr);
+    }
   }
   if(original.format != MEMORY_format) {
     fflush(stdout);
@@ -1699,9 +2135,11 @@ int preprocess_scale(datafile_definition original, float factor, float offset, v
   for(f = 0; f < original.NrFreqChan; f++) {
     for(n = 0; n < original.NrSubints; n++) {
       for(p = 0; p < original.NrPols; p++) {
- for(b = 0; b < original.NrBins; b++) {
-   sample = original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b];
-   original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b] = (sample+offset)* factor;
+ if(polnr < 0 || p == polnr) {
+   for(b = 0; b < original.NrBins; b++) {
+     sample = original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b];
+     original.data[original.NrBins*(p+original.NrPols*(f+n*original.NrFreqChan))+b] = (sample+offset)* factor;
+   }
  }
       }
       if(verbose.verbose && verbose.nocounters == 0) {
@@ -2096,7 +2534,7 @@ int preprocess_deFaraday(datafile_definition *original, int undo, int update, do
  phi -= 2.0*dphi;
  if(verbose.debug) {
    if(b == 0 && n == 0) {
-     printf("  Rotating Q&U of frequency channel %ld (%f MHz) of first bin of first subint by %f rad = %f deg in Q/U space\n", f, get_weighted_channel_freq(*original, n, f, verbose), -2.0*dphi, -2.0*dphi*180.0/M_PI);
+     printf("  Rotating Q&U of frequency channel %ld (%f MHz) of first bin of first subint by %f rad = %f deg in Q/U space (using ref freq %f MHz inffreq=%d)\n", f, get_weighted_channel_freq(*original, n, f, verbose), -2.0*dphi, -2.0*dphi*180.0/M_PI, original->freq_ref, inffreq);
    }
  }
  pulseQ[b] = L*cos(phi);
@@ -2170,12 +2608,12 @@ int preprocess_corrParAng(datafile_definition *original, datafile_definition *cl
     printwarning(verbose.debug, "WARNING preprocess_corrParAng (%s): unknown parallactic angle state. Will not undo Parallactic angle correction.", original->filename);
     return 2;
   }
+  if(data_parang(*original, -1, &parang, verbose) == 0) {
+    fflush(stdout);
+    printwarning(verbose.debug, "WARNING preprocess_corrParAng (%s): Cannot calculate parallactic angle, ignoring parallactic angle correction.", original->filename);
+    return 2;
+  }
   if(verbose.verbose) {
-    if(data_parang(*original, -1, &parang, verbose) == 0) {
-      fflush(stdout);
-      printwarning(verbose.debug, "WARNING preprocess_corrParAng (%s): Cannot calculate parallactic angle, ignoring parallactic angle correction.", original->filename);
-      return 2;
-    }
     parang *= 180.0/M_PI;
     if(undo)
       parang *= -1.0;
@@ -2274,7 +2712,7 @@ int preprocess_corrParAng(datafile_definition *original, datafile_definition *cl
   }
   return 3;
 }
-int preprocess_make_profile(datafile_definition original, datafile_definition *profile, int stokesI, verbose_definition verbose)
+int preprocess_make_profile(datafile_definition original, datafile_definition *profile, int stokesI, int median, verbose_definition verbose)
 {
   int i;
   datafile_definition clone, clone2;
@@ -2315,17 +2753,25 @@ int preprocess_make_profile(datafile_definition original, datafile_definition *p
       printerror(verbose.debug, "ERROR preprocess_make_profile: de-dispersing failed, cannot construct profile");
       return 0;
     }
-    if(preprocess_addsuccessiveFreqChans(clone, &clone2, clone.NrFreqChan, NULL, verbose) == 0) {
+    if(preprocess_addsuccessiveFreqChans(clone, &clone2, clone.NrFreqChan, 1, NULL, verbose) == 0) {
       fflush(stdout);
       printerror(verbose.debug, "ERROR preprocess_make_profile: summing frequency channels failed, cannot construct profile");
       return 0;
     }
     swap_orig_clone(&clone, &clone2, verbose);
   }
-  if(preprocess_addsuccessivepulses(clone, profile, clone.NrSubints, 0, verbose) == 0) {
-    fflush(stdout);
-    printerror(verbose.debug, "ERROR preprocess_make_profile: summing subints failed, cannot construct profile");
-    return 0;
+  if(median == 0) {
+    if(preprocess_addsuccessivepulses(clone, profile, clone.NrSubints, 0, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_make_profile: summing subints failed, cannot construct profile");
+      return 0;
+    }
+  }else {
+    if(preprocess_construct_median_profile(clone, profile, verbose) == 0) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR preprocess_make_profile: combining subints failed, cannot construct profile");
+      return 0;
+    }
   }
   closePSRData(&clone, 0, 0, verbose);
   if(verbose.verbose) {
