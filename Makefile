@@ -213,7 +213,9 @@ SLALIBTARGET = src/slalib/libsla_wrap.a
 SLALIBSRC = $(wildcard src/slalib/*.f) $(wildcard src/slalib/*.c)
 
 #These are the object files to be generated from SLALIBSRC
-SLALIBOBJ = $(SLALIBSRC:.f=.o) $(SLALIBSRC:.c=.o)
+#SLALIBOBJ = $(SLALIBSRC:.f=.o) $(SLALIBSRC:.c=.o)
+#Fix to avoid the source filenames to be included (sequential replace)
+SLALIBOBJ = $(patsubst %.c,%.o,$(patsubst %.f,%.o,$(SLALIBSRC)))
 
 
 
