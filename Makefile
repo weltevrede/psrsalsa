@@ -1,68 +1,64 @@
-# NOTE: Makefile starts with some explanation of ENVIRONMENT VARIABLES
-# and DEPENDENCIES, followed by a relatively short section that might
-# need edditing to account for the SPECIFICT OF THE CONFIGURATION of
-# your OS, followed by a final (largest) bit that should in general be
-# left alone.
-
-#####################################################################
-# Environment variables that affect the Makefile                    #
-#####################################################################
-
-# Not much needs to be done if your system is set-up such that
-# pkg-config recognizes the following packages:
+# NOTE: See README.txt for environment variables that affect
+# compilation and dependencies on which compilation of psrsalsa
+# depends. In general, using these environment variables avoids any
+# editing of the Makefile being required.
 #
-# gsl
-# cfitsio
-# fftw3
-# fftw3f
+# To compile everything, run:
+#   make
 #
-# If you have dependencies in locations that are not automatically
-# found, you might want to set the following environment variables:
+# But see README.txt how to solve problems during compilation because
+# of missing dependencies, or dependencies in non-standard locations.
 #
-# PGPLOT_DIR: This is the directory where (hopefully) both the pgplot
-# libraries and include files can be found. If not, one can use the
-# PSRSALSA_EXTRA_INCDIRS and PSRSALSA_EXTRA_LIBDIRS environment
-# variables to point to where these can be found.
-#
-# PSRSALSA_EXTRA_LIBDIRS: These are -L options for the compiler
-# indicating where libraries can be found that are otherwise not
-# found automatically. Example in bash:
-# export PSRSALSA_EXTRA_LIBDIRS=-L/packages/pulsarsoft/lib/ -L/morepackages/lib/
-#
-# PSRSALSA_EXTRA_INCDIRS: These are -I options for the compiler
-# indicating where include files can be found that are otherwise not
-# found automatically. Example in bash:
-# export PSRSALSA_EXTRA_INCDIRS=-I/packages/pulsarsoft/include/ -I/morepackages/include/
-#
-# PSRSALSA_GSL_VERSION: If not set, the gsl version is automatically
-# determined using pkg-config. To avoid this, one can set
-# PSRSALSA_GSL_VERSION. The psrsalsa code need to know the GSL version number, as things the
-# syntax for some things depend on the version number. Here version 115 would correspond to
-# 1.15, and 203 to 2.3, etc. So version = (100*major version + minor
-# version). Example in bash:
-# export PSRSALSA_GSL_VERSION=203
+# Running make will also attempt to compile the psrsalsa python 
+# wrapper. To only install the executables, run                 
+#   make nopy                                                   
 
 #####################################################################
 # Dependencies                                                      #
 #####################################################################
 
-# The following libraries are used by psrsalsa:
-#  - cfitsio,
-#  - cpgplot
-#  - gsl
-#  - fftw3f
-
-# These libraries in turn dependent on further libraries. Which ones
-# is system dependent, but probably at least includes the following
-# dependencies of cpgplot:
+# See README.txt for more detail.
 #
-#  - libpgplot   (fortran library which is called by the cpgplot wrapper)
-#  - libgfortran (if gfortran was used to compile pgplot)
-#  - libX11      (if used when compiling pgplot)
-#  - libpng      (if used when compiling pgplot)
+# The following libraries are used by psrsalsa:
+#   cfitsio
+#   cpgplot
+#   gsl
+#   fftw3
+#   fftw3f
+#
+# If you have pkg-config you can check if the required dependencies
+# are installed by running the following commands (it should give some
+# compiler command-line options, rather than an error that the package
+# is not found). Note that pgplot always needs manual installation.
+#
+#   pkg-config --libs cfitsio
+#   pkg-config --libs gsl
+#   pkg-config --libs fftw3
+#   pkg-config --libs fftw3f
+#
+# If you have Ubuntu, and if you have missing packages, you may wish
+# to run one or more of the following commands:
+#
+#   sudo apt install git
+#   sudo apt install gcc
+#   sudo apt install gfortran
+#   sudo apt install make
+#   sudo apt install libcfitsio-dev
+#   sudo apt install libgsl-dev
+#   sudo apt install libfftw3-dev
+#   
+# To compile the python wrapper, there are further dependencies. On 
+# Ubuntu, the following commands are at least required to cover all 
+# dependencies.                                                     
+#                                                                   
+#   sudo apt install python3                   
+#   sudo apt install python3-dev               
+#   sudo apt install python3-setuptools        
+#   sudo apt install python3-numpy             
+#
 
 #####################################################################
-# You might need to edit the following section                      #
+# If all is well, you shouldn't need to edit the following section  #
 #####################################################################
 
 # This defines a list of packages that are recognized by pkg-config,
@@ -228,7 +224,7 @@ SLALIBOBJ = $(SLALIBSRC:.f=.o) $(SLALIBSRC:.c=.o)
 
 
 #The name of the library to be generated
-LIBTARGET = src/lib/libpsrsalsa_release_make.a
+LIBTARGET = src/lib/libpsrsalsa_release.a
 
 #The source files used to make the library, i.e. all .c files in src/lib/
 PSRSALSALIBSRC = $(wildcard src/lib/*.c)
@@ -237,7 +233,7 @@ PSRSALSALIBSRC = $(wildcard src/lib/*.c)
 PSRSALSALIBOBJ = $(PSRSALSALIBSRC:.c=.o)
 
 
-PSRSALSALIBS = -lpsrsalsa_release_make -lsla_wrap
+PSRSALSALIBS = -lpsrsalsa_release -lsla_wrap
 
 
 #Make a list of executables to be generated.
@@ -273,17 +269,28 @@ endef
 
 EXTERNAL_LIB_TARGETS = $(SLALIBTARGET)
 
+PYWRAPPER_STAMP = pywrapper/pywrapper.buildstamp
 
 #These are the primary targets: the name of the libraries and executables to be generated
-all: startmessage slalibmessage $(EXTERNAL_LIB_TARGETS) psrsalsalibmessage $(LIBTARGET) psrsalsaprogmessage $(EXECUTABLES)
+all: startmessage slalibmessage $(EXTERNAL_LIB_TARGETS) psrsalsalibmessage $(LIBTARGET) psrsalsaprogmessage $(EXECUTABLES) $(PYWRAPPER_STAMP)
+	@echo "" 
+	@echo "Finished Makefile. If compiled without errors, the executables should be in the directory bin/"
+	@find pywrapper/build/ -name "*version*.so" | awk -F/ '{print "and the python wrapper should be in pywrapper/build/"$$3}'
+	@echo "In your .bashrc file you may wish to add the lines:"
+	@echo ""
+	@echo "export PSRSALSAPATH=`pwd`"
+	@echo "export PATH=$$""PSRSALSAPATH/bin/:""$$""PATH"
+	@find pywrapper/build/ -name "*version*.so" | awk -F/ '{print "export PYTHONPATH=$$""PYTHONPATH:$$""PSRSALSAPATH/pywrapper/build/"$$3}'
+
+
+#These are the primary targets, WITHOUT the python wrapper.
+nopy: startmessage slalibmessage $(EXTERNAL_LIB_TARGETS) psrsalsalibmessage $(LIBTARGET) psrsalsaprogmessage $(EXECUTABLES)
 	@echo "" 
 	@echo "Finished Makefile. If compiled without errors, the executables should be in the directory bin/"
 	@echo "In your .bashrc file you may wish to add the lines:"
 	@echo ""
 	@echo "export PSRSALSAPATH=`pwd`"
 	@echo "export PATH=$$""PSRSALSAPATH/bin/:""$$""PATH"
-
-
 
 startmessage:
 ifndef OSFLAG
@@ -379,9 +386,22 @@ endif
 bin/%: src/prog/%.c $(LIBTARGET) $(EXTERNAL_LIB_TARGETS)
 	$(CC) $(INCDIRS) $(CFLAGS) $(GSLFLAGS) $(LIBDIRS) $< $(PSRSALSALIBS) $(LIBS) -o $@
 
+$(PYWRAPPER_STAMP): $(wildcard pywrapper/src/*.c) $(wildcard pywrapper/*.py) $(wildcard pywrapper/src/lib/*.c) $(wildcard pywrapper/src/psrchive/*.py) $(LIBTARGET) $(EXTERNAL_LIB_TARGETS) $(LIB_INCLUDE_FILES)
+#Note:  comments are required on next lines, so it gets recognized as lines to ignore in packages without the pywrapper
+	@echo "" 
+	@echo "==================================================================================================" 
+	@echo "Starting compiling the python wrapper" 
+	@echo "==================================================================================================" 
+	@echo "" 
+	@rm -r -f pywrapper/build/
+	@mkdir pywrapper/build/
+	@echo "$(INCDIRS) $(CFLAGS) $(GSLFLAGS) $(LIBDIRS) $(PSRSALSALIBS) $(LIBS)" > pywrapper/build/cflags.config
+# Forget about CFLAGS, as this will otherwise be included twice while compiling the pywrapper
+	cd pywrapper; env CFLAGS='' python3 setup.py build; cd ../
 
 #This is the rule of how to clean up things, so everything can be compiled from scratch
 clean:
+	rm -r -f pywrapper/build/
 	rm -f src/slalib/*.o src/lib/*.o $(EXTERNAL_LIB_TARGETS) $(LIBTARGET) $(EXECUTABLES) \
 
 
