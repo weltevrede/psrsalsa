@@ -17,7 +17,7 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #ifndef PSRSALSA_TEMPDIRECTORY
    #define PSRSALSA_TEMPDIRECTORY "/tmp/"
 #endif
-#define PSRSALSA_PACKAGING_VERSION "Packaged at Wed Sep 16 15:26:48 UTC 2026 (MJD = 61299.643618 and last committed revision was 1206)"
+#define PSRSALSA_PACKAGING_VERSION "Packaged at Mon Sep 28 08:28:28 UTC 2026 (MJD = 61311.353105 and last committed revision was 1206)"
 #define DM_CONST 4149.37759336099585062241
 #define MAX_pulselongitude_regions 200
 #define maxNrVonMisesComponents 100

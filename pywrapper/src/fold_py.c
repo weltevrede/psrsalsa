@@ -70,8 +70,10 @@ static PyObject *method_foldP3(PyObject *self, PyObject *args, PyObject *kwargs)
   cleanVerboseState(&verbose);
   verbose.verbose = verbose_flag;
   verbose.debug = debug_flag;
+  char *offsetFileName = NULL;
+  int readwriteOffsets = 0;
   int oldcorrelation = 0;
-  if(foldP3(archive->data, archive->NrSubints, archive->NrBins, map, nrp3bins, foldp3, refine, cyclesperblock, noSmooth, smoothWidth, slope, offset, onpulse
+  if(foldP3(archive->data, archive->NrSubints, archive->NrBins, map, nrp3bins, foldp3, refine, cyclesperblock, noSmooth, smoothWidth, slope, offset, onpulse, offsetFileName, readwriteOffsets
      , oldcorrelation, verbose) != 1) {
     PyErr_SetString(PyExc_TypeError, "P3 folding failed");
     return NULL;

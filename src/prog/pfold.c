@@ -25,6 +25,7 @@ int main(int argc, char **argv)
   long i, p;
   int p3_fold_flag, p3_fold_refine, p3_fold_nbin, p3_fold_onpulse_flag;
   int write_flag, zoom_flag, zoom_flag1, selectMoreOnpulseRegions, oldcorrelation;
+  int p3_fold_inputfile, readwriteP3foldOffsets;
   float p3_fold, p3_fold_smoothWidth, p3fold_dphase, p3fold_nosmooth, p3_fold_cpb, slope;
   float xmin, xmax, xmin_zoom, xmax_zoom, *profileI, *p3foldmap, *p3foldmap2;
   char onpulseselectdevice[1000], p3fold_device[1000], outputname[1000];
@@ -52,6 +53,7 @@ int main(int argc, char **argv)
   application.switch_circshift= 1;
   application.switch_libversions = 1;
   application.switch_history_cmd_only = 1;
+  application.switch_polselect = 1;
   write_flag = 0;
   zoom_flag = 0;
   zoom_flag1 = 0;
@@ -71,6 +73,8 @@ int main(int argc, char **argv)
   cleanVerboseState(&noverbose);
   noverbose.nocounters = 1;
   application.oformat = FITS_format;
+  p3_fold_inputfile = 0;
+  readwriteP3foldOffsets = 0;
   if(argv[argc-1][0] == '-' && strcmp(argv[argc-1], "-formatlist") != 0 && strcmp(argv[argc-1], "-headerlist") != 0) {
     printerror(application.verbose_state.debug, "pfold: Last command line option is expected to be a file name.\nRun pfold without command line arguments to show help");
     terminateApplication(&application);
@@ -108,6 +112,12 @@ int main(int argc, char **argv)
     printf("                      in pulse periods.\n");
     printf("  -p3fold_noonpulse   Ignore selected pulse longitude range, but use the full\n");
     printf("                      range when doing the cross correlations\n");
+    printf("  -p3fold_writephases Write the found phase offsets to a file with extension\n");
+    printf("                      p3foldphases.\n");
+    printf("  -p3fold_readphases  Read offsets from the file (made with\n");
+    printf("                      -p3fold_writephases) with a name specified after this\n");
+    printf("                      command-line option rather than finding them via\n");
+    printf("                      correlations.\n");
     printf("  -slope              Subtract slope from subpulse phases (in degrees subpulse\n");
     printf("                      phase per degree pulse longitude).\n");
     printf("\nGraphics options:\n");
@@ -175,6 +185,12 @@ int main(int argc, char **argv)
    printerror(application.verbose_state.debug, "ERROR pfold: Cannot parse '%s' option.", argv[i]);
    return 0;
  }
+ i++;
+      }else if(strcmp(argv[i], "-p3fold_writephases") == 0) {
+ readwriteP3foldOffsets = 1;
+      }else if(strcmp(argv[i], "-p3fold_readphases") == 0) {
+ readwriteP3foldOffsets = 2;
+ p3_fold_inputfile = i+1;
  i++;
       }else if(strcmp(argv[i], "-slope") == 0) {
  if(parse_command_string(application.verbose_state, argc, argv, i+1, 0, -1, "%f", &slope, NULL) == 0) {
@@ -351,19 +367,26 @@ int main(int argc, char **argv)
       printerror(application.verbose_state.debug, "ERROR pfold: Cannot allocate memory");
       return 0;
     }
-    originalNrPolsP3 = originalNrPols;
-      if(originalNrPols > 1) {
- printwarning(application.verbose_state.debug, "WARNING pfold: Only first polarization chanel is folded.");
- originalNrPolsP3 = 1;
+    if(readwriteP3foldOffsets == 2) {
+      strncpy(outputname, argv[p3_fold_inputfile], 999);
+    }else {
+      if(change_filename_extension(argv[argc-1], outputname, "p3foldphases", 1000, application.verbose_state) == 0) {
+ return 0;
       }
+    }
+    originalNrPolsP3 = originalNrPols;
+    if(readwriteP3foldOffsets != 2 && originalNrPols > 1) {
+      printwarning(application.verbose_state.debug, "WARNING pfold: Only first polarization channel is folded. You could use -p3fold_writephases and -p3fold_readphases in combination with the -polselect option to fold the other polarization channels based on the folding done with for the first polarization channel.");
+      originalNrPolsP3 = 1;
+    }
     for(i = 0; i < originalNrPolsP3; i++) {
       if(p3_fold_onpulse_flag) {
- if(foldP3(fin[i].data, fin[i].NrSubints, fin[i].NrBins, &p3foldmap[i*fin[0].NrBins * p3_fold_nbin], p3_fold_nbin, p3_fold, p3_fold_refine, p3_fold_cpb, p3fold_nosmooth, p3_fold_smoothWidth, slope*360.0/(float)fin[i].NrBins, p3fold_dphase, &application.onpulse
+ if(foldP3(fin[i].data, fin[i].NrSubints, fin[i].NrBins, &p3foldmap[i*fin[0].NrBins * p3_fold_nbin], p3_fold_nbin, p3_fold, p3_fold_refine, p3_fold_cpb, p3fold_nosmooth, p3_fold_smoothWidth, slope*360.0/(float)fin[i].NrBins, p3fold_dphase, &application.onpulse, outputname, readwriteP3foldOffsets
 , oldcorrelation, application.verbose_state) == 0) {
    return 0;
  }
       }else {
- if(foldP3(fin[i].data, fin[i].NrSubints, fin[i].NrBins, &p3foldmap[i*fin[0].NrBins * p3_fold_nbin], p3_fold_nbin, p3_fold, p3_fold_refine, p3_fold_cpb, p3fold_nosmooth, p3_fold_smoothWidth, slope*360.0/(float)fin[i].NrBins, p3fold_dphase, NULL
+ if(foldP3(fin[i].data, fin[i].NrSubints, fin[i].NrBins, &p3foldmap[i*fin[0].NrBins * p3_fold_nbin], p3_fold_nbin, p3_fold, p3_fold_refine, p3_fold_cpb, p3fold_nosmooth, p3_fold_smoothWidth, slope*360.0/(float)fin[i].NrBins, p3fold_dphase, NULL, outputname, readwriteP3foldOffsets
     , oldcorrelation, application.verbose_state) == 0) {
    return 0;
  }

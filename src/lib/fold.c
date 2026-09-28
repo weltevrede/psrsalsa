@@ -98,18 +98,35 @@ void foldP3_simple(float *data, long nry, long starty, long nrx, float *map, flo
     }
   }
 }
-int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float foldp3, int refine, float cyclesperblock, int noSmooth, float smoothWidth, float slope, float subpulse_offset, pulselongitude_regions_definition *onpulse
+int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float foldp3, int refine, float cyclesperblock, int noSmooth, float smoothWidth, float slope, float subpulse_offset, pulselongitude_regions_definition *onpulse, char *offsetFileName, int readwriteOffsets
     , int oldcorrelation, verbose_definition verbose)
 {
   float *blockmap, correl, maxcorrel, *template, *nrcounts, *nrcounts_block;
   int i, b, offset, *bestoffset, itt, ok;
-  long startpulse, pulsesleft, dN, blockcounter;
+  long startpulse, pulsesleft, dN, blockcounter, blockcounter_tmp;
+  FILE *offsetFile;
   if(cyclesperblock < 1.0) {
     fflush(stdout);
     printerror(verbose.debug, "foldP3: cyclesperblock (%f) is expected to be >= 1.0", cyclesperblock);
     return 0;
   }
   dN = foldp3*cyclesperblock;
+  if(offsetFileName != NULL && readwriteOffsets == 2) {
+    if(verbose.verbose)
+      printf("Folding data onto P3 using phases from %s\n", offsetFileName);
+    offsetFile = fopen(offsetFileName, "r");
+    if(offsetFile == NULL) {
+      fflush(stdout);
+      printerror(verbose.debug, "ERROR foldP3: Cannot open %s for reading", offsetFileName);
+      return 0;
+    }
+    if(refine <= 0)
+      refine = 1;
+    if(refine > 1) {
+      printwarning(verbose.debug, "  WARNING: MULTIPLE ITTERATIONS MAKES NO SENSE WHEN LOADING PHASE OFFSETS FROM A FILE.");
+      refine = 1;
+    }
+  }else
     {
       if(verbose.verbose)
  printf("Folding data onto P3=%f using %ld subint blocks of data (refine=%d cyclesperblock=%f smoothWidth=%f slope=%f deg/bin offset=%f)\n", foldp3, dN, refine, cyclesperblock, smoothWidth, slope, subpulse_offset);
@@ -161,7 +178,19 @@ int foldP3(float *data, long nry, long nrx, float *map, int nr_p3_bins, float fo
       pulsesleft = nry;
       blockcounter = 0;
       while(pulsesleft > dN) {
- {
+ if(offsetFileName != NULL && readwriteOffsets == 2) {
+   ok = fscanf(offsetFile, "%ld %d\n", &blockcounter_tmp, &bestoffset[blockcounter]);
+   if(ok != 2) {
+     fflush(stdout);
+     printerror(verbose.debug, "\nERROR foldP3: Reading from %s failed", offsetFileName);
+     return 0;
+   }
+   if(blockcounter_tmp != blockcounter) {
+     fflush(stdout);
+     printerror(verbose.debug, "\nERROR foldP3: Unexpected block number: %ld != %ld", blockcounter_tmp, blockcounter);
+     return 0;
+   }
+ }else {
    maxcorrel = 0;
    for(offset = 0; offset < nr_p3_bins; offset++) {
      if(oldcorrelation == 1) {
@@ -229,6 +258,28 @@ verbose.debug);
     }
     if(verbose.verbose && verbose.nocounters == 0) {
       printf("\n");
+    }
+    if(offsetFileName != NULL && readwriteOffsets == 2) {
+      fclose(offsetFile);
+    }
+    if(offsetFileName != NULL && readwriteOffsets == 1) {
+      printf("  Writing out phases to %s\n", offsetFileName);
+      offsetFile = fopen(offsetFileName, "w");
+      if(offsetFile == NULL) {
+ fflush(stdout);
+ printerror(verbose.debug, "ERROR foldP3: Cannot open %s for writing", offsetFileName);
+ return 0;
+      }
+      startpulse = 0;
+      pulsesleft = nry;
+      blockcounter = 0;
+      while(pulsesleft > dN) {
+ startpulse += dN;
+ pulsesleft -= dN;
+ fprintf(offsetFile, "%ld %d\n", blockcounter, bestoffset[blockcounter]);
+ blockcounter++;
+      }
+      fclose(offsetFile);
     }
     free(blockmap);
     free(nrcounts_block);
